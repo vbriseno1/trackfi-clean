@@ -2304,9 +2304,10 @@ function AppInner(){
     setAccounts({checking:"",savings:"",cushion:"",investments:"",property:"",vehicles:"",crypto:""});
     setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""});
     setTradingAccount({deposit:"",balance:""});
+    setAppName("Trackfi");
     setIsDemoMode(false);
-    try{localStorage.removeItem("fv_demo");localStorage.removeItem("fv_onboarded");}catch{}
-    setIsDemoMode(false);setOnboarded(false);
+    try{localStorage.removeItem("fv_demo");}catch{}
+    navTo("home");
   }
 
   // ── Auth & loading gates ─────────────────────────────────────────────────
