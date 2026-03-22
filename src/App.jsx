@@ -396,37 +396,6 @@ function PINLock({onUnlock,appName,darkMode}){
   const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
   const[editAcct,setEditAcct]=useState(false);
   const today=todayStr();
-  const MILESTONES=[1000,5000,10000,25000,50000,100000,250000,500000,1000000];
-  const heroCards=["spend","networth","cashflow","debt","savings","health"];
-  const[heroIdx2,setHeroIdx2]=useState(0);
-
-  // ── Navigation ────────────────────────────────────────────────────────────
-  const GROUPS=[
-    {key:"daily",label:"Daily Drivers",desc:"Most-used",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"calendar",icon:Calendar,label:"Calendar"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"chat",icon:MessageCircle,label:"AI Assistant"}]},
-    {key:"work",label:"Work & Income",desc:"Shifts and trading",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"cashflow",icon:BarChart2,label:"Income vs Spending"}]},
-    {key:"reports",label:"Reports",desc:"History and analysis",items:[{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
-    {key:"tools",label:"Tools",desc:"Search, settings, help",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"},{id:"insights",icon:Zap,label:"Spending Insights"},{id:"health",icon:Activity,label:"Health Score"},{id:"settings",icon:Settings,label:"Settings"}]},
-  ];
-  const allTabIds=GROUPS.flatMap(g=>g.items.map(i=>i.id));
-  const isMoreTab=allTabIds.includes(tab);
-  const unread=unreadNotifs;
-  const NAV=[
-    {id:"home",icon:LayoutDashboard,label:"Home"},
-    {id:"spend",icon:Wallet,label:"Spending"},
-    {id:"bills",icon:CalendarClock,label:"Bills"},
-    {id:"debt",icon:CreditCard,label:"Debt"},
-    {id:"savings",icon:Target,label:"Goals"},
-    {id:"more",icon:Menu,label:"More",badge:unread>0?unread:null},
-  ];
-
-  // ── Load demo data ────────────────────────────────────────────────────────
-  async function loadDemo(){
-    const d=generateDemoData();
-    setAccounts(d.accounts);setIncome(d.income);setExpenses(d.expenses);
-    setBills(d.bills);setDebts(d.debts);setSGoals(d.savingsGoals);
-    setBGoals(d.budgetGoals);setTrades(d.trades);setShifts(d.shifts);
-    setBalHist(d.balHist);
-  }
 
   return(
     <div style={{minHeight:"100vh",background:bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -620,37 +589,6 @@ function OnboardingWizard({onComplete}){
   const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
   const[editAcct,setEditAcct]=useState(false);
   const today=todayStr();
-  const MILESTONES=[1000,5000,10000,25000,50000,100000,250000,500000,1000000];
-  const heroCards=["spend","networth","cashflow","debt","savings","health"];
-  const[heroIdx2,setHeroIdx2]=useState(0);
-
-  // ── Navigation ────────────────────────────────────────────────────────────
-  const GROUPS=[
-    {key:"daily",label:"Daily Drivers",desc:"Most-used",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"calendar",icon:Calendar,label:"Calendar"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"chat",icon:MessageCircle,label:"AI Assistant"}]},
-    {key:"work",label:"Work & Income",desc:"Shifts and trading",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"cashflow",icon:BarChart2,label:"Income vs Spending"}]},
-    {key:"reports",label:"Reports",desc:"History and analysis",items:[{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
-    {key:"tools",label:"Tools",desc:"Search, settings, help",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"},{id:"insights",icon:Zap,label:"Spending Insights"},{id:"health",icon:Activity,label:"Health Score"},{id:"settings",icon:Settings,label:"Settings"}]},
-  ];
-  const allTabIds=GROUPS.flatMap(g=>g.items.map(i=>i.id));
-  const isMoreTab=allTabIds.includes(tab);
-  const unread=unreadNotifs;
-  const NAV=[
-    {id:"home",icon:LayoutDashboard,label:"Home"},
-    {id:"spend",icon:Wallet,label:"Spending"},
-    {id:"bills",icon:CalendarClock,label:"Bills"},
-    {id:"debt",icon:CreditCard,label:"Debt"},
-    {id:"savings",icon:Target,label:"Goals"},
-    {id:"more",icon:Menu,label:"More",badge:unread>0?unread:null},
-  ];
-
-  // ── Load demo data ────────────────────────────────────────────────────────
-  async function loadDemo(){
-    const d=generateDemoData();
-    setAccounts(d.accounts);setIncome(d.income);setExpenses(d.expenses);
-    setBills(d.bills);setDebts(d.debts);setSGoals(d.savingsGoals);
-    setBGoals(d.budgetGoals);setTrades(d.trades);setShifts(d.shifts);
-    setBalHist(d.balHist);
-  }
 
   return(
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0D1B2A 0%,#2563EB 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -2181,37 +2119,6 @@ function AuthScreen({onAuth, onSkip}){
   const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
   const[editAcct,setEditAcct]=useState(false);
   const today=todayStr();
-  const MILESTONES=[1000,5000,10000,25000,50000,100000,250000,500000,1000000];
-  const heroCards=["spend","networth","cashflow","debt","savings","health"];
-  const[heroIdx2,setHeroIdx2]=useState(0);
-
-  // ── Navigation ────────────────────────────────────────────────────────────
-  const GROUPS=[
-    {key:"daily",label:"Daily Drivers",desc:"Most-used",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"calendar",icon:Calendar,label:"Calendar"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"chat",icon:MessageCircle,label:"AI Assistant"}]},
-    {key:"work",label:"Work & Income",desc:"Shifts and trading",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"cashflow",icon:BarChart2,label:"Income vs Spending"}]},
-    {key:"reports",label:"Reports",desc:"History and analysis",items:[{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
-    {key:"tools",label:"Tools",desc:"Search, settings, help",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"},{id:"insights",icon:Zap,label:"Spending Insights"},{id:"health",icon:Activity,label:"Health Score"},{id:"settings",icon:Settings,label:"Settings"}]},
-  ];
-  const allTabIds=GROUPS.flatMap(g=>g.items.map(i=>i.id));
-  const isMoreTab=allTabIds.includes(tab);
-  const unread=unreadNotifs;
-  const NAV=[
-    {id:"home",icon:LayoutDashboard,label:"Home"},
-    {id:"spend",icon:Wallet,label:"Spending"},
-    {id:"bills",icon:CalendarClock,label:"Bills"},
-    {id:"debt",icon:CreditCard,label:"Debt"},
-    {id:"savings",icon:Target,label:"Goals"},
-    {id:"more",icon:Menu,label:"More",badge:unread>0?unread:null},
-  ];
-
-  // ── Load demo data ────────────────────────────────────────────────────────
-  async function loadDemo(){
-    const d=generateDemoData();
-    setAccounts(d.accounts);setIncome(d.income);setExpenses(d.expenses);
-    setBills(d.bills);setDebts(d.debts);setSGoals(d.savingsGoals);
-    setBGoals(d.budgetGoals);setTrades(d.trades);setShifts(d.shifts);
-    setBalHist(d.balHist);
-  }
 
   return(
     <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
