@@ -1624,7 +1624,7 @@ function SettingsView({settings,setSettings,appName,setAppName,darkMode,setDarkM
       {S("showHealth","Health Score","Gamified financial score","🏆")}
       {S("showSavings","Savings Goals","Track goals with timelines","🎯")}
     </div>
-    <button className="ba" onClick={()=>window._loadDemo&&window._loadDemo()} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:10}}>🧪 Load Demo Data</button>
+    <button className="ba" onClick={()=>loadDemo()} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:10}}>🧪 Load Demo Data</button>
     {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><RefreshCw size={14}/>Re-run Setup Wizard</button>}{onSignOut&&<button className="ba" onClick={onSignOut} style={{width:"100%",marginTop:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}{onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",marginTop:8,background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}{onSignOut&&<button className="ba" onClick={onSignOut} style={{width:"100%",marginTop:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}{onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",marginTop:8,background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}
     {onSignOut&&<div style={{marginTop:20,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
       {userEmail&&<div style={{fontSize:12,color:C.textLight,textAlign:"center",marginBottom:10}}>{"Signed in as "}{userEmail}</div>}
@@ -2007,62 +2007,93 @@ function ExtraPayModal({debt,onConfirm,onClose}){
 }
 function AuthScreen({onAuth, onSkip}){
   const[mode,setMode]=useState("login");
-  const[email,setEmail]=useState("");const[pass,setPass]=useState("");
-  const[name,setName]=useState("");const[err,setErr]=useState("");
+  const[email,setEmail]=useState("");
+  const[pass,setPass]=useState("");
+  const[name,setName]=useState("");
+  const[err,setErr]=useState("");
   const[loading,setLoading]=useState(false);
+  const[confirmed,setConfirmed]=useState(false);
+
   async function submit(){
     if(!email.trim()||!pass.trim()){setErr("Please fill in all fields.");return;}
-    if(mode==="signup"&&!name.trim()){setErr("Please enter your name.");return;}
+    if(mode==="signup"&&pass.length<6){setErr("Password must be at least 6 characters.");return;}
     setLoading(true);setErr("");
     try{
       if(mode==="login"){
         const r=await signIn(email.trim(),pass);
-        if(r.error_description||r.error)throw new Error(r.error_description||"Sign in failed");
-        if(!r.access_token)throw new Error("Invalid credentials");
-        onAuth(r);}else{
+        if(r.error_description||r.msg){setErr(r.error_description||r.msg||"Wrong email or password.");setLoading(false);return;}
+        if(!r.access_token){setErr("Sign in failed. Check your email and password.");setLoading(false);return;}
+        onAuth(r);
+      }else{
         const r=await signUp(email.trim(),pass);
-        if(r.error_description||r.error)throw new Error(r.error_description||"Sign up failed");
-        if(r.access_token)onAuth(r);else setErr("Check your email to confirm your account.");
+        // Supabase returns access_token if email confirmation is disabled
+        if(r.access_token){onAuth(r);return;}
+        // Email confirmation required OR user already exists
+        if(r.error_description||r.msg){
+          const msg=r.error_description||r.msg||"";
+          if(msg.toLowerCase().includes("already")||msg.toLowerCase().includes("registered")){
+            setErr("An account with this email already exists. Please sign in instead.");
+          }else{
+            setErr(msg||"Sign up failed. Please try again.");
+          }
+          setLoading(false);return;
+        }
+        // Email confirmation flow
+        setConfirmed(true);
       }
-    }catch(e){setErr(e.message||"Something went wrong.");}
+    }catch(e){setErr(e.message||"Network error. Please try again.");}
+    setLoading(false);
   }
-  // ── Helpers ──────────────────────────────────────────────────────────────
-  const om=(t,d={})=>{setModal(t);setForm(d);};
-  const cl=()=>{setModal(null);setForm({});};
-  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
-  const[editAcct,setEditAcct]=useState(false);
-  const today=todayStr();
+
+  if(confirmed) return(
+    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <style>{CSS}</style>
+      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"36px 28px",boxShadow:"0 20px 60px rgba(0,0,0,.25)",textAlign:"center"}}>
+        <div style={{fontSize:52,marginBottom:16}}>📧</div>
+        <div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:C.navy,marginBottom:8}}>Check your email</div>
+        <div style={{fontSize:14,color:C.textLight,marginBottom:8,lineHeight:1.6}}>We sent a confirmation link to <strong>{email}</strong>.</div>
+        <div style={{fontSize:13,color:C.textLight,marginBottom:24,lineHeight:1.6}}>Click the link, then come back and sign in below.</div>
+        <button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12}}>
+          Sign In Now
+        </button>
+        {onSkip&&<button onClick={onSkip} style={{width:"100%",padding:"12px",borderRadius:14,border:`1px solid ${C.border}`,background:"transparent",color:C.textLight,fontWeight:600,fontSize:14,cursor:"pointer"}}>
+          Continue without account
+        </button>}
+      </div>
+    </div>
+  );
 
   return(
     <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"32px 28px",boxShadow:"0 24px 64px rgba(0,0,0,.25)"}}>
-        <div style={{textAlign:"center",marginBottom:28}}>
-          <div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:C.navy,marginBottom:4}}>Trackfi</div>
-          <div style={{fontSize:14,color:C.textLight}}>{mode==="login"?"Welcome back":"Create your account"}</div>
+      <style>{CSS}</style>
+      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"32px 28px",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:C.navy,marginBottom:4}}>💰 Trackfi</div>
+          <div style={{fontSize:14,color:C.textLight}}>{mode==="login"?"Welcome back — sign in to continue":"Create your free account"}</div>
         </div>
         {mode==="signup"&&<div style={{marginBottom:14}}>
-          <label style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,display:"block",marginBottom:5}}>Your Name</label>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Victor" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:IF,color:C.text}}/>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Your Name</div>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Victor" style={iS(false,false)} autoCapitalize="words"/>
         </div>}
         <div style={{marginBottom:14}}>
-          <label style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,display:"block",marginBottom:5}}>Email</label>
-          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:IF,color:C.text}}/>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Email</div>
+          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" style={iS(false,false)} autoCapitalize="none" autoCorrect="off"/>
         </div>
-        <div style={{marginBottom:20}}>
-          <label style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,display:"block",marginBottom:5}}>Password</label>
-          <input type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="••••••••" style={{width:"100%",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:IF,color:C.text}}/>
+        <div style={{marginBottom:err?8:20}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Password</div>
+          <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={mode==="login"?"Password":"Min 6 characters"} style={iS(false,false)} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/>
         </div>
-        {err&&<div style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.red,marginBottom:14}}>{err}</div>}
-        <button onClick={submit} disabled={loading} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:loading?"#ccc":`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading?"default":"pointer",marginBottom:14}}>
-          {loading?"Loading...":(mode==="login"?"Sign In":"Create Account")}
+        {err&&<div style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.red,marginBottom:14,lineHeight:1.4}}>{err}</div>}
+        <button onClick={submit} disabled={loading} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:loading?C.border:`linear-gradient(135deg,${C.accent},${C.green})`,color:loading?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading?"default":"pointer",marginBottom:14,transition:"all .2s"}}>
+          {loading?"Signing in...":(mode==="login"?"Sign In":"Create Account")}
         </button>
-        <div style={{textAlign:"center",fontSize:13,color:C.textLight}}>
+        <div style={{textAlign:"center",fontSize:13,color:C.textLight,marginBottom:16}}>
           {mode==="login"?"Don't have an account? ":"Already have an account? "}
           <button onClick={()=>{setMode(mode==="login"?"signup":"login");setErr("");}} style={{background:"none",border:"none",color:C.accent,fontWeight:700,cursor:"pointer",fontSize:13}}>
             {mode==="login"?"Sign up":"Sign in"}
           </button>
         </div>
-        {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,marginTop:4,textAlign:"center"}}>
+        {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}>
           <button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer",fontWeight:500}}>Continue without account →</button>
           <div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data saved locally on this device</div>
         </div>}
