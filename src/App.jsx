@@ -13,109 +13,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
 const SUPA_URL = "https://lkxznfbcnvsbugffvobw.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxreHpuZmJjbnZzYnVnZmZ2b2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODQ5MzAsImV4cCI6MjA4OTY2MDkzMH0.Fb1R7H5ltCRSnzTZpgAndrnDXUEPxKfqsy0fZ5ZtAuU";
 
-const supa = {
-  async signUp(email, password) {
-    const r = await fetch(`${SUPA_URL}/auth/v1/signup`, {
-      method:"POST", headers:{"apikey":SUPA_KEY,"Content-Type":"application/json"},
-      body: JSON.stringify({email, password})
-    });
-    return r.json();
-  },
-  async signIn(email, password) {
-    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`, {
-      method:"POST", headers:{"apikey":SUPA_KEY,"Content-Type":"application/json"},
-      body: JSON.stringify({email, password})
-    });
-    return r.json();
-  },
-  async signOut(token) {
-    await fetch(`${SUPA_URL}/auth/v1/logout`, {
-      method:"POST", headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`}
-    });
-  },
-  async getUser(token) {
-    const r = await fetch(`${SUPA_URL}/auth/v1/user`, {
-      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`}
-    });
-    return r.json();
-  },
-  async refreshToken(refresh_token) {
-    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
-      method:"POST", headers:{"apikey":SUPA_KEY,"Content-Type":"application/json"},
-      body: JSON.stringify({refresh_token})
-    });
-    return r.json();
-  },
-  _headers(token) {
-    return {"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`,"Content-Type":"application/json","Prefer":"return=representation"};
-  },
-  async select(table, token, query="*") {
-    const r = await fetch(`${SUPA_URL}/rest/v1/${table}?select=${query}&order=created_at.desc`, {headers:this._headers(token)});
-    return r.json();
-  },
-  async upsert(table, token, data) {
-    const rows = Array.isArray(data) ? data : [data];
-    const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
-      method:"POST",
-      headers:{...this._headers(token),"Prefer":"resolution=merge-duplicates,return=representation"},
-      body: JSON.stringify(rows)
-    });
-    return r.json();
-  },
-  async remove(table, token, match) {
-    const params = Object.entries(match).map(([k,v])=>`${k}=eq.${v}`).join("&");
-    const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}`, {
-      method:"DELETE", headers:this._headers(token)
-    });
-    return r.ok;
-  },
-  async syncAll(token, uid, data) {
-    const now = new Date().toISOString();
-    // Profile
-    await this.upsert("profiles", token, {id:uid, app_name:data.appName, prof_category:data.profCategory, prof_sub:data.profSub, income:data.income, settings:data.settings, updated_at:now});
-    // Accounts
-    await this.upsert("accounts", token, {id:uid, ...data.accounts, updated_at:now});
-    // Array tables
-    const isUUID = id => typeof id === "string" && id.includes("-");
-    if(data.expenses?.length) await this.upsert("expenses", token, data.expenses.map(e=>({name:e.name,amount:e.amount,category:e.category||"Other",date:e.date,notes:e.notes||"",tags:e.tags||[],user_id:uid,...(isUUID(e.id)?{id:e.id}:{})})));
-    if(data.bills?.length) await this.upsert("bills", token, data.bills.map(b=>({name:b.name,amount:b.amount,due_date:b.dueDate,paid:b.paid||false,auto_pay:b.autoPay||false,recurring:b.recurring||"Monthly",user_id:uid,...(isUUID(b.id)?{id:b.id}:{})})));
-    if(data.debts?.length) await this.upsert("debts", token, data.debts.map(d=>({name:d.name,balance:d.balance,original:d.original,rate:d.rate||0,type:d.type||"Credit Card",min_payment:d.minPayment,user_id:uid,...(isUUID(d.id)?{id:d.id}:{})})));
-    if(data.trades?.length) await this.upsert("trades", token, data.trades.map(t=>({symbol:t.symbol,side:t.side,contracts:t.contracts||1,pnl:t.pnl,date:t.date,note:t.note||"",user_id:uid,...(isUUID(t.id)?{id:t.id}:{})})));
-    if(data.shifts?.length) await this.upsert("shifts", token, data.shifts.map(s=>({date:s.date,hours:s.hours,type:s.type||"Regular",rate:s.rate,gross:s.gross,note:s.note||"",user_id:uid,...(isUUID(s.id)?{id:s.id}:{})})));
-    if(data.savingsGoals?.length) await this.upsert("savings_goals", token, data.savingsGoals.map(g=>({name:g.name,target:g.target,saved:g.saved||0,monthly:g.monthly||0,icon:g.icon||"🎯",color:g.color||"#2563EB",user_id:uid,...(isUUID(g.id)?{id:g.id}:{})})));
-    if(data.budgetGoals?.length) await this.upsert("budget_goals", token, data.budgetGoals.map(g=>({category:g.category,limit_amount:g.limit,user_id:uid,...(isUUID(g.id)?{id:g.id}:{})})));
-    if(data.balHist?.length) await this.upsert("bal_hist", token, data.balHist.map(h=>({date:h.date,checking:h.checking||0,savings:h.savings||0,cushion:h.cushion||0,investments:h.investments||0,total:h.total||0,user_id:uid,...(isUUID(h.id)?{id:h.id}:{})})));
-    return true;
-  },
-  async loadAll(token) {
-    const [profile, acct, expenses, bills, debts, trades, shifts, sgoals, bgoals, balHist, recurring] = await Promise.all([
-      this.select("profiles", token),
-      this.select("accounts", token),
-      this.select("expenses", token),
-      this.select("bills", token),
-      this.select("debts", token),
-      this.select("trades", token),
-      this.select("shifts", token),
-      this.select("savings_goals", token),
-      this.select("budget_goals", token),
-      this.select("bal_hist", token, "*&order=date.asc"),
-      this.select("recurring", token),
-    ]);
-    return {
-      profile: Array.isArray(profile)?profile[0]:profile,
-      accounts: Array.isArray(acct)?acct[0]:acct,
-      expenses: Array.isArray(expenses)?expenses:[],
-      bills: Array.isArray(bills)?bills.map(b=>({...b,dueDate:b.due_date,autoPay:b.auto_pay})):[],
-      debts: Array.isArray(debts)?debts.map(d=>({...d,minPayment:d.min_payment})):[],
-      trades: Array.isArray(trades)?trades:[],
-      shifts: Array.isArray(shifts)?shifts:[],
-      savingsGoals: Array.isArray(sgoals)?sgoals:[],
-      budgetGoals: Array.isArray(bgoals)?bgoals.map(g=>({...g,limit:g.limit_amount})):[],
-      balHist: Array.isArray(balHist)?balHist:[],
-      recurring: Array.isArray(recurring)?recurring:[],
-    };
-  }
-};
+
 // Standalone auth helpers (wrap supa object methods)
 async function supaFetch(path, opts={}) {
   const session = JSON.parse(localStorage.getItem("fv_session")||"null");
@@ -451,13 +349,13 @@ function PINSetup({onSave,onCancel,darkMode}){
 // --- ONBOARDING ---------------------------------------------------------------
 function OnboardingWizard({onComplete}){
   const [step,setStep]=useState(0);
-  const [d,setD]=useState({appName:"Trackfi",profCategory:"nurse",profSub:"rn",income:{primary:"",other:"",freelance:"",trading:""},accounts:{checking:"",savings:"",cushion:"",investments:""}});
+  const [d,setD]=useState({name:"",appName:"Trackfi",profCategory:"nurse",profSub:"rn",income:{primary:"",other:"",freelance:"",trading:""},accounts:{checking:"",savings:"",cushion:"",investments:""}});
   const IS={width:"100%",border:`1.5px solid ${C.border}`,borderRadius:14,padding:"13px 15px",fontSize:15,color:C.text,outline:"none",background:C.surfaceAlt,boxSizing:"border-box",fontFamily:IF,transition:"border-color .15s"};
   const sel=getProfession(d.profCategory);
   const selSub=sel.subs.find(s=>s.id===d.profSub)||sel.subs[0];
   const isTrader=(parseFloat(d.income.trading||0)>0)||(d.profCategory==="trader");
   const isHealthcare=["nurse","doctor","paramedic","therapist","pharmacist","health_admin"].includes(d.profCategory);
-  const firstName=d.appName.split(" ")[0]||"there";
+  const firstName=(d.name||d.appName||"").split(" ")[0].replace(/[^a-zA-Z]/g,"")||"there";
 
   const STEPS=[
     {
@@ -476,14 +374,17 @@ function OnboardingWizard({onComplete}){
       icon:"✏️",
       title:"What should we call you?",
       body:<div>
-        <label style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block"}}>Your Name / App Name</label>
-        <input value={d.appName} onChange={e=>setD(p=>({...p,appName:e.target.value}))} placeholder="e.g. Victor" style={IS} autoFocus/>
-        <div style={{fontSize:12,color:C.textLight,marginTop:8,marginBottom:10}}>This personalizes your greetings and app header</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-          {["Victor","Alex","Jordan","My Finances","Family Budget"].map(s=>(
-            <button key={s} onClick={()=>setD(p=>({...p,appName:s}))} style={{background:d.appName===s?C.accentBg:C.bg,border:`1.5px solid ${d.appName===s?C.accent:C.border}`,borderRadius:99,padding:"7px 14px",fontSize:13,color:d.appName===s?C.accent:C.slate,fontWeight:600,cursor:"pointer"}}>{s}</button>
+        <label style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block"}}>Your First Name</label>
+        <input value={d.name} onChange={e=>setD(p=>({...p,name:e.target.value}))} placeholder="e.g. Victor" style={IS} autoFocus/>
+        <div style={{fontSize:12,color:C.textLight,marginTop:6,marginBottom:10}}>Used for greetings — "Good morning, Victor 👋"</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16}}>
+          {["Victor","Alex","Jordan","Sam","Taylor"].map(s=>(
+            <button key={s} onClick={()=>setD(p=>({...p,name:s}))} style={{background:d.name===s?C.accentBg:C.bg,border:`1.5px solid ${d.name===s?C.accent:C.border}`,borderRadius:99,padding:"7px 14px",fontSize:13,color:d.name===s?C.accent:C.slate,fontWeight:600,cursor:"pointer"}}>{s}</button>
           ))}
         </div>
+        <label style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block"}}>App Name <span style={{fontWeight:400,textTransform:"none",fontSize:10,color:C.textFaint}}>optional</span></label>
+        <input value={d.appName} onChange={e=>setD(p=>({...p,appName:e.target.value}))} placeholder="Trackfi" style={IS}/>
+        <div style={{fontSize:12,color:C.textLight,marginTop:6}}>Shown in the header and exports</div>
       </div>
     },
     {
@@ -1675,7 +1576,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   </div>);
 }
 
-function SettingsView({settings,setSettings,appName,setAppName,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn}){
+function SettingsView({settings,setSettings,appName,setAppName,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail}){
   const[nm,setNm]=useState(appName||"");const[showPIN,setShowPIN]=useState(false);const[profTab,setProfTab]=useState(false);
   function exportData(){const d={exportedAt:new Date().toISOString(),appName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,version:"2.0"};const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;a.click();URL.revokeObjectURL(u);}
   async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(d.accounts)setAccounts(d.accounts);if(d.income)setIncome(d.income);if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);alert("✅ Imported!");}catch(e){alert("❌ "+e.message);}}
@@ -2211,46 +2112,23 @@ function AppInner(){
   useEffect(()=>{
     (async()=>{
       try{
-        if(userId){
-          const[expR,billR,debtR,tradeR,shiftR,sgR,bgR,bhR,profR]=await Promise.all([
-            supaFetch(`/rest/v1/expenses?user_id=eq.${userId}&select=*&order=created_at.desc`),
-            supaFetch(`/rest/v1/bills?user_id=eq.${userId}&select=*`),
-            supaFetch(`/rest/v1/debts?user_id=eq.${userId}&select=*`),
-            supaFetch(`/rest/v1/trades?user_id=eq.${userId}&select=*`),
-            supaFetch(`/rest/v1/shifts?user_id=eq.${userId}&select=*`),
-            supaFetch(`/rest/v1/savings_goals?user_id=eq.${userId}&select=*`),
-            supaFetch(`/rest/v1/budget_goals?user_id=eq.${userId}&select=*`),
-            supaFetch(`/rest/v1/balance_history?user_id=eq.${userId}&select=*&order=date.asc`),
-            supaFetch(`/rest/v1/profiles?id=eq.${userId}&select=*`),
-          ]);
-          if(expR.data?.length)setExpenses(expR.data.map(e=>({...e,amount:String(e.amount||0),tags:e.tags||[]})));
-          if(billR.data?.length)setBills(billR.data.map(b=>({...b,amount:String(b.amount||0),dueDate:b.due_date,autoPay:b.auto_pay})));
-          if(debtR.data?.length)setDebts(debtR.data.map(d=>({...d,balance:String(d.balance||0),original:String(d.original||d.balance||0),rate:String(d.rate||0),minPayment:String(d.min_payment||0)})));
-          if(tradeR.data?.length)setTrades(tradeR.data.map(t=>({...t,pnl:String(t.pnl||0)})));
-          if(shiftR.data?.length)setShifts(shiftR.data.map(s=>({...s,hours:String(s.hours||0),gross:String(s.gross||0)})));
-          if(sgR.data?.length)setSGoals(sgR.data.map(g=>({...g,target:String(g.target||0),saved:String(g.saved||0),monthly:String(g.monthly||0)})));
-          if(bgR.data?.length)setBGoals(bgR.data.map(g=>({...g,limit:String(g.limit_amount||0)})));
-          if(bhR.data?.length)setBalHist(bhR.data);
-          if(profR.data?.[0]){const p=profR.data[0];if(p.app_name)setAppName(p.app_name);if(p.prof_category)setProfCategory(p.prof_category);if(p.prof_sub)setProfSub(p.prof_sub);}
-        }else{
-          const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName"];
-          const vals=await Promise.all(keys.map(k=>sg(k)));
-          const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an]=vals;
-          if(ac)setAccounts(a=>({...a,...ac}));
-          if(inc)setIncome(a=>({...a,...inc}));
-          if(exp)setExpenses(exp);if(bll)setBills(bll);if(dbt)setDebts(dbt);
-          if(bg)setBGoals(bg);if(sg2)setSGoals(sg2);if(cats)setCats(cats);
-          if(tr)setTrades(tr);if(ta)setTradingAccount(ta);
-          if(sett)setSettings(a=>({...a,...sett}));
-          if(cc)setCalColors(a=>({...a,...cc}));
-          if(nts)setNotifs(nts);if(bh)setBalHist(bh);if(sh)setShifts(sh);
-          if(prof)setProfCategory(prof);if(psub)setProfSub(psub);
-          if(dc)setDashConfig(a=>({...a,...dc}));if(an)setAppName(an);
-        }
+        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName"];
+        const vals=await Promise.all(keys.map(k=>sg(k)));
+        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an]=vals;
+        if(ac)setAccounts(a=>({...a,...ac}));
+        if(inc)setIncome(a=>({...a,...inc}));
+        if(exp)setExpenses(exp);if(bll)setBills(bll);if(dbt)setDebts(dbt);
+        if(bg)setBGoals(bg);if(sg2)setSGoals(sg2);if(cats&&cats.length)setCats(cats);
+        if(tr)setTrades(tr);if(ta)setTradingAccount(ta);
+        if(sett)setSettings(a=>({...a,...sett}));
+        if(cc)setCalColors(a=>({...a,...cc}));
+        if(nts)setNotifs(nts);if(bh)setBalHist(bh);if(sh)setShifts(sh);
+        if(prof)setProfCategory(prof);if(psub)setProfSub(psub);
+        if(dc)setDashConfig(a=>({...a,...dc}));if(an)setAppName(an);
       }catch(e){console.error("Load error",e);}
       setReady(true);
     })();
-  },[userId]);
+  },[]);
 
   // Save to localStorage when data changes
   useEffect(()=>{if(ready)ss("fv6:accounts",accounts);},[accounts,ready]);
@@ -2363,7 +2241,7 @@ function AppInner(){
     if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
   if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip}/>;
   if(!onboarded)return(<><style>{CSS}</style><OnboardingWizard onComplete={async d=>{
-    if(d.appName)setAppName(d.appName);setProfCategory(d.profCategory);setProfSub(d.profSub);
+    if(d.name)setAppName(d.name);else if(d.appName)setAppName(d.appName);setProfCategory(d.profCategory);setProfSub(d.profSub);
     if(d.income)setIncome(d.income);if(d.accounts)setAccounts(d.accounts);
     const hasTrading=parseFloat(d.income?.trading||0)>0;
     const isTrader=["tech","finance_biz","self_employed"].includes(d.profCategory)||hasTrading;
