@@ -2125,7 +2125,7 @@ const sb = null; // Supabase JS SDK disabled - using REST API
 function AppInner(){
   const[tab,setTabRaw]=useState("home");
   const[tabHistory,setTabHistory]=useState([]);
-  function navTo(t){if(t===tab)return;setTabHistory(h=>[...h.slice(-19),tab]);setTabRaw(t);}
+  function navTo(t){if(t===tab)return;setTabHistory(h=>[...h.slice(-19),tab]);setTabRaw(t);setTimeout(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;},0);}
   function goBack(){setTabHistory(h=>{if(!h.length)return h;const p=h[h.length-1];setTabRaw(p);return h.slice(0,-1);});}
   const canGoBack=tabHistory.length>0;
   const[authSession,setAuthSession]=useState(null);
@@ -2293,10 +2293,21 @@ function AppInner(){
     setAppName("Victor");setProfCategory("healthcare");setProfSub("nurse_rn");
     setTradingAccount({deposit:"5000",balance:"5200"});
     setSettings(p=>({...p,showTrading:true,showHealth:true,showSavings:true}));
-    try{localStorage.setItem("fv_onboarded","1");}catch{}
-    setOnboarded(true);
+    try{localStorage.setItem("fv_onboarded","1");localStorage.setItem("fv_demo","1");}catch{}
+    setIsDemoMode(true);setOnboarded(true);
   }
   useEffect(()=>{window._loadDemo=loadDemo;return()=>{delete window._loadDemo;};},[]);
+  const[isDemoMode,setIsDemoMode]=useState(()=>{try{return localStorage.getItem("fv_demo")==="1";}catch{return false;}});
+  async function exitDemo(){
+    setExpenses([]);setBills([]);setDebts([]);setTrades([]);setShifts([]);
+    setSGoals([]);setBGoals([]);setBalHist([]);setNotifs([]);
+    setAccounts({checking:"",savings:"",cushion:"",investments:"",property:"",vehicles:"",crypto:""});
+    setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""});
+    setTradingAccount({deposit:"",balance:""});
+    setIsDemoMode(false);
+    try{localStorage.removeItem("fv_demo");localStorage.removeItem("fv_onboarded");}catch{}
+    setOnboarded(false);
+  }
 
   // ── Auth & loading gates ─────────────────────────────────────────────────
   if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
@@ -2316,15 +2327,15 @@ function AppInner(){
     if(liq<1000)goals.push({id:Date.now()+1,name:"Emergency Fund",icon:"🛡️",target:"5000",saved:String(liq||0),monthly:totalInc>0?String(Math.round(totalInc*0.1)):"100"});
     if(d.profCategory==="healthcare")goals.push({id:Date.now()+2,name:"Travel Nurse Fund",icon:"✈️",target:"10000",saved:"0",monthly:"200"});
     if(goals.length)setSGoals(goals);
-    try{localStorage.setItem("fv_onboarded","1");}catch{}
-    setOnboarded(true);
+    try{localStorage.setItem("fv_onboarded","1");localStorage.setItem("fv_demo","1");}catch{}
+    setIsDemoMode(true);setOnboarded(true);
   }}/></>);
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
 
   return(
     <div style={{minHeight:"100vh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",maxWidth:640,margin:"0 auto"}}>
       <style>{CSS}</style>
-      <div style={{flex:1,overflowY:"auto",padding:"20px 16px",paddingBottom:90}}>
+      <div id="fv-scroll" style={{flex:1,overflowY:"auto",padding:"20px 16px",paddingBottom:90}}>
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:15,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
         {tab==="home"&&(
@@ -2351,6 +2362,12 @@ function AppInner(){
           </div>
         </div>
 
+        {/* ── DEMO BANNER ─────────────────────────────── */}
+        {isDemoMode&&<div style={{background:`linear-gradient(135deg,${C.amber},#d97706)`,borderRadius:14,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:18}}>🧪</span>
+          <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Demo Mode</div><div style={{fontSize:11,color:"rgba(255,255,255,.8)"}}>Viewing sample data — not your real finances</div></div>
+          <button onClick={()=>setConfirm({title:"Exit Demo",message:"This will clear all demo data and restart setup. Your real data is not affected.",onConfirm:()=>{exitDemo();setConfirm(null);},danger:false})} style={{background:"rgba(255,255,255,.25)",border:"none",borderRadius:8,padding:"7px 12px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0}}>Exit</button>
+        </div>}
         {/* ── ALERTS ──────────────────────────────────── */}
         {overdue.length>0&&<div onClick={()=>navTo("bills")} style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:14,padding:"12px 16px",marginBottom:12,display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><AlertCircle size={16} color={C.red} style={{flexShrink:0}}/><div style={{flex:1,fontSize:13,color:C.red,fontWeight:600}}>{overdue.length} bill{overdue.length!==1?"s":""} overdue — tap to resolve</div><ChevronRight size={14} color={C.red}/></div>}
         {!overdue.length&&dueSoon.length>0&&<div onClick={()=>navTo("bills")} style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:14,padding:"12px 16px",marginBottom:12,display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><AlertCircle size={16} color={C.amber} style={{flexShrink:0}}/><div style={{flex:1,fontSize:13,color:C.amber,fontWeight:600}}>{dueSoon.length} bill{dueSoon.length!==1?"s":""} due within 7 days</div><ChevronRight size={14} color={C.amber}/></div>}
@@ -2358,12 +2375,12 @@ function AppInner(){
         {/* ── HERO CAROUSEL ───────────────────────────── */}
         {(()=>{
           const cards=[
-            {label:"Safe to Spend",sub:"Checking minus bills & buffer",val:fmt(sts),color:sts>500?C.green:sts>0?C.amber:C.red,tab:"accounts",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Left",fmt(Math.max(0,totalIncome-totalExp)),cashflow>=0?C.green:C.red]]},
-            {label:"Net Worth",sub:"Assets minus total debt",val:fmt(totalAssets-totalDebt),color:totalAssets-totalDebt>=0?C.green:C.red,tab:"accounts",stats:[["Assets",fmt(totalAssets),C.green],["Debt",fmt(totalDebt),C.red],["Trend",totalAssets-totalDebt>=0?"Positive":"Negative",totalAssets-totalDebt>=0?C.green:C.red]]},
-            {label:"Monthly Cashflow",sub:"Income vs spending this month",val:(cashflow>=0?"+":"")+fmt(cashflow),color:cashflow>=0?C.green:C.red,tab:"cashflow",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Saved",savingsRate.toFixed(1)+"%",savingsRate>=15?C.green:savingsRate>=5?C.amber:C.red]]},
-            {label:"Debt Overview",sub:"Total across all accounts",val:fmt(totalDebt),color:totalDebt===0?C.green:C.red,tab:"debt",stats:[["Accounts",String(debts.length),C.textFaint],["Min/mo",fmt(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)),C.red],["DTI",((debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/Math.max(1,totalIncome))*100).toFixed(1)+"%",((debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/Math.max(1,totalIncome))*100)<28?C.green:C.red]]},
-            {label:"Savings Progress",sub:savingsGoals.length?savingsGoals[0].name:"No goals yet",val:savingsGoals.length?Math.round((parseFloat(savingsGoals[0].saved||0)/parseFloat(savingsGoals[0].target||1))*100)+"%":"--",color:C.green,tab:"savings",stats:savingsGoals.length?[["Saved",fmt(savingsGoals[0].saved||0),C.green],["Target",fmt(savingsGoals[0].target||0),C.textFaint],["Goals",String(savingsGoals.length),C.textFaint]]:[["Tap","to add",C.textFaint],["your","first",C.textFaint],["goal","->",C.textFaint]]},
-            {label:"Health Score",sub:"Your financial wellness grade",val:(()=>{const mAvg=totalExp/Math.max(1,new Date().getMonth()+1);const sr2=totalIncome>0?Math.min(100,Math.max(0,(totalIncome-mAvg)/totalIncome*100)):0;const srS=sr2>=20?100:sr2>=10?75:sr2>=5?50:25;const dti=totalIncome>0?(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/totalIncome*100):0;const dtiS=dti<=15?100:dti<=28?80:dti<=36?60:35;const liq=(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));const efMo=mAvg>0?liq/mAvg:0;const efS=efMo>=6?100:efMo>=3?75:efMo>=1?40:10;const overall=Math.min(10,Math.max(1,parseFloat(((srS*.3)+(dtiS*.35)+(efS*.35))/10).toFixed(1)));return overall+"/10";})(),color:C.green,tab:"health",stats:[["Savings",savingsRate.toFixed(1)+"%",savingsRate>=15?C.green:C.amber],["Emergency",((parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0))/Math.max(1,totalExp/Math.max(1,new Date().getMonth()+1))).toFixed(1)+"mo",C.textFaint],["Bills",overdue.length===0?"All clear":overdue.length+" late",overdue.length===0?C.green:C.red]]}
+            {label:"Safe to Spend",sub:"Tap to see paycheck breakdown",val:fmt(sts),color:sts>500?C.green:sts>0?C.amber:C.red,tab:"paycheck",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Left",fmt(Math.max(0,totalIncome-totalExp)),cashflow>=0?C.green:C.red]]},
+            {label:"Net Worth",sub:"Tap to see wealth over time",val:fmt(totalAssets-totalDebt),color:totalAssets-totalDebt>=0?C.green:C.red,tab:"networthtrend",stats:[["Assets",fmt(totalAssets),C.green],["Debt",fmt(totalDebt),C.red],["Trend",totalAssets-totalDebt>=0?"Positive":"Negative",totalAssets-totalDebt>=0?C.green:C.red]]},
+            {label:"Monthly Cashflow",sub:"Tap to see income vs spending",val:(cashflow>=0?"+":"")+fmt(cashflow),color:cashflow>=0?C.green:C.red,tab:"cashflow",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Saved",savingsRate.toFixed(1)+"%",savingsRate>=15?C.green:savingsRate>=5?C.amber:C.red]]},
+            {label:"Debt Overview",sub:"Tap to see payoff plan",val:fmt(totalDebt),color:totalDebt===0?C.green:C.red,tab:"debt",stats:[["Accounts",String(debts.length),C.textFaint],["Min/mo",fmt(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)),C.red],["DTI",((debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/Math.max(1,totalIncome))*100).toFixed(1)+"%",((debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/Math.max(1,totalIncome))*100)<28?C.green:C.red]]},
+            {label:"Savings Progress",sub:savingsGoals.length?"Tap to track goals":"Add your first goal",val:savingsGoals.length?Math.round((parseFloat(savingsGoals[0].saved||0)/parseFloat(savingsGoals[0].target||1))*100)+"%":"--",color:C.green,tab:"savings",stats:savingsGoals.length?[["Saved",fmt(savingsGoals[0].saved||0),C.green],["Target",fmt(savingsGoals[0].target||0),C.textFaint],["Goals",String(savingsGoals.length),C.textFaint]]:[["Tap","to add",C.textFaint],["your","first",C.textFaint],["goal","->",C.textFaint]]},
+            {label:"Health Score",sub:"Tap to see full breakdown",val:(()=>{const mAvg=totalExp/Math.max(1,new Date().getMonth()+1);const sr2=totalIncome>0?Math.min(100,Math.max(0,(totalIncome-mAvg)/totalIncome*100)):0;const srS=sr2>=20?100:sr2>=10?75:sr2>=5?50:25;const dti=totalIncome>0?(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/totalIncome*100):0;const dtiS=dti<=15?100:dti<=28?80:dti<=36?60:35;const liq=(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));const efMo=mAvg>0?liq/mAvg:0;const efS=efMo>=6?100:efMo>=3?75:efMo>=1?40:10;const overall=Math.min(10,Math.max(1,parseFloat(((srS*.3)+(dtiS*.35)+(efS*.35))/10).toFixed(1)));return overall+"/10";})(),color:C.green,tab:"health",stats:[["Savings",savingsRate.toFixed(1)+"%",savingsRate>=15?C.green:C.amber],["Emergency",((parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0))/Math.max(1,totalExp/Math.max(1,new Date().getMonth()+1))).toFixed(1)+"mo",C.textFaint],["Bills",overdue.length===0?"All clear":overdue.length+" late",overdue.length===0?C.green:C.red]]}
           ];
           const card=cards[heroIdx];
           const goNext=()=>setHeroIdx(i=>(i+1)%cards.length);
