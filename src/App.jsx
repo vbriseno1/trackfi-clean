@@ -2348,7 +2348,13 @@ function AppInner(){
     setBills(d.bills);setDebts(d.debts);setSGoals(d.savingsGoals);
     setBGoals(d.budgetGoals);setTrades(d.trades);setShifts(d.shifts);
     setBalHist(d.balHist);
+    setAppName("Victor");setProfCategory("healthcare");setProfSub("nurse_rn");
+    setTradingAccount({deposit:"5000",balance:"5200"});
+    setSettings(p=>({...p,showTrading:true,showHealth:true,showSavings:true}));
+    try{localStorage.setItem("fv_onboarded","1");}catch{}
+    setOnboarded(true);
   }
+  useEffect(()=>{window._loadDemo=loadDemo;return()=>{delete window._loadDemo;};},[]);
 
   // ── Auth & loading gates ─────────────────────────────────────────────────
   if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
