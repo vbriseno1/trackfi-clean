@@ -2168,7 +2168,6 @@ function AppInner(){
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
-  const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const userId=authSession?.user?.id||null;
   const authToken=authSession?.access_token||null;
   useEffect(()=>{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(!s?.access_token){setAuthLoading(false);return;}supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+s.access_token}}).then(u=>{if(u?.data?.id||u?.id){setAuthSession(s);}else{localStorage.removeItem("fv_session");}setAuthLoading(false);}).catch(()=>setAuthLoading(false));},[]);
