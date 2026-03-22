@@ -1774,7 +1774,7 @@ function SettingsView({settings,setSettings,appName,setAppName,darkMode,setDarkM
       {S("showSavings","Savings Goals","Track goals with timelines","🎯")}
     </div>
     <button className="ba" onClick={()=>window._loadDemo&&window._loadDemo()} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:10}}>🧪 Load Demo Data</button>
-    {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><RefreshCw size={14}/>Re-run Setup Wizard</button>}{onSignOut&&<button className="ba" onClick={onSignOut} style={{width:"100%",marginTop:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}
+    {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><RefreshCw size={14}/>Re-run Setup Wizard</button>}{onSignOut&&<button className="ba" onClick={onSignOut} style={{width:"100%",marginTop:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}{onSignOut&&<button className="ba" onClick={onSignOut} style={{width:"100%",marginTop:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}
     {onSignOut&&<div style={{marginTop:20,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
       {userEmail&&<div style={{fontSize:12,color:C.textLight,textAlign:"center",marginBottom:10}}>{"Signed in as "}{userEmail}</div>}
       <button className="ba" onClick={()=>onSignOut()} style={{width:"100%",background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>{"Sign Out"}</button>
@@ -2261,12 +2261,14 @@ function AppInner(){
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
+  const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const userId=authSession?.user?.id||null;
   const authToken=authSession?.access_token||null;
   useEffect(()=>{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(!s?.access_token){setAuthLoading(false);return;}supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+s.access_token}}).then(u=>{if(u?.data?.id||u?.id){setAuthSession(s);}else{localStorage.removeItem("fv_session");}setAuthLoading(false);}).catch(()=>setAuthLoading(false));},[]);
   function handleAuth(sess){setAuthSession(sess);localStorage.setItem("fv_session",JSON.stringify(sess));}
   function handleSkip(){localStorage.setItem("fv_skip_auth","1");setSkipAuth(true);}
-  function handleSignOut(){if(authToken)supaFetch("/auth/v1/logout",{method:"POST"});setAuthSession(null);localStorage.removeItem("fv_session");localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}
+  function handleSkip(){localStorage.setItem("fv_skip_auth","1");setSkipAuth(true);}
+  function handleSignOut(){if(authToken)supaFetch("/auth/v1/logout",{method:"POST"});setAuthSession(null);localStorage.removeItem("fv_session");localStorage.removeItem("fv_skip_auth");setSkipAuth(false);localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}
   const[ready,setReady]=useState(false);
   const[accounts,setAccounts]=useState({checking:"",savings:"",cushion:"",investments:"",property:"",vehicles:""});
   const[income,setIncome]=useState({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""});
@@ -2446,6 +2448,8 @@ function AppInner(){
   if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
   if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip}/>;
   if(!ready)return(<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:`3px solid ${C.accentMid}`,borderTopColor:C.accent,borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:C.textLight}}>Loading your data...</div></div></div>);
+    if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
+  if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip}/>;
   if(!onboarded)return(<><style>{CSS}</style><OnboardingWizard onComplete={async d=>{
     if(d.appName)setAppName(d.appName);setProfCategory(d.profCategory);setProfSub(d.profSub);
     if(d.income)setIncome(d.income);if(d.accounts)setAccounts(d.accounts);
