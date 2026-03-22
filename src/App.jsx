@@ -1137,7 +1137,14 @@ function DebtView({debts,setDebts,setModal,setEditItem,setConfirm}){
             ))}
           </div>
 
-          <div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:10,textTransform:"uppercase",letterSpacing:.5}}>Priority Order</div>
+          <div style={{marginBottom:12}}>{(()=>{
+              function calcTotalInt(strat){return[...debts].sort((a,b)=>strat==="avalanche"?(parseFloat(b.rate)||0)-(parseFloat(a.rate)||0):(parseFloat(a.balance)||0)-(parseFloat(b.balance)||0)).reduce((tot,d)=>{const bal=parseFloat(d.balance)||0;const rate=(parseFloat(d.rate)||0)/100/12;const min=d.minPayment?parseFloat(d.minPayment):Math.max(25,bal*0.02+(rate*bal));let b=bal,mo=0,int=0;while(b>0.01&&mo<600){const i=b*rate;int+=i;b=b+i-min;mo++;}return tot+int;},0);}
+              const avInt=calcTotalInt("avalanche");const snInt=calcTotalInt("snowball");const saved=Math.abs(snInt-avInt);
+              if(saved<1||debts.length<2)return null;
+              const isAv=strategy==="avalanche";
+              return(<div style={{background:isAv?C.greenBg:C.amberBg,border:`1px solid ${isAv?C.greenMid:C.amberMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:isAv?C.green:C.amber,fontWeight:500}}>{isAv?`💡 Avalanche saves you ${fmt(saved)} in interest vs Snowball`:`⚡ Switch to Avalanche to save ${fmt(saved)} in interest`}</div>);
+            })()}</div>
+            <div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:10,textTransform:"uppercase",letterSpacing:.5}}>Priority Order</div>
           {prioritized.map((d,i)=>{
             const proj=calcPayoff(d);
             const bal=parseFloat(d.balance)||0;
@@ -1201,8 +1208,8 @@ function DebtView({debts,setDebts,setModal,setEditItem,setConfirm}){
             </div>
           );
         })()}
-        {/* ── Debt cards (compact) ── */}
-        {debts.map(d=>{
+        {/* ── Debt cards (ordered by strategy) ── */}
+        {prioritized.map(d=>{
           const bal=parseFloat(d.balance)||0,orig=parseFloat(d.original)||bal,pct=Math.min(100,((orig-bal)/orig)*100);
           const mi=(parseFloat(d.rate)||0)/100/12*bal;
           const color=PIE_COLORS[debts.indexOf(d)%PIE_COLORS.length];
