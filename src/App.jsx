@@ -2306,7 +2306,7 @@ function AppInner(){
     setTradingAccount({deposit:"",balance:""});
     setIsDemoMode(false);
     try{localStorage.removeItem("fv_demo");localStorage.removeItem("fv_onboarded");}catch{}
-    setOnboarded(false);
+    setIsDemoMode(false);setOnboarded(false);
   }
 
   // ── Auth & loading gates ─────────────────────────────────────────────────
@@ -2363,7 +2363,7 @@ function AppInner(){
         </div>
 
         {/* ── DEMO BANNER ─────────────────────────────── */}
-        {isDemoMode&&<div style={{background:`linear-gradient(135deg,${C.amber},#d97706)`,borderRadius:14,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+        {isDemoMode&&expenses.length>0&&<div style={{background:`linear-gradient(135deg,${C.amber},#d97706)`,borderRadius:14,padding:"12px 16px",marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
           <span style={{fontSize:18}}>🧪</span>
           <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Demo Mode</div><div style={{fontSize:11,color:"rgba(255,255,255,.8)"}}>Viewing sample data — not your real finances</div></div>
           <button onClick={()=>setConfirm({title:"Exit Demo",message:"This will clear all demo data and restart setup. Your real data is not affected.",onConfirm:()=>{exitDemo();setConfirm(null);},danger:false})} style={{background:"rgba(255,255,255,.25)",border:"none",borderRadius:8,padding:"7px 12px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0}}>Exit</button>
