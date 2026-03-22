@@ -25,14 +25,26 @@ async function supaFetch(path, opts={}) {
   return {data, error:null};
 }
 async function signUp(email, password) {
-  const r = await supa.signUp(email, password);
-  if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
-  return r;
+  try {
+    const res = await fetch(SUPA_URL+"/auth/v1/signup", {
+      method:"POST", headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
+      body: JSON.stringify({email, password})
+    });
+    const r = await res.json();
+    if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
+    return r;
+  } catch(e) { return {error:e.message}; }
 }
 async function signIn(email, password) {
-  const r = await supa.signIn(email, password);
-  if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
-  return r;
+  try {
+    const res = await fetch(SUPA_URL+"/auth/v1/token?grant_type=password", {
+      method:"POST", headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
+      body: JSON.stringify({email, password})
+    });
+    const r = await res.json();
+    if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
+    return r;
+  } catch(e) { return {error:e.message}; }
 }
 
 // --- BRAND PALETTE -----------------------------------------------------------
@@ -512,7 +524,7 @@ function OnboardingWizard({onComplete}){
           }} style={{width:"100%",marginTop:20,background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:14,padding:"15px 0",color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer"}}>
             {step===STEPS.length-1?"🚀 Launch Trackfi":step===0?"Get Started →":"Continue →"}
           </button>
-          {step>0&&step<STEPS.length-1&&<button onClick={()=>setStep(s=>s+1)} style={{width:"100%",marginTop:10,background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer"}}>Skip for now</button>}
+          {step>0&&step<STEPS.length-1&&<button onClick={()=>setStep(s=>s===2?s+2:s+1)} style={{width:"100%",marginTop:10,background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer"}}>Skip for now</button>}
         </div>
       </div>
     </div>
