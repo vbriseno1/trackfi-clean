@@ -396,7 +396,11 @@ function OnboardingWizard({onComplete}){
         </div>
         <label style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block"}}>App Name <span style={{fontWeight:400,textTransform:"none",fontSize:10,color:C.textFaint}}>optional</span></label>
         <input value={d.appName} onChange={e=>setD(p=>({...p,appName:e.target.value}))} placeholder="Trackfi" style={IS}/>
-        <div style={{fontSize:12,color:C.textLight,marginTop:6}}>Shown in the header and exports</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+          {["Victor's Finances","My Finances","Trackfi","Family Budget","Money HQ"].map(s=>(
+            <button key={s} onClick={()=>setD(p=>({...p,appName:s}))} style={{background:d.appName===s?C.accentBg:C.bg,border:`1.5px solid ${d.appName===s?C.accent:C.border}`,borderRadius:99,padding:"5px 11px",fontSize:12,color:d.appName===s?C.accent:C.slate,fontWeight:600,cursor:"pointer"}}>{s}</button>
+          ))}
+        </div>
       </div>
     },
     {
@@ -1596,6 +1600,11 @@ function SettingsView({settings,setSettings,appName,setAppName,darkMode,setDarkM
   return(<div className="fu">
     <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:16}}>Settings</div>
     <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:16,marginBottom:12}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Your Name</div>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Victor" style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none"}}/>
+        <button className="ba" onClick={()=>nm.trim()&&setAppName(nm.trim())} style={{background:C.accent,border:"none",borderRadius:10,padding:"0 16px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>Save</button>
+      </div>
       <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>App Name</div>
       <div style={{display:"flex",gap:8}}><input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Trackfi" style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none"}}/><button className="ba" onClick={()=>nm.trim()&&setAppName(nm.trim())} style={{background:C.accent,border:"none",borderRadius:10,padding:"0 16px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>Save</button></div>
     </div>
@@ -1625,11 +1634,12 @@ function SettingsView({settings,setSettings,appName,setAppName,darkMode,setDarkM
       {S("showSavings","Savings Goals","Track goals with timelines","🎯")}
     </div>
     <button className="ba" onClick={()=>loadDemo()} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:10}}>🧪 Load Demo Data</button>
-    {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><RefreshCw size={14}/>Re-run Setup Wizard</button>}{onSignOut&&<button className="ba" onClick={onSignOut} style={{width:"100%",marginTop:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}{onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",marginTop:8,background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}{onSignOut&&<button className="ba" onClick={onSignOut} style={{width:"100%",marginTop:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}{onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",marginTop:8,background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}
-    {onSignOut&&<div style={{marginTop:20,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
-      {userEmail&&<div style={{fontSize:12,color:C.textLight,textAlign:"center",marginBottom:10}}>{"Signed in as "}{userEmail}</div>}
-      <button className="ba" onClick={()=>onSignOut()} style={{width:"100%",background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>{"Sign Out"}</button>
-    </div>}
+    {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><RefreshCw size={14}/>Re-run Setup Wizard</button>}
+    <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
+      {userEmail&&<div style={{fontSize:12,color:C.textLight,textAlign:"center",marginBottom:8}}>Signed in as {userEmail}</div>}
+      {onSignOut&&<button className="ba" onClick={()=>onSignOut()} style={{width:"100%",marginBottom:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}
+      {onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}
+    </div>
   </div>);
 }
 
@@ -2031,8 +2041,10 @@ function AuthScreen({onAuth, onSkip}){
         // Email confirmation required OR user already exists
         if(r.error_description||r.msg){
           const msg=r.error_description||r.msg||"";
-          if(msg.toLowerCase().includes("already")||msg.toLowerCase().includes("registered")){
-            setErr("An account with this email already exists. Please sign in instead.");
+          if(msg.toLowerCase().includes("already")||msg.toLowerCase().includes("registered")||msg.toLowerCase().includes("taken")||msg.toLowerCase().includes("exist")){
+            setErr("An account already exists with this email. Switching to sign in...");
+          setTimeout(()=>{setMode("login");setErr("Account found — enter your password to sign in.");},1200);
+          setLoading(false);return;
           }else{
             setErr(msg||"Sign up failed. Please try again.");
           }
@@ -2159,7 +2171,7 @@ function AppInner(){
         const vals=await Promise.all(keys.map(k=>sg(k)));
         const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an]=vals;
         if(ac)setAccounts(a=>({...a,...ac}));
-        if(inc)setIncome(a=>({...a,...inc}));
+        if(inc)setIncome(a=>({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",...a,...inc}));
         if(exp)setExpenses(exp);if(bll)setBills(bll);if(dbt)setDebts(dbt);
         if(bg)setBGoals(bg);if(sg2)setSGoals(sg2);if(cats&&cats.length)setCats(cats);
         if(tr)setTrades(tr);if(ta)setTradingAccount(ta);
@@ -2192,7 +2204,7 @@ function AppInner(){
   useEffect(()=>{if(ready)ss("fv6:appName",appName);},[appName,ready]);
 
   // Computed values - AFTER all useState
-  const totalIncome=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
+  const totalIncome=useMemo(()=>{if(!income||typeof income!=="object")return 0;return(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));},[income]);
   const totalAssets=useMemo(()=>(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0)),[accounts]);
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const totalDebt=useMemo(()=>debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0),[debts]);
@@ -2265,7 +2277,9 @@ function AppInner(){
   // ── Load demo data ────────────────────────────────────────────────────────
   async function loadDemo(){
     const d=generateDemoData();
-    setAccounts(d.accounts);setIncome(d.income);setExpenses(d.expenses);
+    setAccounts({checking:"4280",savings:"9400",cushion:"1000",investments:"14200",property:"0",vehicles:"12000",crypto:""});
+    setIncome({primary:"4200",other:"300",trading:"",rental:"",dividends:"",freelance:"500"});
+    setExpenses(d.expenses);
     setBills(d.bills);setDebts(d.debts);setSGoals(d.savingsGoals);
     setBGoals(d.budgetGoals);setTrades(d.trades);setShifts(d.shifts);
     setBalHist(d.balHist);
