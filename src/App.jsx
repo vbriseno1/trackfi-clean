@@ -1125,6 +1125,36 @@ function DebtView({debts,setDebts,setModal,setEditItem,setConfirm}){
           })()}
         </div>
 
+        {/* ── Debt-Free Countdown ── */}
+        {debts.length>0&&(()=>{
+          const totalBal=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
+          const totalMin=debts.reduce((s,d)=>{const b=parseFloat(d.balance)||0;const r=(parseFloat(d.rate)||0)/100/12;return s+(parseFloat(d.minPayment)||Math.max(25,b*0.02+r*b));},0);
+          let rem=prioritized.map(d=>{const b=parseFloat(d.balance)||0;const r=(parseFloat(d.rate)||0)/100/12;return{...d,bal:b,rate:r,min:parseFloat(d.minPayment)||Math.max(25,b*0.02+r*b)};});
+          let mo=0,totalInt=0;
+          while(rem.some(d=>d.bal>0.01)&&mo<600){
+            mo++;let extra=0;
+            rem=rem.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;totalInt+=i;const pay=Math.min(d.min,d.bal+i);extra+=Math.max(0,d.min-pay);return{...d,bal:Math.max(0,d.bal+i-pay)};});
+            const focus=rem.find(d=>d.bal>0.01);if(focus){const idx=rem.indexOf(focus);rem[idx].bal=Math.max(0,rem[idx].bal-extra);}
+          }
+          const dfDate=new Date();dfDate.setMonth(dfDate.getMonth()+mo);
+          const yrs=Math.floor(mo/12);const mos=mo%12;
+          const timeStr=yrs>0?yrs+"y "+(mos>0?mos+"mo":""):mos+"mo";
+          return(
+            <div style={{background:`linear-gradient(135deg,${C.green},#059669)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
+              <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.6)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>🎯 Debt-Free Date</div>
+              <div style={{fontFamily:MF,fontSize:28,fontWeight:800,color:"#fff",marginBottom:4}}>{mo>=600?"Increase payments":dfDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
+              <div style={{fontSize:13,color:"rgba(255,255,255,.7)",marginBottom:14}}>{mo>=600?"Min payments don't cover interest — pay more to escape":""+timeStr+" away · you've got this!"}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                {[["Total Debt",fmt(totalBal),"rgba(255,255,255,.9)"],["Min/mo",fmt(totalMin),"rgba(255,255,255,.9)"],["Total Interest",mo<600?fmt(totalInt):"High","rgba(255,255,255,.7)"]].map(([l,v,c])=>(
+                  <div key={l} style={{background:"rgba(255,255,255,.12)",borderRadius:10,padding:"9px 8px"}}>
+                    <div style={{fontSize:10,color:"rgba(255,255,255,.5)",fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div>
+                    <div style={{fontFamily:MF,fontSize:12,fontWeight:700,color:c}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
         {/* ── Payoff Strategy ── */}
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:18,padding:20,marginBottom:14}}>
           <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Payoff Strategy</div>
@@ -2122,6 +2152,151 @@ function AuthScreen({onAuth, onSkip}){
 }
 const sb = null; // Supabase JS SDK disabled - using REST API
 
+function RecurringView({expenses,setExpenses,categories}){
+  const[showAdd,setShowAdd]=useState(false);
+  const[form,setForm]=useState({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});
+  const[recurrings,setRecurrings]=useState(()=>{try{const r=localStorage.getItem("fv_recurring");return r?JSON.parse(r):[];}catch{return[];}});
+  useEffect(()=>{try{localStorage.setItem("fv_recurring",JSON.stringify(recurrings));}catch{}},[recurrings]);
+  useEffect(()=>{
+    const today=todayStr();let anyLogged=false;
+    const updated=recurrings.map(r=>{
+      if(r.nextDate<=today&&r.active!==false){
+        setExpenses(p=>[...p,{id:Date.now()+Math.random(),name:r.name,amount:r.amount,category:r.category,date:today,notes:"Auto-logged"}]);
+        const d=new Date(r.nextDate+"T00:00:00");
+        if(r.frequency==="Weekly")d.setDate(d.getDate()+7);
+        else if(r.frequency==="Bi-weekly")d.setDate(d.getDate()+14);
+        else if(r.frequency==="Monthly")d.setMonth(d.getMonth()+1);
+        else if(r.frequency==="Quarterly")d.setMonth(d.getMonth()+3);
+        else if(r.frequency==="Annual")d.setFullYear(d.getFullYear()+1);
+        anyLogged=true;
+        return{...r,nextDate:d.toISOString().split("T")[0],lastLogged:today};
+      }
+      return r;
+    });
+    if(anyLogged)setRecurrings(updated);
+  },[]);
+  const FREQS=["Weekly","Bi-weekly","Monthly","Quarterly","Annual"];
+  const ICONS=["🏠","🚗","📱","💪","🎮","📺","☕","🛒","💊","🐕","🎓","⚡","💧","🌐","🎵","🏋️","🍕","✈️","👶","🐱"];
+  function add(){
+    if(!form.name||!form.amount)return;
+    setRecurrings(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category,frequency:form.frequency,nextDate:form.nextDate,icon:form.icon||"🔄",active:true}]);
+    setForm({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});
+    setShowAdd(false);
+  }
+  const active=recurrings.filter(r=>r.active!==false);
+  const totalMonthly=active.reduce((s,r)=>{
+    const amt=parseFloat(r.amount||0);
+    if(r.frequency==="Weekly")return s+amt*4.33;
+    if(r.frequency==="Bi-weekly")return s+amt*2.17;
+    if(r.frequency==="Monthly")return s+amt;
+    if(r.frequency==="Quarterly")return s+amt/3;
+    if(r.frequency==="Annual")return s+amt/12;
+    return s+amt;
+  },0);
+  const dueSoon=recurrings.filter(r=>r.active!==false&&r.nextDate&&Math.ceil((new Date(r.nextDate)-new Date(todayStr()))/86400000)<=7);
+  return(
+    <div className="fu">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Recurring Expenses</div><div style={{fontSize:13,color:C.textLight}}>{active.length} active · auto-logged when due</div></div>
+        <button onClick={()=>setShowAdd(true)} style={{background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>Add</button>
+      </div>
+      <div style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:16,padding:18,marginBottom:14,color:"#fff"}}>
+        <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Monthly Recurring Total</div>
+        <div style={{fontFamily:MF,fontSize:32,fontWeight:800,color:"#fff"}}>{fmt(totalMonthly)}</div>
+        <div style={{display:"flex",gap:8,marginTop:12}}>
+          {[["Active",String(active.length),C.greenMid],["Due Soon",String(dueSoon.length),dueSoon.length>0?C.amberMid:C.greenMid],["Annual",fmt(totalMonthly*12),C.accentMid]].map(([l,v,c])=>(
+            <div key={l} style={{flex:1,background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div>
+              <div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:c}}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {dueSoon.length>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"11px 14px",marginBottom:14,fontSize:13,color:C.amber,fontWeight:500}}>⏰ {dueSoon.length} recurring expense{dueSoon.length!==1?"s":""} due within 7 days</div>}
+      {recurrings.length===0&&<Empty text="Add rent, subscriptions, or any regular expense — they log automatically when due." icon={RefreshCw} cta="Add First" onCta={()=>setShowAdd(true)}/>}
+      {recurrings.map(r=>{
+        const due=r.nextDate?Math.ceil((new Date(r.nextDate)-new Date(todayStr()))/86400000):0;
+        const col=due<0?C.red:due<=3?C.red:due<=7?C.amber:C.textLight;
+        return(
+          <div key={r.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,opacity:r.active===false?.5:1}}>
+            <div style={{width:40,height:40,borderRadius:12,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{r.icon||"🔄"}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:600,color:C.text}}>{r.name}</div>
+              <div style={{fontSize:12,color:C.textLight,marginTop:2,display:"flex",gap:8,flexWrap:"wrap"}}>
+                <span>{r.frequency}</span>
+                <span style={{color:col,fontWeight:500}}>{due<0?Math.abs(due)+"d overdue":due===0?"Due today":due===1?"Tomorrow":"In "+due+"d"}</span>
+                {r.lastLogged&&<span style={{color:C.textFaint}}>Last: {fmtDate(r.lastLogged)}</span>}
+              </div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontFamily:MF,fontWeight:700,fontSize:15,color:C.text}}>{fmt(r.amount)}</div>
+              <button onClick={()=>setRecurrings(p=>p.map(x=>x.id===r.id?{...x,active:x.active===false?true:false}:x))} style={{fontSize:11,color:r.active===false?C.green:C.textLight,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>
+                {r.active===false?"Resume":"Pause"}
+              </button>
+            </div>
+            <button onClick={()=>setRecurrings(p=>p.filter(x=>x.id!==r.id))} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={14}/></button>
+          </div>
+        );
+      })}
+      {showAdd&&<Modal title="Add Recurring" icon={RefreshCw} onClose={()=>setShowAdd(false)} onSubmit={add} submitLabel="Add Recurring">
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
+          {ICONS.map(ic=><button key={ic} onClick={()=>setForm(p=>({...p,icon:ic}))} style={{fontSize:20,background:form.icon===ic?C.accentBg:C.surfaceAlt,border:form.icon===ic?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"4px 6px",cursor:"pointer"}}>{ic}</button>)}
+        </div>
+        <FI label="Name" placeholder="Rent, Netflix, Gym..." value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
+        <div style={{display:"flex",gap:12}}>
+          <FI half label="Amount ($)" type="number" placeholder="0.00" value={form.amount} onChange={e=>setForm(p=>({...p,amount:e.target.value}))}/>
+          <FI half label="Next Due Date" type="date" value={form.nextDate} onChange={e=>setForm(p=>({...p,nextDate:e.target.value}))}/>
+        </div>
+        <FS label="Frequency" options={FREQS} value={form.frequency} onChange={e=>setForm(p=>({...p,frequency:e.target.value}))}/>
+        <FS label="Category" options={categories.map(c=>c.name)} value={form.category} onChange={e=>setForm(p=>({...p,category:e.target.value}))}/>
+      </Modal>}
+    </div>
+  );
+}
+
+function CategoriesView({categories,setCategories}){
+  const[showAdd,setShowAdd]=useState(false);
+  const[form,setForm]=useState({name:"",icon:""});
+  const EMOJIS=["🍔","🚗","🏠","💊","🎮","✈️","👗","📱","💰","🐶","🎵","⚽","🎓","💅","🍺","🎁","🏋️","🛁","🐱","🌿","🔧","💻","🎨","📚","☕","🍕","🏖️","🎯","💳","🛍️"];
+  const DEFAULT_IDS=["food","housing","transport","bills_cat","subs","health","personal","entertainment","savings_cat","misc"];
+  function add(){
+    if(!form.name.trim())return;
+    const id="cat_"+Date.now();
+    setCategories(p=>[...p,{id,name:form.name.trim(),icon:form.icon||"📦"}]);
+    setForm({name:"",icon:""});
+    setShowAdd(false);
+  }
+  return(
+    <div className="fu">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Categories</div><div style={{fontSize:13,color:C.textLight}}>{categories.length} categories</div></div>
+        <button onClick={()=>setShowAdd(true)} style={{background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>Add</button>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {categories.map(cat=>{
+          const isDefault=DEFAULT_IDS.includes(cat.id);
+          return(
+            <div key={cat.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:40,height:40,borderRadius:10,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{cat.icon}</div>
+              <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{cat.name}</div>{isDefault&&<div style={{fontSize:11,color:C.textFaint}}>Default</div>}</div>
+              {!isDefault&&<button onClick={()=>setCategories(p=>p.filter(c=>c.id!==cat.id))} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={14}/></button>}
+            </div>
+          );
+        })}
+      </div>
+      {showAdd&&<Modal title="New Category" icon={Tag||Target} onClose={()=>setShowAdd(false)} onSubmit={add} submitLabel="Add Category">
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Pick an Icon</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {EMOJIS.map(e=><button key={e} onClick={()=>setForm(p=>({...p,icon:e}))} style={{fontSize:20,background:form.icon===e?C.accentBg:C.surfaceAlt,border:form.icon===e?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"4px 6px",cursor:"pointer"}}>{e}</button>)}
+          </div>
+        </div>
+        <FI label="Category Name" placeholder="Coffee, Travel, Pet..." value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
+      </Modal>}
+    </div>
+  );
+}
+
 function AppInner(){
   const[tab,setTabRaw]=useState("home");
   const[tabHistory,setTabHistory]=useState([]);
@@ -2264,10 +2439,10 @@ function AppInner(){
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const GROUPS=[
-    {key:"daily",label:"Daily Drivers",desc:"Most-used",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"calendar",icon:Calendar,label:"Calendar"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"chat",icon:MessageCircle,label:"AI Assistant"}]},
+    {key:"daily",label:"Daily Drivers",desc:"Most-used",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"recurring",icon:RefreshCw,label:"Recurring Expenses"},{id:"calendar",icon:Calendar,label:"Calendar"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"chat",icon:MessageCircle,label:"AI Assistant"}]},
     {key:"work",label:"Work & Income",desc:"Shifts and trading",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"cashflow",icon:BarChart2,label:"Income vs Spending"}]},
     {key:"reports",label:"Reports",desc:"History and analysis",items:[{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
-    {key:"tools",label:"Tools",desc:"Search, settings, help",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"},{id:"insights",icon:Zap,label:"Spending Insights"},{id:"health",icon:Activity,label:"Health Score"},{id:"settings",icon:Settings,label:"Settings"}]},
+    {key:"tools",label:"Tools",desc:"Search, settings, help",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"},{id:"insights",icon:Zap,label:"Spending Insights"},{id:"health",icon:Activity,label:"Health Score"},{id:"categories",icon:Filter,label:"Categories"},{id:"settings",icon:Settings,label:"Settings"}]},
   ];
   const allTabIds=GROUPS.flatMap(g=>g.items.map(i=>i.id));
   const isMoreTab=allTabIds.includes(tab);
@@ -2450,6 +2625,17 @@ function AppInner(){
           );
         })()}
 
+        {/* ── DAILY TIP ──────────────────────────────────── */}
+        {(()=>{
+          const TIPS_LIST=["Pay yourself first — automate savings before spending.","The 50/30/20 rule: 50% needs, 30% wants, 20% savings.","An emergency fund of 3-6 months expenses is your safety net.","Paying just the minimum on credit cards costs thousands in interest.","Automate bill payments to avoid late fees and credit damage.","Track every dollar for one month — most people are shocked.","The avalanche method saves the most interest over time.","Increasing your income by 1% beats cutting spending by 10%.","A 1% increase in your 401k today is huge over 30 years.","High-yield savings accounts earn 10-20x more than regular savings.","Renegotiate subscriptions yearly — most will give you a discount.","Your net worth grows fastest when debt is zero.","Pack lunch twice a week and save $1,000+ per year.","The best time to start investing was yesterday. Second best is today.","Set up automatic transfers to savings on payday.","Review subscriptions monthly — most people have forgotten ones.","A $5/day habit costs $1,825 a year.","Debt-to-income under 28% keeps your finances healthy.","Your credit score affects your mortgage rate by thousands.","Side income is the fastest path to financial freedom.","Index funds outperform most actively managed funds long-term.","Pay off highest-interest debt first to minimize total cost.","Build your emergency fund before investing.","Negotiate your salary — most employers expect it.","A budget is permission to spend without guilt.","Compound interest works for you in savings, against you in debt.","Review your bank fees monthly — they add up fast.","Max your employer 401k match — it is free money.","Insurance is the foundation of any financial plan.","Financial freedom is buying time, not things."];
+          const tip=TIPS_LIST[new Date().getDate()%TIPS_LIST.length];
+          return(<div style={{background:C.surface,border:`1px solid ${C.borderLight}`,borderRadius:16,padding:"13px 16px",marginBottom:14,display:"flex",gap:12,alignItems:"flex-start"}}>
+            <div style={{width:36,height:36,borderRadius:10,background:C.amberBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>💡</div>
+            <div><div style={{fontSize:11,fontWeight:700,color:C.amber,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Daily Tip</div>
+            <div style={{fontSize:13,color:C.textMid,lineHeight:1.5}}>{tip}</div></div>
+          </div>);
+        })()}
+
         {/* ── SPENDING DONUT + METRICS ─────────────────── */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
           {/* Spending donut */}
@@ -2578,6 +2764,7 @@ function AppInner(){
       </div>
     )}
     {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}><div style={{marginBottom:14}}><div style={{fontFamily:MF,fontSize:18,fontWeight:800}}>AI Assistant</div><div style={{fontSize:13,color:C.textLight,marginTop:1}}>Log everything offline — just type naturally</div></div><div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
+        {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats}/>}
         {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem}/>}
         {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")}/>}
 
@@ -2626,6 +2813,7 @@ function AppInner(){
 
         {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem}/>}
         {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals}/>}
+        {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
         {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals}/>}
         {tab==="health"&&<HealthScoreView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills}/>}
@@ -2687,7 +2875,7 @@ function AppInner(){
       {modal==="bill"&&<Modal title="Add Bill" icon={CalendarClock} onClose={cl} onSubmit={submit} submitLabel="Add Bill" accent={C.amber}><FI label="Bill Name" placeholder="Rent, Electric, Netflix..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Monthly","Bi-weekly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/></Modal>}
       {modal==="debt"&&<Modal title="Add Debt" icon={CreditCard} onClose={cl} onSubmit={submit} submitLabel="Track Debt" accent={C.red} wide><FI label="Name" placeholder="Car loan, student debt..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div style={{display:"flex",gap:12}}><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/></div></Modal>}
       {modal==="bgoal_home"&&<Modal title="Budget Goal" icon={Target} onClose={cl} onSubmit={()=>{if(!form.category||!form.limit)return;setBGoals(p=>[...p,{id:Date.now(),...form}]);cl();}} submitLabel="Set Goal" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Monthly Limit ($)" type="number" placeholder="400" value={form.limit||""} onChange={e=>ff("limit",e.target.value)}/></Modal>}
-      {modal==="receipt"&&<Modal title="Scan Receipt" icon={Scan} onClose={cl} accent={C.purple}><div style={{textAlign:"center",padding:"10px 0 20px"}}><div style={{width:64,height:64,borderRadius:18,background:C.purpleBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><Scan size={30} color={C.purple}/></div><div style={{fontFamily:MF,fontWeight:700,fontSize:15,color:C.text,marginBottom:8}}>AI Receipt Scanner</div><div style={{fontSize:13,color:C.textLight,marginBottom:16,lineHeight:1.6}}>Take a photo — AI reads the receipt and auto-fills the expense form. Requires internet.</div><label style={{display:"block",background:C.purple,borderRadius:12,padding:"13px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📷 Choose Photo<input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={async e=>{const file=e.target.files[0];if(!file)return;cl();const reader=new FileReader();reader.onload=async re=>{const b64=re.result.split(",")[1];try{const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:200,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:file.type,data:b64}},{type:"text",text:"Extract from this receipt: merchant name, total amount, category (Food/Transport/Health/Personal/Entertainment/Housing/Subscriptions/Misc). Reply ONLY as JSON: {name,amount,category}"}]}]})});const d=await resp.json();const txt=d.content?.find(c=>c.type==="text")?.text||"{}";const p=JSON.parse(txt.replace(/```json|```/g,"").trim());if(p.amount){om("expense",{name:p.name||"Receipt",amount:String(parseFloat(p.amount)||0),category:p.category||"Misc",date:todayStr()});}}catch{alert("Could not read receipt. Try a clearer photo.");}};reader.readAsDataURL(file);}}/></label><button className="ba" onClick={cl} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:11,padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",width:"100%"}}>Cancel</button></div></Modal>}
+      {modal==="receipt"&&<Modal title="Scan Receipt" icon={Scan} onClose={cl} accent={C.purple}><div style={{textAlign:"center",padding:"10px 0 20px"}}><div style={{width:64,height:64,borderRadius:18,background:C.purpleBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><Scan size={30} color={C.purple}/></div><div style={{fontFamily:MF,fontWeight:700,fontSize:15,color:C.text,marginBottom:8}}>Scan Receipt</div><div style={{fontSize:13,color:C.textLight,marginBottom:16,lineHeight:1.6}}>Take a photo of your receipt and fill in the expense details.</div><label style={{display:"block",background:C.purple,borderRadius:12,padding:"13px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📷 Take Photo<input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><label style={{display:"block",background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:12,padding:"13px 0",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>🖼 Choose from Library<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><button className="ba" onClick={cl} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:11,padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",width:"100%"}}>Cancel</button></div></Modal>}
       {modal==="simulator"&&debts.length>0&&(()=>{const dL=debts.map(d=>({...d,bal:parseFloat(d.balance||0),rate:parseFloat(d.rate||0)/100/12,min:parseFloat(d.minPayment||0)}));const tm=dL.reduce((s,d)=>s+d.min,0);const ex=parseFloat(form.extra||"0")||0;function sim(strat){let r=dL.map(d=>({...d}));let mo=0,ti=0;while(r.some(d=>d.bal>0)&&mo<600){mo++;let av=tm+ex;r=r.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;ti+=i;const p=Math.min(d.min,d.bal+i);av-=p;return{...d,bal:Math.max(0,d.bal+i-p)};});const ac=r.filter(d=>d.bal>0);if(ac.length&&av>0){const tgt=strat==="avalanche"?ac.reduce((a,b)=>a.rate>b.rate?a:b):ac.reduce((a,b)=>a.bal<b.bal?a:b);const idx=r.findIndex(d=>d.name===tgt.name);r[idx].bal=Math.max(0,r[idx].bal-av);}}return{months:mo,interest:ti};}const sn=sim("snowball"),av=sim("avalanche"),diff=sn.interest-av.interest;return(<Modal title="Payoff Simulator" icon={Calculator} onClose={cl} accent={C.green} wide><div style={{background:C.navy,borderRadius:14,padding:16,marginBottom:14,color:"#fff"}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",marginBottom:4}}>TOTAL DEBT</div><div style={{fontFamily:MF,fontSize:26,fontWeight:800,color:C.red}}>{fmt(debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0))}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>Min payments: {fmt(tm)}/mo</div></div><div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Extra Monthly Payment</div><div style={{position:"relative"}}><span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:C.textLight,fontWeight:600}}>$</span><input type="number" placeholder="0" value={form.extra||""} onChange={e=>ff("extra",e.target.value)} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"11px 14px 11px 28px",color:C.text,fontSize:15,outline:"none",boxSizing:"border-box"}}/></div><div style={{fontSize:12,color:C.textLight,marginTop:5}}>Total: {fmt(tm+ex)}/mo</div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>{[{label:"❄️ Snowball",sub:"Smallest first",m:sn.months,i:sn.interest,c:C.accent},{label:"🔥 Avalanche",sub:"Highest rate first",m:av.months,i:av.interest,c:C.green}].map(s=><div key={s.label} style={{background:C.surface,border:`1.5px solid ${s.c}44`,borderRadius:14,padding:14,borderTop:`3px solid ${s.c}`}}><div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:s.c,marginBottom:2}}>{s.label}</div><div style={{fontSize:11,color:C.textLight,marginBottom:10}}>{s.sub}</div><div style={{marginBottom:6}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>DEBT FREE</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.text}}>{s.m>=600?"∞":s.m<12?s.m+"mo":Math.floor(s.m/12)+"y "+(s.m%12)+"mo"}</div></div><div><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>INTEREST</div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red}}>{fmt(s.i)}</div></div></div>)}</div>{diff>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",fontSize:13,color:C.green,fontWeight:500}}>💡 Avalanche saves <strong>{fmt(diff)}</strong> vs Snowball</div>}</Modal>);})()} 
       
       {confirm&&<ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)} danger={confirm.danger}/>}
