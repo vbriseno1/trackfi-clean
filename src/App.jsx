@@ -2933,4 +2933,6 @@ if(typeof window !== "undefined"){
     console.error("GLOBAL ERROR:", e.message, e.filename, e.lineno, e.colno, e.error?.stack);
   });
 }
+}
+
 export default function App(){return(<ErrorBoundary><AppInner/></ErrorBoundary>);}
