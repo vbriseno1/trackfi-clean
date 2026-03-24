@@ -303,22 +303,7 @@ function PINLock({onUnlock,appName,darkMode}){
   // ── Helpers ──────────────────────────────────────────────────────────────
   const om=(t,d={})=>{setModal(t);setForm(d);};
   const cl=()=>{setModal(null);setForm({});};
-  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
-  function submit(){
-  if(modal==="expense"){
-    if(!form.name||!form.amount)return;
-    setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[]}]);
-    cl();
-  }else if(modal==="bill"){
-    if(!form.name||!form.amount)return;
-    setBills(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,dueDate:form.dueDate||"",recurring:form.recurring||"Monthly",paid:false,autoPay:false}]);
-    cl();
-  }else if(modal==="debt"){
-    if(!form.name||!form.balance)return;
-    setDebts(p=>[...p,{id:Date.now(),name:form.name,balance:form.balance,original:form.original||form.balance,rate:form.rate||"",minPayment:form.minPayment||"",type:form.type||""}]);
-    cl();
-  }
-}
+  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));function submit(){
   if(modal==="expense"){
     if(!form.name||!form.amount)return;
     setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[]}]);
@@ -2460,6 +2445,21 @@ function AppInner(){
   const om=(t,d={})=>{setModal(t);setForm(d);};
   const cl=()=>{setModal(null);setForm({});};
   const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
+  function submit(){
+  if(modal==="expense"){
+    if(!form.name||!form.amount)return;
+    setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[]}]);
+    cl();
+  }else if(modal==="bill"){
+    if(!form.name||!form.amount)return;
+    setBills(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,dueDate:form.dueDate||"",recurring:form.recurring||"Monthly",paid:false,autoPay:false}]);
+    cl();
+  }else if(modal==="debt"){
+    if(!form.name||!form.balance)return;
+    setDebts(p=>[...p,{id:Date.now(),name:form.name,balance:form.balance,original:form.original||form.balance,rate:form.rate||"",minPayment:form.minPayment||"",type:form.type||""}]);
+    cl();
+  }
+}
   const[editAcct,setEditAcct]=useState(false);
   const today=todayStr();
   const MILESTONES=[1000,5000,10000,25000,50000,100000,250000,500000,1000000];
