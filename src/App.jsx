@@ -380,14 +380,9 @@ function OnboardingWizard({onComplete}){
   );
 }
 
-Reply **"Part 2"** when ready.",
-  }
 
-================================================================================
 
-  }
 
-================================================================================
 
 
 function parseMsg(text,categories,debts){
@@ -1203,14 +1198,9 @@ function ShiftView({shifts,setShifts,income,profCategory,profSub}){
   </div>);
 }
 
-Reply **"Part 3"** when ready.",
-  }
 
-================================================================================
 
-  }
 
-================================================================================
 
 
 function TrendView({balHist,accounts,expenses}){
