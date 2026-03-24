@@ -2266,7 +2266,7 @@ function AppInner(){
         )}
 
         {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem}/>}
-        {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals}/>}
+        {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income}/>}
         {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades} onAdd={()=>om("expense")}/>}
         {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals} onAdd={()=>om("expense")}/>}
