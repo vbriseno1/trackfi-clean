@@ -913,7 +913,7 @@ function NetWorthTrendView({balHist,debts,accounts}){
       </div>
     </div>
   );
-function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd}){
+}function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem}){
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
   const now=new Date();
@@ -927,7 +927,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
   const catSorted=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   return(
     <div className="fu">
-<SH title="Spending" sub={`Total: ${fmt(totalExp)}`} onAdd={onAdd} addLabel="Expense"/>
+      <SH title="Spending" sub={`Total: ${fmt(totalExp)}`}/>
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:10,padding:3,marginBottom:14}}>
         {[["month","This Month"],["week","7 Days"],["all","All Time"]].map(([id,label])=>(
           <button key={id} className="ba" onClick={()=>setDateFilter(id)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:dateFilter===id?"#fff":"transparent",color:dateFilter===id?C.accent:C.textLight,fontWeight:dateFilter===id?700:500,fontSize:12,cursor:"pointer",boxShadow:dateFilter===id?"0 1px 4px rgba(0,0,0,.08)":"none"}}>{label}</button>
@@ -2794,9 +2794,9 @@ function AppInner(){
     )}
     {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}><div style={{marginBottom:14}}><div style={{fontFamily:MF,fontSize:18,fontWeight:800}}>AI Assistant</div><div style={{fontSize:13,color:C.textLight,marginTop:1}}>Log everything offline — just type naturally</div></div><div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
         {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats}/>}
+        {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem}/>}
         {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")}/>}
-          {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")}/>}
-<SH title="Spending" sub={`Total: ${fmt(totalExp)}`}/>
+
         {tab==="more"&&!isMoreTab&&(
           <div className="fu">
             <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:darkMode?C.text:C.text,marginBottom:2}}>More</div>
@@ -2950,6 +2950,5 @@ if(typeof window !== "undefined"){
     document.title = "ERR: " + (e.message||"unknown");
     console.error("GLOBAL ERROR:", e.message, e.filename, e.lineno, e.colno, e.error?.stack);
   });
-}
 }
 export default function App(){return(<ErrorBoundary><AppInner/></ErrorBoundary>);}
