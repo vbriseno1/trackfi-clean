@@ -190,7 +190,12 @@ class ErrorBoundary extends React.Component {
         <div style={{background:C.surface,borderRadius:18,padding:28,maxWidth:380,width:"100%",textAlign:"center",boxShadow:"0 4px 24px rgba(0,0,0,.1)"}}>
           <div style={{fontSize:40,marginBottom:12}}>⚠️</div>
           <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Something went wrong</div>
-          <div style={{fontSize:13,color:C.textLight,marginBottom:20,lineHeight:1.5}}>{this.state.err?.message||"Unexpected error. Your data is safe."}</div>
+
+      {debts.length>0&&totalOriginal>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+        <div style={{background:C.redBg,borderRadius:12,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:10,color:C.red,marginBottom:2,fontWeight:600}}>REMAINING</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.red}}>{fmt(totalDebt)}</div></div>
+        <div style={{background:C.greenBg,borderRadius:12,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:10,color:C.green,marginBottom:2,fontWeight:600}}>PAID DOWN</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.green}}>{fmt(totalPaidDown)}</div></div>
+        <div style={{background:C.accentBg,borderRadius:12,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:10,color:C.accent,marginBottom:2,fontWeight:600}}>PROGRESS</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.accent}}>{overallPct}%</div></div>
+      </div>}          <div style={{fontSize:13,color:C.textLight,marginBottom:20,lineHeight:1.5}}>{this.state.err?.message||"Unexpected error. Your data is safe."}</div>
           <button onClick={()=>window.location.reload()} style={{background:C.accent,border:"none",borderRadius:10,padding:"12px 24px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",marginBottom:8}}>Reload App</button>
           <div style={{fontSize:11,color:C.textLight}}>Data stored separately — won't be affected</div>
         </div>
@@ -664,6 +669,9 @@ function PaycheckView({bills,income,expenses,accounts,onAdd}){
 
 function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
   const totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
+  const totalOriginal=debts.reduce((s,d)=>s+(parseFloat(d.original||d.balance||0)),0);
+  const totalPaidDown=Math.max(0,totalOriginal-totalDebt);
+  const overallPct=totalOriginal>0?Math.round(totalPaidDown/totalOriginal*100):0;
   const totalAssets=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
   const currentNW=totalAssets-totalDebt;
   const chartData=balHist.map(h=>({date:h.date,assets:(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0),netWorth:((h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0))-totalDebt})).slice(-52);
@@ -730,6 +738,34 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
   );
 }
 
+function ExpenseRow({e,cat,onEdit,onDelete}){
+  const[swipeX,setSwipeX]=React.useState(0);
+  const[swiping,setSwiping]=React.useState(false);
+  const startX=React.useRef(0);
+  const threshold=60;
+  function onTouchStart(ev){startX.current=ev.touches[0].clientX;setSwiping(true);}
+  function onTouchMove(ev){if(!swiping)return;const dx=ev.touches[0].clientX-startX.current;setSwipeX(Math.min(0,Math.max(-threshold*1.5,dx)));}
+  function onTouchEnd(){if(swipeX<-threshold){onDelete();}setSwipeX(0);setSwiping(false);}
+  const revealed=swipeX<-20;
+  return(
+    <div style={{position:"relative",marginBottom:8,borderRadius:16,overflow:"hidden"}}>
+      <div style={{position:"absolute",right:0,top:0,bottom:0,width:68,background:C.red,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"0 16px 16px 0"}}>
+        <Trash2 size={18} color="#fff"/>
+      </div>
+      <div
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+        onClick={swipeX===0?onEdit:undefined}
+        style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,cursor:"pointer",transform:`translateX(${swipeX}px)`,transition:swiping?"none":"transform .2s ease",position:"relative",zIndex:1}}>
+        <div style={{width:38,height:38,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat?.icon||"💸"}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:14,fontWeight:600,color:C.text}}>{e.name}</div>
+          <div style={{fontSize:11,color:C.textLight,marginTop:1}}>{e.date}{e.category?` · ${e.category}`:""}{e.notes?` · ${e.notes}`:""}</div>
+        </div>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red,flexShrink:0}}>-{fmt(e.amount)}</div>
+      </div>
+    </div>
+  );
+}
 function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd}){
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
@@ -754,6 +790,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         <div style={{fontSize:12,color:C.textLight}}>{filteredExp.length} transaction{filteredExp.length!==1?"s":""}</div>
         <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.red}}>-{fmt(totalExp)}</div>
       </div>
+      {filteredExp.length>0&&(()=>{const catTotals=Object.entries(filteredExp.reduce((m,e)=>{const k=e.category||"Misc";m[k]=(m[k]||0)+(parseFloat(e.amount)||0);return m;},{})).sort((a,b)=>b[1]-a[1]).slice(0,4);const catMax=catTotals[0]?.[1]||1;return(<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 14px",marginBottom:14}}>{catTotals.map(([cat,amt])=><div key={cat} style={{marginBottom:7}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,color:C.textMid,fontWeight:500}}>{cat}</span><span style={{fontSize:12,fontFamily:MF,fontWeight:700,color:C.red}}>-{fmt(amt)}</span></div><div style={{height:5,background:C.borderLight,borderRadius:3}}><div style={{height:5,width:`${(amt/catMax*100).toFixed(1)}%`,background:C.accent,borderRadius:3,transition:"width .4s"}}/></div></div>)}</div>);})()}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
         <div style={{fontSize:12,color:C.textLight}}>{filteredExp.length} transaction{filteredExp.length!==1?"s":""}</div>
         <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.red}}>-{fmt(totalExp)}</div>
@@ -799,12 +836,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       {filteredExp.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>{
         const cat=categories.find(c=>c.name===e.category);
         return(
-          <div key={e.id} style={{marginBottom:8}}><div onClick={()=>setEditItem({type:"expense",data:e})} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,cursor:"pointer"}}>
-              <div style={{width:38,height:38,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat?.icon||"💸"}</div>
-              <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{e.name}</div><div style={{fontSize:11,color:C.textLight,marginTop:1}}>{e.date}{e.category?` · ${e.category}`:""}{e.notes?` · ${e.notes}`:""}</div></div>
-              <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red,flexShrink:0}}>-{fmt(e.amount)}</div>
-            </div>
-          </div>
+          <ExpenseRow key={e.id} e={e} cat={cat} onEdit={()=>setEditItem({type:"expense",data:e})} onDelete={()=>{if(window.confirm("Delete "+e.name+"?"))setExpenses(p=>p.filter(x=>x.id!==e.id));}}/>
         );
       })}
       {showAdd&&<Modal title="Budget Goal" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Set Goal" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Monthly Limit ($)" type="number" placeholder="400" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
@@ -813,14 +845,32 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
 }function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
   const unpaid=bills.filter(b=>!b.paid);
+  const paid=bills.filter(b=>b.paid);
+  const totalMonthly=bills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+  const totalPaid=paid.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+  const pctPaid=totalMonthly>0?Math.round(totalPaid/totalMonthly*100):0;
   const soonAmt=bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=7).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   return(
     <div className="fu">
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Bills</div><div style={{fontSize:13,color:C.textLight}}>{unpaid.length} unpaid · {overdue.length} overdue</div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>setBills(p=>p.map(b=>overdue.some(o=>o.id===b.id)?{...b,paid:true}:b))} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{width:38,height:38,borderRadius:12,background:C.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Plus size={20} color="#fff"/></button></div>
       </div>
-      {soonAmt>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"11px 15px",marginBottom:14,fontSize:13,color:C.amber,fontWeight:500}}>💸 <strong>{fmt(soonAmt)}</strong> due in the next 7 days</div>}
+      {bills.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:12,color:C.textLight,marginBottom:2}}>Monthly Total</div>
+          <div style={{fontFamily:MF,fontWeight:800,fontSize:20,color:C.text}}>{fmt(totalMonthly)}</div>
+          <div style={{fontSize:12,color:C.green,marginTop:2}}>{fmt(totalPaid)} paid · {fmt(totalMonthly-totalPaid)} remaining</div>
+        </div>
+        <div style={{position:"relative",width:56,height:56}}>
+          <svg width="56" height="56" style={{transform:"rotate(-90deg)"}}>
+            <circle cx="28" cy="28" r="22" fill="none" stroke={C.borderLight} strokeWidth="5"/>
+            <circle cx="28" cy="28" r="22" fill="none" stroke={pctPaid===100?C.green:C.accent} strokeWidth="5" strokeDasharray={`${2*Math.PI*22}`} strokeDashoffset={`${2*Math.PI*22*(1-pctPaid/100)}`} strokeLinecap="round"/>
+          </svg>
+          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:C.text}}>{pctPaid}%</div>
+        </div>
+      </div>}
+      {soonAmt>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"11px 15px",marginBottom:14,fontSize:13,color:C.amber,fontWeight:500}}>⚠️ <strong>{fmt(soonAmt)}</strong> due in the next 7 days</div>}
       {bills.length===0&&<Empty text='No bills yet. Use AI Logger — type "rent 1200 due 28th"' icon={CalendarClock}/>}
       {bills.sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).map(b=>{
         const d=dueIn(b.dueDate);
@@ -854,6 +904,9 @@ function DebtView({debts,setDebts,setModal,setEditItem}){
   const[strategy,setStrategy]=useState("avalanche");
   const[payModal,setPayModal]=useState(null);
   const totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
+  const totalOriginal=debts.reduce((s,d)=>s+(parseFloat(d.original||d.balance||0)),0);
+  const totalPaidDown=Math.max(0,totalOriginal-totalDebt);
+  const overallPct=totalOriginal>0?Math.round(totalPaidDown/totalOriginal*100):0;
   const pieData=debts.map((d,i)=>({name:d.name,value:parseFloat(d.balance)||0,color:PIE_COLORS[i%PIE_COLORS.length],debt:d}));
   function calcPayoff(d){
     const bal=parseFloat(d.balance)||0;
@@ -1735,12 +1788,13 @@ function AuthScreen({onAuth,onSkip}){
   return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><style>{CSS}</style><div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"32px 28px",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}><div style={{textAlign:"center",marginBottom:24}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:C.navy,marginBottom:4}}>💰 Trackfi</div><div style={{fontSize:14,color:C.textLight}}>{mode==="login"?"Welcome back":"Create your free account"}</div></div>{mode==="signup"&&<div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Your Name</div><input value={name} onChange={e=>setName(e.target.value)} placeholder="Victor" style={iS(false,false)} autoCapitalize="words"/></div>}<div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Email</div><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" style={iS(false,false)} autoCapitalize="none"/></div><div style={{marginBottom:err?8:20}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Password</div><input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={mode==="login"?"Password":"Min 6 characters"} style={iS(false,false)} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/></div>{err&&<div style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.red,marginBottom:14}}>{err}</div>}<button onClick={submit} disabled={loading} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:loading?C.border:`linear-gradient(135deg,${C.accent},${C.green})`,color:loading?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading?"default":"pointer",marginBottom:14}}>{loading?"Signing in...":(mode==="login"?"Sign In":"Create Account")}</button><div style={{textAlign:"center",fontSize:13,color:C.textLight,marginBottom:16}}>{mode==="login"?"Don't have an account? ":"Already have an account? "}<button onClick={()=>{setMode(mode==="login"?"signup":"login");setErr("");}} style={{background:"none",border:"none",color:C.accent,fontWeight:700,cursor:"pointer",fontSize:13}}>{mode==="login"?"Sign up":"Sign in"}</button></div>{onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}><button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer"}}>Continue without account →</button><div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data saved locally on this device</div></div>}</div></div>);
 }
 
-function RecurringView({expenses,setExpenses,categories,showToast}){
+function RecurringView({expenses,setExpenses,categories,showToast,appReady}){
   const[showAdd,setShowAdd]=useState(false);
   const[form,setForm]=useState({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});
   const[recurrings,setRecurrings]=useState(()=>{try{const r=localStorage.getItem("fv_recurring");return r?JSON.parse(r):[];}catch{return[];}});
   useEffect(()=>{try{localStorage.setItem("fv_recurring",JSON.stringify(recurrings));}catch{}},[recurrings]);
   useEffect(()=>{
+    if(!appReady)return;
     const today=todayStr();
     const updated=recurrings.map(r=>{
       if(r.nextDate<=today&&r.active!==false){
@@ -1756,7 +1810,7 @@ function RecurringView({expenses,setExpenses,categories,showToast}){
       return r;
     });
     setRecurrings(updated);
-  },[]);
+  },[appReady]);
   const FREQS=["Weekly","Bi-weekly","Monthly","Quarterly","Annual"];
   const ICONS=["🏠","🚗","📱","💪","🎮","📺","☕","🛒","💊","🐕","🎓","⚡","💧","🌐","🎵","🏋️","🍕","✈️","👶","🐱"];
   function add(){if(!form.name||!form.amount)return;setRecurrings(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category,frequency:form.frequency,nextDate:form.nextDate,icon:form.icon||"🔄",active:true}]);setForm({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});if(showToast)showToast("Recurring added — "+form.name);setShowAdd(false);}
@@ -1887,16 +1941,25 @@ function AppInner(){
         const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName"];
         const vals=await Promise.all(keys.map(k=>sg(k)));
         const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an]=vals;
-        if(ac)setAccounts(a=>({...a,...ac}));
-        if(inc)setIncome(a=>({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",...a,...inc}));
-        if(exp)setExpenses(exp);if(bll)setBills(bll);if(dbt)setDebts(dbt);
-        if(bg)setBGoals(bg);if(sg2)setSGoals(sg2);if(cats&&cats.length)setCats(cats);
-        if(tr)setTrades(tr);if(ta)setTradingAccount(ta);
-        if(sett)setSettings(a=>({...a,...sett}));
-        if(cc)setCalColors(a=>({...a,...cc}));
-        if(nts)setNotifs(nts);if(bh)setBalHist(bh);if(sh)setShifts(sh);
-        if(prof)setProfCategory(prof);if(psub)setProfSub(psub);
-        if(dc)setDashConfig(a=>({...a,...dc}));if(an)setAppName(an);
+        try{if(exp&&exp.length)setExpenses(exp);}catch{}
+        try{if(bll&&bll.length)setBills(bll);}catch{}
+        try{if(dbt&&dbt.length)setDebts(dbt);}catch{}
+        try{if(bg&&bg.length)setBGoals(bg);}catch{}
+        try{if(sg2&&sg2.length)setSGoals(sg2);}catch{}
+        try{if(cats&&cats.length)setCats(cats);}catch{}
+        try{if(tr&&tr.length)setTrades(tr);}catch{}
+        try{if(ta)setTradingAccount(ta);}catch{}
+        try{if(ac)setAccounts(a=>({...a,...ac}));}catch{}
+        try{if(inc)setIncome(a=>({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",...a,...inc}));}catch{}
+        try{if(sett)setSettings(a=>({...a,...sett}));}catch{}
+        try{if(cc)setCalColors(a=>({...a,...cc}));}catch{}
+        try{if(nts&&nts.length)setNotifs(nts);}catch{}
+        try{if(bh&&bh.length)setBalHist(bh);}catch{}
+        try{if(sh&&sh.length)setShifts(sh);}catch{}
+        try{if(prof)setProfCategory(prof);}catch{}
+        try{if(psub)setProfSub(psub);}catch{}
+        try{if(dc)setDashConfig(a=>({...a,...dc}));}catch{}
+        try{if(an)setAppName(an);}catch{}
       }catch(e){console.error("Load error",e);}
       setReady(true);
     })();
@@ -1918,6 +1981,10 @@ function AppInner(){
   useEffect(()=>{if(ready)ss("fv6:profSub",profSub);},[profSub,ready]);
   useEffect(()=>{if(ready)ss("fv6:dashConfig",dashConfig);},[dashConfig,ready]);
   useEffect(()=>{if(ready)ss("fv6:appName",appName);},[appName,ready]);
+  useEffect(()=>{if(ready)ss("fv6:settings",settings);},[settings,ready]);
+  useEffect(()=>{if(ready)ss("fv6:calColors",calColors);},[calColors,ready]);
+  useEffect(()=>{if(ready)ss("fv6:taccount",tradingAccount);},[tradingAccount,ready]);
+  useEffect(()=>{try{localStorage.setItem("fv_dark",darkMode?"1":"0");}catch{}},[darkMode]);
 
   const totalIncome=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
   const totalAssets=useMemo(()=>(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0)),[accounts]);
@@ -2272,7 +2339,7 @@ function AppInner(){
 
         {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem}/>}
         {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} showToast={showToast}/>}
-        {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast}/>}
+        {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades} onAdd={()=>om("expense")}/>}
         {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals} onAdd={()=>om("expense")}/>}
         {tab==="health"&&<HealthScoreView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} onAdd={()=>om("expense")}/>}
