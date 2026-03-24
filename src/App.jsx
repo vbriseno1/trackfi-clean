@@ -303,21 +303,7 @@ function PINLock({onUnlock,appName,darkMode}){
   // ── Helpers ──────────────────────────────────────────────────────────────
   const om=(t,d={})=>{setModal(t);setForm(d);};
   const cl=()=>{setModal(null);setForm({});};
-  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));function submit(){
-  if(modal==="expense"){
-    if(!form.name||!form.amount)return;
-    setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[]}]);
-    cl();
-  }else if(modal==="bill"){
-    if(!form.name||!form.amount)return;
-    setBills(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,dueDate:form.dueDate||"",recurring:form.recurring||"Monthly",paid:false,autoPay:false}]);
-    cl();
-  }else if(modal==="debt"){
-    if(!form.name||!form.balance)return;
-    setDebts(p=>[...p,{id:Date.now(),name:form.name,balance:form.balance,original:form.original||form.balance,rate:form.rate||"",minPayment:form.minPayment||"",type:form.type||""}]);
-    cl();
-  }
-}
+  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
   const[editAcct,setEditAcct]=useState(false);
   const today=todayStr();
 
@@ -913,8 +899,7 @@ function NetWorthTrendView({balHist,debts,accounts}){
       </div>
     </div>
   );
-}function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem}){
-  const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
+function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd}){
   const[dateFilter,setDateFilter]=useState("month");
   const now=new Date();
   const filteredExp=useMemo(()=>{
@@ -927,7 +912,7 @@ function NetWorthTrendView({balHist,debts,accounts}){
   const catSorted=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   return(
     <div className="fu">
-      <SH title="Spending" sub={`Total: ${fmt(totalExp)}`}/>
+      <SH title="Spending" sub={`Total: ${fmt(totalExp)}`} onAdd={onAdd} addLabel="Expense"/>
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:10,padding:3,marginBottom:14}}>
         {[["month","This Month"],["week","7 Days"],["all","All Time"]].map(([id,label])=>(
           <button key={id} className="ba" onClick={()=>setDateFilter(id)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:dateFilter===id?"#fff":"transparent",color:dateFilter===id?C.accent:C.textLight,fontWeight:dateFilter===id?700:500,fontSize:12,cursor:"pointer",boxShadow:dateFilter===id?"0 1px 4px rgba(0,0,0,.08)":"none"}}>{label}</button>
@@ -2794,8 +2779,7 @@ function AppInner(){
     )}
     {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}><div style={{marginBottom:14}}><div style={{fontFamily:MF,fontSize:18,fontWeight:800}}>AI Assistant</div><div style={{fontSize:13,color:C.textLight,marginTop:1}}>Log everything offline — just type naturally</div></div><div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
         {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats}/>}
-        {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem}/>}
-        {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")}/>}
+{tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")}/>}        {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")}/>}
 
         {tab==="more"&&!isMoreTab&&(
           <div className="fu">
