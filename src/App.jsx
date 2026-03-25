@@ -190,12 +190,7 @@ class ErrorBoundary extends React.Component {
         <div style={{background:C.surface,borderRadius:18,padding:28,maxWidth:380,width:"100%",textAlign:"center",boxShadow:"0 4px 24px rgba(0,0,0,.1)"}}>
           <div style={{fontSize:40,marginBottom:12}}>⚠️</div>
           <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Something went wrong</div>
-
-      {debts.length>0&&totalOriginal>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
-        <div style={{background:C.redBg,borderRadius:12,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:10,color:C.red,marginBottom:2,fontWeight:600}}>REMAINING</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.red}}>{fmt(totalDebt)}</div></div>
-        <div style={{background:C.greenBg,borderRadius:12,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:10,color:C.green,marginBottom:2,fontWeight:600}}>PAID DOWN</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.green}}>{fmt(totalPaidDown)}</div></div>
-        <div style={{background:C.accentBg,borderRadius:12,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:10,color:C.accent,marginBottom:2,fontWeight:600}}>PROGRESS</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.accent}}>{overallPct}%</div></div>
-      </div>}          <div style={{fontSize:13,color:C.textLight,marginBottom:20,lineHeight:1.5}}>{this.state.err?.message||"Unexpected error. Your data is safe."}</div>
+          <div style={{fontSize:13,color:C.textLight,marginBottom:20,lineHeight:1.5}}>{this.state.err?.message||"Unexpected error. Your data is safe."}</div>
           <button onClick={()=>window.location.reload()} style={{background:C.accent,border:"none",borderRadius:10,padding:"12px 24px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",marginBottom:8}}>Reload App</button>
           <div style={{fontSize:11,color:C.textLight}}>Data stored separately — won't be affected</div>
         </div>
@@ -495,7 +490,7 @@ Or ask: \"can I afford $200?\""}]);
   </div>);
 }
 
-function SearchView({expenses,bills,debts,trades,categories}){
+function SearchView({expenses,bills,debts,trades,categories,setEditItem,onNavigate}){
   const[q,setQ]=useState("");const[filter,setFilter]=useState("all");
   const results=useMemo(()=>{
     if(!q.trim())return[];
@@ -524,13 +519,13 @@ function SearchView({expenses,bills,debts,trades,categories}){
       {!q&&<div style={{textAlign:"center",padding:"40px 20px",color:C.textLight}}><Search size={32} color={C.border} style={{margin:"0 auto 12px",display:"block"}}/><div style={{fontSize:14,fontWeight:500}}>Start typing to search</div></div>}
       {q&&results.length===0&&<div style={{textAlign:"center",padding:"40px 20px",color:C.textLight}}><div style={{fontSize:32,marginBottom:12}}>🔍</div><div style={{fontSize:14,fontWeight:500}}>No results for "{q}"</div></div>}
       {results.map((r,i)=>(
-        <div key={i} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"13px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}>
+        <div key={i} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"13px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>{if((r.type==="expense"||r.type==="bill"||r.type==="debt")&&setEditItem)setEditItem({type:r.type,data:r.data});else if(r.type==="trade"&&onNavigate)onNavigate("trading");}}>
           <div style={{width:38,height:38,borderRadius:10,background:r.color+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{r.icon}</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:14,fontWeight:600,color:C.text}}>{r.title}</div>
             <div style={{fontSize:12,color:C.textLight,marginTop:1}}>{r.sub}</div>
           </div>
-          <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:r.color,flexShrink:0}}>{r.val}</div>
+          <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:r.color}}>{r.val}</div><ChevronRight size={13} color={C.textLight}/></div>
         </div>
       ))}
       {results.length>0&&<div style={{textAlign:"center",fontSize:12,color:C.textLight,marginTop:8}}>{results.length} result{results.length!==1?"s":""} found</div>}
@@ -769,18 +764,26 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
 function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd}){
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
+  const[searchQ,setSearchQ]=useState("");
   const now=new Date();
   const filteredExp=useMemo(()=>{
-    if(dateFilter==="month"){const m=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");return expenses.filter(e=>e.date?.startsWith(m));}
-    if(dateFilter==="week"){const ago=new Date(now);ago.setDate(ago.getDate()-7);return expenses.filter(e=>new Date(e.date)>=ago);}
-    return expenses;
-  },[expenses,dateFilter]);
+    let base=expenses;
+    if(dateFilter==="month"){const m=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");base=base.filter(e=>e.date?.startsWith(m));}
+    else if(dateFilter==="week"){const ago=new Date(now);ago.setDate(ago.getDate()-7);base=base.filter(e=>new Date(e.date)>=ago);}
+    if(searchQ){const q=searchQ.toLowerCase();base=base.filter(e=>(e.name||"").toLowerCase().includes(q)||(e.category||"").toLowerCase().includes(q)||(e.notes||"").toLowerCase().includes(q));}
+    return base;
+  },[expenses,dateFilter,searchQ]);
   const totalExp=filteredExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const catMap=filteredExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
   const catSorted=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   return(
     <div className="fu">
       <SH title="Spending" sub={`Total: ${fmt(totalExp)}`} onAdd={onAdd} addLabel="Expense"/>
+      <div style={{position:"relative",marginBottom:10}}>
+        <Search size={14} color={C.textLight} style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)"}}/>
+        <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Search expenses..." style={{width:"100%",background:C.surface,border:"1.5px solid "+(searchQ?C.accent:C.border),borderRadius:10,padding:"9px 12px 9px 32px",fontSize:13,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+        {searchQ&&<button onClick={()=>setSearchQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:2}}><X size={14}/></button>}
+      </div>
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:10,padding:3,marginBottom:14}}>
         {[["month","This Month"],["week","7 Days"],["all","All Time"]].map(([id,label])=>(
           <button key={id} className="ba" onClick={()=>setDateFilter(id)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:dateFilter===id?"#fff":"transparent",color:dateFilter===id?C.accent:C.textLight,fontWeight:dateFilter===id?700:500,fontSize:12,cursor:"pointer",boxShadow:dateFilter===id?"0 1px 4px rgba(0,0,0,.08)":"none"}}>{label}</button>
@@ -932,6 +935,8 @@ function DebtView({debts,setDebts,setModal,setEditItem}){
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Debt Tracker</div><div style={{fontSize:13,color:C.textLight}}>{fmt(totalDebt)} total across {debts.length} debt{debts.length!==1?"s":""}</div></div>
+
+      {debts.length>0&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}><div style={{background:C.redBg,borderRadius:12,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:10,color:C.red,marginBottom:2,fontWeight:600,letterSpacing:.5}}>REMAINING</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.red}}>{fmt(totalDebt)}</div></div><div style={{background:C.greenBg,borderRadius:12,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:10,color:C.green,marginBottom:2,fontWeight:600,letterSpacing:.5}}>PAID DOWN</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.green}}>{fmt(totalPaidDown)}</div></div><div style={{background:C.accentBg,borderRadius:12,padding:"10px 12px",textAlign:"center"}}><div style={{fontSize:10,color:C.accent,marginBottom:2,fontWeight:600,letterSpacing:.5}}>PROGRESS</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.accent}}>{overallPct}%</div></div></div>}
         <div style={{display:"flex",gap:8}}>
           {debts.length>0&&<button className="ba" onClick={()=>setModal("simulator")} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}><Calculator size={13}/>Sim</button>}
           <button className="ba" onClick={()=>setModal("debt")} style={{width:38,height:38,borderRadius:12,background:C.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Plus size={20} color="#fff"/></button>
@@ -1261,11 +1266,16 @@ function ShiftView({shifts,setShifts,income,profCategory,profSub,showToast}){
   const mh=ms.reduce((s,x)=>s+(parseFloat(x.hours)||0),0),mg=ms.reduce((s,x)=>s+(parseFloat(x.gross)||0),0),mot=ms.filter(s=>s.type!=="Regular").reduce((s,x)=>s+(parseFloat(x.gross)||0),0);
   const ytd=shifts.reduce((s,x)=>s+(parseFloat(x.gross)||0),0);
   const subRole=getProfSub(profCategory,profSub);
+  const weeklyData=useMemo(()=>{const wk={};shifts.forEach(s=>{const d=new Date((s.date||todayStr())+"T00:00:00");d.setDate(d.getDate()-d.getDay());const k=d.toISOString().split("T")[0];if(!wk[k])wk[k]={week:k,gross:0};wk[k].gross+=parseFloat(s.gross||0);});return Object.values(wk).sort((a,b)=>a.week.localeCompare(b.week)).slice(-8).map(w=>({...w,label:w.week.slice(5)}));},[shifts]);
   return(<div className="fu">
     <SH title={prof.icon+" "+prof.shiftLabel+" Tracker"} sub={subRole.label+" · Log hours & calculate pay"} onAdd={()=>setShowAdd(true)} addLabel={"Log "+prof.shiftLabel}/>
     <div style={{background:`linear-gradient(135deg,${C.navy} 0%,#1a3a6e 100%)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>This Month</div><div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:"#fff",marginBottom:14}}>{fmt(mg)}</div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>{[["Shifts",String(ms.length)],["Hours",mh.toFixed(1)],["OT Pay",fmtK(mot)],["YTD",fmtK(ytd)]].map(([l,v])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l}</div><div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:"#fff"}}>{v}</div></div>)}</div></div>
     {shifts.length===0&&<Empty text={`No ${prof.shiftLabel.toLowerCase()}s logged yet.`} icon={Clock}/>}
     {shifts.slice(0,30).map(s=>{const mult=OT[s.type]||1;const col={Regular:C.accent,Overtime:C.amber,"Double Time":C.red,Night:C.purple,Weekend:C.green,Holiday:C.red}[s.type]||C.accent;return(<div key={s.id} className="rw" style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}><div style={{width:40,height:40,borderRadius:12,background:col+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Clock size={18} color={col}/></div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{s.type} {prof.shiftLabel}</div><div style={{fontSize:12,color:C.textLight,marginTop:2}}>{fmtDate(s.date)} · {s.hours}h @ ${s.rate}/hr{mult!==1&&<span style={{color:col,fontWeight:600}}> ×{mult}</span>}{s.note&&" · "+s.note}</div></div><div style={{textAlign:"right",flexShrink:0}}><div style={{fontFamily:MF,fontWeight:800,fontSize:15,color:C.green}}>{fmt(s.gross)}</div><button className="db" onClick={()=>{if(window.confirm("Delete this shift?"))setShifts(p=>p.filter(x=>x.id!==s.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:2,display:"flex",marginLeft:"auto",marginTop:4}}><Trash2 size={13}/></button></div></div>);})}
+    {weeklyData.length>1&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 14px 8px",marginBottom:14}}>
+      <div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:10}}>Weekly Earnings</div>
+      <ResponsiveContainer width="100%" height={100}><BarChart data={weeklyData} barSize={24}><XAxis dataKey="label" tick={{fontSize:10,fill:C.textLight}} axisLine={false} tickLine={false}/><Tooltip formatter={v=>[fmt(v),"Gross"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Bar dataKey="gross" fill={C.accent} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>
+    </div>}
     {showAdd&&<Modal title={`Log ${prof.shiftLabel}`} icon={Clock} onClose={()=>setShowAdd(false)} onSubmit={add} submitLabel={`Add ${prof.shiftLabel}`} accent={C.green}><FI label="Date" type="date" value={form.date} onChange={e=>ff("date",e.target.value)}/><FS label={`${prof.shiftLabel} Type`} options={Object.keys(OT)} value={form.type} onChange={e=>ff("type",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Hours Worked" type="number" placeholder="8" value={form.hours} onChange={e=>ff("hours",e.target.value)}/><FI half label="Hourly Rate ($)" type="number" placeholder={DEFAULT_RATE||"35.00"} value={form.rate} onChange={e=>ff("rate",e.target.value)}/></div>{form.hours&&form.rate&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.green,fontWeight:600}}>Gross pay: {fmt((parseFloat(form.hours)*parseFloat(form.rate)*(OT[form.type]||1)).toFixed(2))}</div>}<FI label="Note (optional)" placeholder={prof.notePlaceholder} value={form.note} onChange={e=>ff("note",e.target.value)}/></Modal>}
   </div>);
 }
@@ -2348,7 +2358,7 @@ function AppInner(){
         {tab==="shifts"&&<ShiftView shifts={shifts} setShifts={setShifts} income={income} profCategory={profCategory} profSub={profSub} showToast={showToast}/>}
         {tab==="trend"&&<TrendView balHist={balHist} accounts={accounts} expenses={expenses} onNavigate={navTo}/>}
         {tab==="statement"&&<StatementView expenses={expenses} bills={bills} income={income} accounts={accounts} debts={debts} trades={trades} appName={appName} categories={categories} onAdd={()=>om("expense")}/>}
-        {tab==="search"&&<SearchView expenses={expenses} bills={bills} debts={debts} trades={trades} categories={categories}/>}
+        {tab==="search"&&<SearchView expenses={expenses} bills={bills} debts={debts} trades={trades} categories={categories} setEditItem={setEditItem} onNavigate={navTo}/>}
         {tab==="subscriptions"&&<SubsView detectedSubs={detectedSubs} expenses={expenses}/>}
         {tab==="insights"&&<InsightsView expenses={expenses} income={income} bills={bills} debts={debts} budgetGoals={budgetGoals} savingsGoals={savingsGoals} onAdd={()=>om("expense")}/>}
         {tab==="paycheck"&&<PaycheckView bills={bills} income={income} expenses={expenses} accounts={accounts} onAdd={()=>om("expense")}/>}
