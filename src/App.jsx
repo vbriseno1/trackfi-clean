@@ -387,10 +387,23 @@ function OnboardingWizard({onComplete}){
 
 function parseMsg(text,categories,debts){
   const t=text.toLowerCase().trim();
+  // Pre-process: split bill
+  const splitM=t.match(/split\s*(\d+)/i);const splitBy=splitM?parseInt(splitM[1]):1;
+  // Pre-process: tip/percentage
+  const tipM=t.match(/(?:plus|\+|tip)\s*(\d+)%/i);const tipPct=tipM?parseFloat(tipM[1])/100:0;
   const am=text.match(/\$?([\d,]+(?:\.\d{1,2})?)/);
-  const amount=am?am[1].replace(/,/g,""):null;
+  const rawAmount=am?parseFloat(am[1].replace(/,/g,"")):null;
+  const amount=rawAmount!=null?String(((rawAmount*(1+tipPct))/splitBy).toFixed(2)):null;
   const dt=new Date();let date=todayStr();
   if(t.includes("yesterday")){const d=new Date(dt);d.setDate(d.getDate()-1);date=d.toISOString().split("T")[0];}
+  const DAYS=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  const lastDayM=t.match(/last\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
+  if(lastDayM){const target=DAYS.indexOf(lastDayM[1].toLowerCase());const d=new Date(dt);const curr=d.getDay();const diff=curr>=target?curr-target:curr-target+7;d.setDate(d.getDate()-Math.max(diff,1));date=d.toISOString().split("T")[0];}
+  // Transfer detection (moved/transferred X to savings/checking)
+  if((t.includes("moved")||t.includes("transferred")||t.includes("transfer"))&&amount){
+    if(t.includes("saving"))return{type:"account",key:"savings",amount,text:"Moved to savings"};
+    if(t.includes("checking"))return{type:"account",key:"checking",amount,text:"Moved to checking"};
+  }
   const dueM=t.match(/due(?:\s+the)?\s+(\d{1,2})(?:st|nd|rd|th)?/)||t.match(/on(?:\s+the)?\s+(\d{1,2})(?:st|nd|rd|th)/);
   let dueDate=null;
   if(dueM){const d=new Date(dt.getFullYear(),dt.getMonth(),parseInt(dueM[1]));if(d<dt)d.setMonth(d.getMonth()+1);dueDate=d.toISOString().split("T")[0];}
@@ -439,12 +452,15 @@ function parseMsg(text,categories,debts){
 }
 
 function ChatView({categories,expenses,bills,debts,accounts,income,savingsGoals,trades,tradingAccount,setExpenses,setBills,setDebts,setSGoals,setAccounts,setIncome,setTrades,setBGoals}){
-  const[msgs,setMsgs]=useState([{role:"a",text:"Hey! Log expenses:\
-• \"lunch 12\" - Food $12\
-• \"rent 1200 due 28th\" - Bill\
-• \"checking 3200\" - Balance\
-• \"traded ES long +250\" - Trade\
-• \"undo\" - Remove last\
+  const[msgs,setMsgs]=useState([{role:"a",text:"Hey! I can log anything:\
+• \"lunch 60 split 3\" → $20 expense\
+• \"coffee 5 tip 20%\" → $6 expense\
+• \"rent 1200 due 28th\" → bill\
+• \"checking 3200\" → balance update\
+• \"moved 500 to savings\" → transfer\
+• \"last monday dinner 45\" → dated expense\
+• \"traded ES +250\" → trade\
+• \"undo\" → remove last entry\
 Or ask: \"can I afford $200?\""}]);
   const[input,setInput]=useState("");const[pending,setPending]=useState(null);const[history,setHistory]=useState([]);
   const botRef=useRef();
@@ -768,6 +784,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
   const[searchQ,setSearchQ]=useState("");
+  const[editingBudget,setEditingBudget]=useState(null);
   const now=new Date();
   const filteredExp=useMemo(()=>{
     let base=expenses;
@@ -810,7 +827,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
                   <span style={{fontSize:13,fontWeight:600,color:C.text}}>{g.category}</span>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:13,fontWeight:700,color:over?C.red:C.green}}>{fmt(sp)}<span style={{fontWeight:400,color:C.textLight}}> / {fmt(lim)}</span></span>
+                    <span style={{fontSize:13,fontWeight:700,color:over?C.red:C.green}}>{fmt(sp)} / {editingBudget===g.id?<input autoFocus type="number" defaultValue={g.limit} onBlur={e=>{const v=parseFloat(e.target.value);if(v>0)setBGoals(p=>p.map(x=>x.id===g.id?{...x,limit:String(v)}:x));setEditingBudget(null);}} onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditingBudget(null);}} style={{width:70,background:C.surfaceAlt,border:`1.5px solid ${C.accent}`,borderRadius:6,padding:"2px 6px",fontSize:13,fontWeight:700,color:C.accent,outline:"none",textAlign:"right"}}/>:<span onClick={()=>setEditingBudget(g.id)} style={{fontWeight:400,color:C.textLight,cursor:"pointer",borderBottom:`1px dashed ${C.textLight}`}}>{fmt(lim)} ✎</span>}</span>
                     <button onClick={()=>{if(window.confirm("Remove budget goal?"))setBGoals(p=>p.filter(x=>x.id!==g.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><X size={12}/></button>
                   </div>
                 </div>
@@ -1359,6 +1376,10 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
   const[mo,setMo]=useState(now.getMonth());const[yr,setYr]=useState(now.getFullYear());
   function nav(d){let m=mo+d,y=yr;if(m<0){m=11;y--;}else if(m>11){m=0;y++;}setMo(m);setYr(y);}
   const ms=yr+"-"+String(mo+1).padStart(2,"0");
+  const prevMo=mo===0?11:mo-1,prevYr=mo===0?yr-1:yr;
+  const prevMs=prevYr+"-"+String(prevMo+1).padStart(2,"0");
+  const prevExp=expenses.filter(e=>e.date?.startsWith(prevMs));
+  const totPrev=prevExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const mExp=expenses.filter(e=>e.date?.startsWith(ms));
   const mBills=bills.filter(b=>b.dueDate?.startsWith(ms));
   const mTrades=trades.filter(t=>t.date?.startsWith(ms));
@@ -1383,7 +1404,18 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
         {[["Income",fmt(ti),C.greenMid],["Expenses",fmt(totE),C.redMid],["Net",(ti-totE>=0?"+":"")+fmt(ti-totE),ti-totE>=0?C.greenMid:C.redMid]].map(([l,v,c])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"11px 12px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:3}}>{l}</div><div style={{fontFamily:MF,fontSize:15,fontWeight:800,color:c}}>{v}</div></div>)}
       </div>
     </div>
-    {Object.entries(catMap).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i)=><div key={cat} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:600,color:C.text}}>{cat}</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(amt)}</span></div><BarProg pct={totE>0?amt/totE*100:0} color={PIE_COLORS[i%PIE_COLORS.length]} h={5}/></div>)}
+    
+      {(totE>0||totPrev>0)&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px",marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:600,color:C.textLight}}>vs Last Month</div>
+          <div style={{fontSize:13,fontWeight:700,color:totE<=totPrev?C.green:C.red}}>{totE<=totPrev?"↓ ":"+$"}{totE<=totPrev?fmt(totPrev-totE)+" less":""+fmt(totE-totPrev)+" more"}</div>
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:6}}>
+          <div style={{flex:1}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:4}}>THIS MONTH</div><div style={{height:8,background:C.borderLight,borderRadius:4}}><div style={{height:8,width:totPrev>0?Math.min(100,totE/Math.max(totE,totPrev)*100).toFixed(1)+"%":"100%",background:totE<=totPrev?C.green:C.red,borderRadius:4}}/></div><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text,marginTop:3}}>{fmt(totE)}</div></div>
+          <div style={{flex:1}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:4}}>LAST MONTH</div><div style={{height:8,background:C.borderLight,borderRadius:4}}><div style={{height:8,width:totE>0?Math.min(100,totPrev/Math.max(totE,totPrev)*100).toFixed(1)+"%":"100%",background:C.textLight,borderRadius:4}}/></div><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.textMid,marginTop:3}}>{fmt(totPrev)}</div></div>
+        </div>
+      </div>}
+      {Object.entries(catMap).sort((a,b)=>b[1]-a[1]).map(([cat,amt],i)=><div key={cat} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:13,fontWeight:600,color:C.text}}>{cat}</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(amt)}</span></div><BarProg pct={totE>0?amt/totE*100:0} color={PIE_COLORS[i%PIE_COLORS.length]} h={5}/></div>)}
     {mTrades.length>0&&<div style={{background:C.surface,border:"1px solid "+C.border,borderRadius:14,padding:14,marginTop:12}}><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text,marginBottom:4}}>Trading P&L: <span style={{color:tradePnl>=0?C.green:C.red}}>{tradePnl>=0?"+":""}{fmt(tradePnl)}</span></div><div style={{fontSize:12,color:C.textLight}}>{mTrades.length} trades · {mTrades.filter(t=>parseFloat(t.pnl)>0).length} wins</div></div>}
     <div style={{marginTop:12}}>
       <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Transactions ({mExp.length})</div>
@@ -1429,7 +1461,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
     <div style={{background:C.surface,border:"1px solid "+C.border,borderRadius:16,padding:18}}>
       <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Dave Ramsey Steps</div>
       <div style={{fontSize:12,color:C.textLight,marginBottom:10}}>Based on your real numbers</div>
-      {[[liq>=1000,"$1,000 emergency fund","Have: "+fmt(liq)+(liq<1000?" — need "+fmt(1000-liq)+" more":""),"baby-1"],[td===0,"Pay off all debt (except mortgage)","Total: "+fmt(td)+(td>0?" across "+debts.length+" account"+(debts.length!==1?"s":""):""),"baby-2"],[efMo>=3&&efMo<=6,"3-6 months emergency fund",efMo.toFixed(1)+" months — target 3-6","baby-3"],[parseFloat(accounts.investments||0)>=annualIncome*0.15,"Invest 15% for retirement","Balance: "+fmt(accounts.investments||0),"baby-4"],[savingsGoals.some(g=>g.name?.toLowerCase().includes("college")||g.name?.toLowerCase().includes("529")),"College funding (if applicable)","Check savings goals","baby-5"],[parseFloat(accounts.property||0)>0||nw>totalDebt*2,"Pay off home early","Property equity: "+fmt(accounts.property||0),"baby-6"],[nw>=500000||nw>=annualIncome*7,"Build wealth & give generously","Net worth: "+fmt(nw),"baby-7"]].map(([done,t,sub],i)=><div key={i} style={{display:"flex",gap:12,alignItems:"center",padding:"9px 0",borderBottom:i<3?"1px solid "+C.border:""}}><div style={{width:24,height:24,borderRadius:"50%",background:done?C.greenBg:C.bg,border:"2px solid "+(done?C.green:C.border),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:11,fontWeight:800,color:done?C.green:C.textLight}}>{done?"✓":i+1}</div><div><div style={{fontSize:13,fontWeight:600,color:done?C.textLight:C.text,textDecoration:done?"line-through":"none"}}>{t}</div><div style={{fontSize:11,color:C.textLight,marginTop:2}}>{sub}</div></div></div>)}
+      {[[liq>=1000,"$1,000 emergency fund","Have: "+fmt(liq)+(liq<1000?" — need "+fmt(1000-liq)+" more":""),"baby-1"],[td===0,"Pay off all debt (except mortgage)","Total: "+fmt(td)+(td>0?" across "+debts.length+" account"+(debts.length!==1?"s":""):""),"baby-2"],[efMo>=3&&efMo<=6,"3-6 months emergency fund",efMo.toFixed(1)+" months — target 3-6","baby-3"],[parseFloat(accounts.investments||0)>=annualIncome*0.15,"Invest 15% for retirement","Balance: "+fmt(accounts.investments||0),"baby-4"],[savingsGoals.some(g=>g.name?.toLowerCase().includes("college")||g.name?.toLowerCase().includes("529")),"College funding (if applicable)","Check savings goals","baby-5"],[parseFloat(accounts.property||0)>0||nw>td*2,"Pay off home early","Property equity: "+fmt(accounts.property||0),"baby-6"],[nw>=500000||nw>=annualIncome*7,"Build wealth & give generously","Net worth: "+fmt(nw),"baby-7"]].map(([done,t,sub],i)=><div key={i} style={{display:"flex",gap:12,alignItems:"center",padding:"9px 0",borderBottom:i<3?"1px solid "+C.border:""}}><div style={{width:24,height:24,borderRadius:"50%",background:done?C.greenBg:C.bg,border:"2px solid "+(done?C.green:C.border),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:11,fontWeight:800,color:done?C.green:C.textLight}}>{done?"✓":i+1}</div><div><div style={{fontSize:13,fontWeight:600,color:done?C.textLight:C.text,textDecoration:done?"line-through":"none"}}>{t}</div><div style={{fontSize:11,color:C.textLight,marginTop:2}}>{sub}</div></div></div>)}
     </div>
   </div>);
 }
@@ -2189,7 +2221,7 @@ function AppInner(){
             {(()=>{
               const cards=[
                 {label:"Safe to Spend",sub:"Tap for paycheck breakdown",val:fmt(sts),color:sts>500?C.green:sts>0?C.amber:C.red,tab:"paycheck",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Left",fmt(Math.max(0,totalIncome-totalExp)),cashflow>=0?C.green:C.red]]},
-                {label:"Net Worth",sub:"Tap to see wealth over time",val:fmt(totalAssets-totalDebt),color:totalAssets-totalDebt>=0?C.green:C.red,tab:"networthtrend",stats:[["Assets",fmt(totalAssets),C.green],["Debt",fmt(totalDebt),C.red],["Trend",totalAssets-totalDebt>=0?"Positive":"Negative",totalAssets-totalDebt>=0?C.green:C.red]]},
+                {label:"Net Worth",sub:"Tap to see wealth over time",val:fmt(totalAssets-totalDebt),color:totalAssets-totalDebt>=0?C.green:C.red,tab:"networthtrend",spark:balHist.slice(-8).map((h,i)=>({i,v:Object.values(h.accounts||{}).reduce((s,v)=>s+(parseFloat(v)||0),0)})),stats:[["Assets",fmt(totalAssets),C.green],["Debt",fmt(totalDebt),C.red],["Trend",totalAssets-totalDebt>=0?"Positive":"Negative",totalAssets-totalDebt>=0?C.green:C.red]]},
                 {label:"Monthly Cashflow",sub:"Tap to see income vs spending",val:(cashflow>=0?"+":"")+fmt(cashflow),color:cashflow>=0?C.green:C.red,tab:"cashflow",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Saved",savingsRate.toFixed(1)+"%",savingsRate>=15?C.green:savingsRate>=5?C.amber:C.red]]},
                 {label:"Debt Overview",sub:"Tap to see payoff plan",val:fmt(totalDebt),color:totalDebt===0?C.green:C.red,tab:"debt",stats:[["Accounts",String(debts.length),C.textFaint],["Min/mo",fmt(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)),C.red],["DTI",((debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/Math.max(1,totalIncome))*100).toFixed(1)+"%",C.textFaint]]},
                 {label:"Savings Progress",sub:savingsGoals.length?"Tap to track goals":"Add your first goal",val:savingsGoals.length?Math.round((parseFloat(savingsGoals[0].saved||0)/parseFloat(savingsGoals[0].target||1))*100)+"%":"--",color:C.green,tab:"savings",stats:savingsGoals.length?[["Saved",fmt(savingsGoals[0].saved||0),C.green],["Target",fmt(savingsGoals[0].target||0),C.textFaint],["Goals",String(savingsGoals.length),C.textFaint]]:[["Tap","to add",C.textFaint],["your","first",C.textFaint],["goal","→",C.textFaint]]},
