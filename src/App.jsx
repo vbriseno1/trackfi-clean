@@ -862,7 +862,10 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
           ))}
         </div>
       )}
-      {budgetGoals.length===0&&<button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:10,padding:"10px 14px",color:C.purple,fontSize:13,cursor:"pointer",marginBottom:14,width:"100%",justifyContent:"center"}}><Target size={13}/>Add Budget Goal</button>}{!searchQ&&filteredExp.length>=3&&(()=>{
+      {budgetGoals.length===0&&<button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:10,padding:"10px 14px",color:C.purple,fontSize:13,cursor:"pointer",marginBottom:14,width:"100%",justifyContent:"center"}}><Target size={13}/>Add Budget Goal</button>}
+      {!searchQ&&filteredExp.length>=7&&(()=>{const DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];const dow=[0,1,2,3,4,5,6].map(d=>filteredExp.filter(e=>new Date(e.date+"T00:00:00").getDay()===d).reduce((s,e)=>s+(parseFloat(e.amount)||0),0));const max=Math.max(...dow)||1;const topDay=dow.indexOf(max);return(<div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Spending by Day</div><div style={{display:"flex",gap:4,alignItems:"flex-end",height:60}}>{dow.map((amt,d)=>{const h=Math.max(4,Math.round((amt/max)*52));return(<div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div style={{width:"100%",height:h,background:d===topDay?`linear-gradient(135deg,${C.accent},${C.purple})`:C.accentBg,borderRadius:"4px 4px 0 0",transition:"height .4s"}}/><div style={{fontSize:9,color:d===topDay?C.accent:C.textFaint,fontWeight:d===topDay?700:400}}>{DAYS[d]}</div></div>);})}</div><div style={{fontSize:11,color:C.textLight,marginTop:8}}>{DAYS[topDay]} is your highest spending day · {fmt(max)}</div></div>);})()}
+
+      {!searchQ&&filteredExp.length>=3&&(()=>{
         const merchants=filteredExp.reduce((m,e)=>{const k=(e.name||'').toLowerCase().trim();if(!k)return m;m[k]=(m[k]||0)+(parseFloat(e.amount)||0);return m;},{});
         const top=Object.entries(merchants).sort((a,b)=>b[1]-a[1])[0];
         const dayOfMo=new Date().getDate();
@@ -893,9 +896,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       {showAdd&&<Modal title="Budget Goal" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Set Goal" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Monthly Limit ($)" type="number" placeholder="400" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
     </div>
   );
-}
-
-function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
+}function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
   const unpaid=bills.filter(b=>!b.paid);
   const paid=bills.filter(b=>b.paid);
@@ -1301,6 +1302,7 @@ function TradingView({trades,setTrades,account,setAccount,showToast}){
   const bal=parseFloat(account.balance||0),dep=parseFloat(account.deposit||0),ret=dep>0?((bal-dep)/dep*100).toFixed(1):0;
   const monthly=trades.reduce((a,t)=>{const m=t.date?MOS[new Date(t.date).getMonth()]:"?";a[m]=(a[m]||0)+(parseFloat(t.pnl)||0);return a},{});
   const chartData=Object.entries(monthly).map(([month,pnl])=>({month,pnl}));
+  const equityData=useMemo(()=>{let run=parseFloat(tradingAccount.deposit||0);return[...trades].sort((a,b)=>a.date?.localeCompare(b.date)).map((t,i)=>{run+=(parseFloat(t.pnl)||0);return{i:i+1,equity:parseFloat(run.toFixed(2)),pnl:parseFloat(t.pnl)||0};});},[trades,tradingAccount.deposit]);
   return(<div className="fu">
     <SH title="Futures Trading" sub="P&L, win rate & performance" onAdd={()=>setShowAdd(true)} addLabel="Log Trade"/>
     <div style={{background:`linear-gradient(135deg,${C.navy} 0%,#1a3a6e 100%)`,borderRadius:18,padding:22,marginBottom:14,color:"#fff"}}>
@@ -1311,6 +1313,7 @@ function TradingView({trades,setTrades,account,setAccount,showToast}){
     <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.slate,marginBottom:10}}>Update Balances</div><div style={{display:"flex",gap:10}}><div style={{flex:1}}><div style={{fontSize:11,color:C.textLight,marginBottom:4}}>Total Deposited</div><input type="number" placeholder="0.00" value={account.deposit||""} onChange={e=>setAccount(p=>({...p,deposit:e.target.value}))} style={{...iS(false),padding:"9px 12px",fontSize:13}}/></div><div style={{flex:1}}><div style={{fontSize:11,color:C.textLight,marginBottom:4}}>Current Balance</div><input type="number" placeholder="0.00" value={account.balance||""} onChange={e=>setAccount(p=>({...p,balance:e.target.value}))} style={{...iS(false),padding:"9px 12px",fontSize:13}}/></div></div></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>{[{l:"Win Rate",v:winRate+"%",c:parseFloat(winRate)>=50?C.green:C.red},{l:"Profit Factor",v:avgLoss>0?(avgWin/avgLoss).toFixed(2):"∞",c:C.accent},{l:"Avg Win",v:fmt(avgWin),c:C.green},{l:"Avg Loss",v:"-"+fmt(avgLoss),c:C.red}].map(s=><div key={s.l} style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:14}}><div style={{fontSize:11,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.4,marginBottom:4}}>{s.l}</div><div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:s.c}}>{s.v}</div></div>)}</div>
     {chartData.length>0&&<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Monthly P&L</div><ResponsiveContainer width="100%" height={160}><BarChart data={chartData} margin={{left:-20,right:4,top:4,bottom:0}}><XAxis dataKey="month" tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/><YAxis tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}} formatter={v=>[fmt(v),"P&L"]}/><Bar dataKey="pnl" radius={[6,6,0,0]}>{chartData.map((d,i)=><Cell key={i} fill={d.pnl>=0?C.green:C.red}/>)}</Bar></BarChart></ResponsiveContainer></div>}
+    {equityData.length>1&&<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Equity Curve</div><div style={{fontSize:12,color:C.textLight,marginBottom:14}}>Cumulative account value per trade</div><ResponsiveContainer width="100%" height={160}><AreaChart data={equityData} margin={{left:-20,right:4,top:4,bottom:0}}><defs><linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(tradingAccount.deposit||0))?C.green:C.red} stopOpacity={.2}/><stop offset="95%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(tradingAccount.deposit||0))?C.green:C.red} stopOpacity={0}/></linearGradient></defs><XAxis dataKey="i" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} label={{value:"Trades",position:"insideBottom",fill:C.textFaint,fontSize:10}}/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><Tooltip formatter={(v,n)=>n==="equity"?[fmt(v),"Account Value"]:[fmt(v),"Trade P&L"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Area type="monotone" dataKey="equity" name="equity" stroke={equityData[equityData.length-1]?.equity>=(parseFloat(tradingAccount.deposit||0))?C.green:C.red} strokeWidth={2.5} fill="url(#eqGrad)" dot={false}/></AreaChart></ResponsiveContainer></div>}
     <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:10}}>Trade Log</div>
     {trades.length===0&&<Empty text="No trades yet. Tap 'Log Trade' to start." icon={BarChart2}/>}
     {trades.map(t=>{const pnl=parseFloat(t.pnl)||0;return(<Row key={t.id} icon={pnl>=0?"📈":"📉"} title={t.symbol} sub={`${t.date} · ${t.side} · ${t.contracts} contract${t.contracts!=="1"?"s":""}${t.note?" · "+t.note:""}`} right={(pnl>=0?"+":"")+fmt(pnl)} rightColor={pnl>=0?C.green:C.red} rightSub={t.entry&&t.exit?t.entry+" - "+t.exit:""} onDelete={()=>{if(window.confirm("Delete this trade?"))setTrades(p=>p.filter(x=>x.id!==t.id));}} badge={pnl>=0?{label:"WIN",bg:C.greenBg,color:C.green}:{label:"LOSS",bg:C.redBg,color:C.red}}/>);})}
@@ -1464,6 +1467,8 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
   const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const catMap=mExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
   function exportHTML(){const rows=mExp.map(e=>"<tr><td>"+e.date+"</td><td>"+e.name+"</td><td>"+e.category+"</td><td>$"+parseFloat(e.amount).toFixed(2)+"</td></tr>").join("");const html="<html><head><title>"+MOS[mo]+" "+yr+" Statement</title></head><body><h1>"+(appName||"Finances")+" — "+MOS[mo]+" "+yr+"</h1><table border='1'><tr><th>Date</th><th>Name</th><th>Category</th><th>Amount</th></tr>"+rows+"<tr><td colspan='3'><b>Total</b></td><td><b>$"+totE.toFixed(2)+"</b></td></tr></table></body></html>";const b=new Blob([html],{type:"text/html"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"finances")+"-"+MOS[mo]+"-"+yr+".html";a.click();URL.revokeObjectURL(u);}
+  function exportCSV(){const rows=[["Date","Name","Category","Amount"],...mExp.map(e=>[e.date,'"'+e.name+'"','"'+e.category+'"',parseFloat(e.amount).toFixed(2)])];const csv=rows.map(r=>r.join(",")).join("
+");const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"trackfi")+"-"+MOS[mo]+"-"+yr+".csv";a.click();URL.revokeObjectURL(u);}
   return(<div className="fu">
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
       <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Monthly Statement</div><div style={{fontSize:13,color:C.textLight}}>{MOS[mo]} {yr}</div></div>
@@ -1471,7 +1476,7 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
         <button className="ba" onClick={onAdd} style={{background:C.accent,border:"none",borderRadius:10,padding:"8px 12px",cursor:"pointer",color:"#fff",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",gap:4}}><Plus size={13}/>Add</button>
         <button className="ba" onClick={()=>nav(-1)} style={{background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:"8px 12px",cursor:"pointer",color:C.textMid,fontWeight:600}}>←</button>
         <button className="ba" onClick={()=>nav(1)} style={{background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:"8px 12px",cursor:"pointer",color:C.textMid,fontWeight:600}}>→</button>
-        <button className="ba" onClick={exportHTML} style={{background:C.green,border:"none",borderRadius:10,padding:"8px 12px",cursor:"pointer",color:"#fff",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",gap:4}}><Download size={13}/>Export</button>
+        <button className="ba" onClick={exportCSV} style={{background:C.teal,border:"none",borderRadius:10,padding:"8px 12px",cursor:"pointer",color:"#fff",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",gap:4}}><Download size={13}/>CSV</button><button className="ba" onClick={exportHTML} style={{background:C.green,border:"none",borderRadius:10,padding:"8px 12px",cursor:"pointer",color:"#fff",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",gap:4}}><Download size={13}/>HTML</button>
       </div>
     </div>
     <div style={{background:C.navy,borderRadius:18,padding:20,marginBottom:16,color:"#fff"}}>
@@ -1541,16 +1546,22 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   </div>);
 }
 
-function SettingsView({settings,setSettings,appName,setAppName,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail}){
+function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail}){
   const[nm,setNm]=useState(appName||"");const[showPIN,setShowPIN]=useState(false);
   function exportData(){const d={exportedAt:new Date().toISOString(),appName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,version:"2.0"};const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;a.click();URL.revokeObjectURL(u);}
   async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(d.accounts)setAccounts(d.accounts);if(d.income)setIncome(d.income);if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);alert("✅ Imported!");}catch(e){alert("❌ "+e.message);}}
   const S=(k,l,d,ic)=>(<div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{ic}</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>{l}</div><div style={{fontSize:12,color:C.textLight}}>{d}</div></div></div><button onClick={()=>setSettings(p=>({...p,[k]:!p[k]}))} style={{background:"none",border:"none",cursor:"pointer",color:settings[k]?C.accent:C.borderLight,padding:0}}>{settings[k]?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>);
   return(<div className="fu">
-    <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:16}}>Settings</div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+      <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Settings</div>
+      {userEmail&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:C.accent}}>{userEmail.split("@")[0]}</div>}
+    </div>
     <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:12}}>
       <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>App Name</div>
       <div style={{display:"flex",gap:8,marginBottom:14}}><input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Trackfi" style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none"}}/><button className="ba" onClick={()=>nm.trim()&&setAppName(nm.trim())} style={{background:C.accent,border:"none",borderRadius:10,padding:"0 16px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>Save</button></div>
+      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6,marginTop:14}}>Greeting Name</div>
+      <div style={{fontSize:11,color:C.textLight,marginBottom:6}}>Used in your home screen greeting — "Good morning, ____"</div>
+      <div style={{display:"flex",gap:8,marginBottom:14}}><input value={greetName||""} onChange={e=>setGreetName(e.target.value)} placeholder="Your first name" style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none"}}/><button className="ba" onClick={()=>setGreetName(greetName.trim())} style={{background:C.green,border:"none",borderRadius:10,padding:"0 16px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>Save</button></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
         {PROFESSIONS.map(p=><button key={p.id} onClick={()=>{setProfCategory(p.id);setProfSub(p.subs[0].id);}} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:10,border:`1.5px solid ${profCategory===p.id?C.accent:C.border}`,background:profCategory===p.id?C.accentBg:C.surfaceAlt,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:12,fontWeight:600,color:profCategory===p.id?C.accent:C.text}}>{p.label}</span></button>)}
       </div>
@@ -1576,7 +1587,7 @@ function SettingsView({settings,setSettings,appName,setAppName,darkMode,setDarkM
     </div>
     {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:10}}><RefreshCw size={14}/>Re-run Setup Wizard</button>}
     <div style={{marginTop:8,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
-      {userEmail&&<div style={{fontSize:12,color:C.textLight,textAlign:"center",marginBottom:8}}>Signed in as {userEmail}</div>}
+      
       {onSignOut&&<button className="ba" onClick={()=>onSignOut()} style={{width:"100%",marginBottom:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}
       {onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}
     </div>
@@ -2036,8 +2047,8 @@ function CategoriesView({categories,setCategories,showToast}){
 function AppInner(){
   const[tab,setTabRaw]=useState("home");
   const[tabHistory,setTabHistory]=useState([]);
-  function navTo(t){if(t===tab)return;setTabHistory(h=>[...h.slice(-19),tab]);setTabRaw(t);setTimeout(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;},0);}
-  function goBack(){setTabHistory(h=>{if(!h.length)return h;const p=h[h.length-1];setTabRaw(p);setTimeout(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;},0);return h.slice(0,-1);});}
+  function navTo(t){if(t===tab)return;setTabHistory(h=>[...h.slice(-19),tab]);setTabRaw(t);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));}
+  function goBack(){setTabHistory(h=>{if(!h.length)return h;const p=h[h.length-1];setTabRaw(p);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));return h.slice(0,-1);});}
   const canGoBack=tabHistory.length>0;
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
@@ -2065,6 +2076,7 @@ function AppInner(){
   const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,quickActions:["expense","receipt","bill","debt","simulator","budget"]});
   const[dashConfig,setDashConfig]=useState({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
   const[appName,setAppName]=useState("Trackfi");
+  const[greetName,setGreetName]=useState("");
   const[profCategory,setProfCategory]=useState("healthcare");
   const[profSub,setProfSub]=useState("nurse_rn");
   const[darkMode,setDarkMode]=useState(()=>{try{return localStorage.getItem("fv_dark")==="1";}catch{return false;}});
@@ -2087,9 +2099,9 @@ function AppInner(){
   useEffect(()=>{
     (async()=>{
       try{
-        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName"];
+        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName"];
         const vals=await Promise.all(keys.map(k=>sg(k)));
-        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an]=vals;
+        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn]=vals;
         try{if(exp&&exp.length)setExpenses(exp);}catch{}
         try{if(bll&&bll.length)setBills(bll);}catch{}
         try{if(dbt&&dbt.length)setDebts(dbt);}catch{}
@@ -2109,6 +2121,7 @@ function AppInner(){
         try{if(psub)setProfSub(psub);}catch{}
         try{if(dc)setDashConfig(a=>({...a,...dc}));}catch{}
         try{if(an)setAppName(an);}catch{}
+        try{if(gn)setGreetName(gn);}catch{}
       }catch(e){console.error("Load error",e);}
       setReady(true);
     })();
@@ -2130,6 +2143,7 @@ function AppInner(){
   useEffect(()=>{if(ready)ss("fv6:profSub",profSub);},[profSub,ready]);
   useEffect(()=>{if(ready)ss("fv6:dashConfig",dashConfig);},[dashConfig,ready]);
   useEffect(()=>{if(ready)ss("fv6:appName",appName);},[appName,ready]);
+  useEffect(()=>{if(ready)ss("fv6:greetName",greetName);},[greetName,ready]);
   useEffect(()=>{if(ready)ss("fv6:settings",settings);},[settings,ready]);
   useEffect(()=>{if(ready)ss("fv6:calColors",calColors);},[calColors,ready]);
   useEffect(()=>{if(ready)ss("fv6:taccount",tradingAccount);},[tradingAccount,ready]);
@@ -2251,7 +2265,8 @@ function AppInner(){
   if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip}/>;
   if(!ready)return(<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:`3px solid ${C.accentMid}`,borderTopColor:C.accent,borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:C.textLight}}>Loading your data...</div></div></div>);
   if(!onboarded)return(<><style>{CSS}</style><OnboardingWizard onComplete={async d=>{
-    if(d.name)setAppName(d.name);else if(d.appName)setAppName(d.appName);
+    if(d.name)setGreetName(d.name);
+    setAppName("Trackfi");
     if(d.profCategory)setProfCategory(d.profCategory);if(d.profSub)setProfSub(d.profSub);
     if(d.income)setIncome(d.income);if(d.accounts)setAccounts(d.accounts);
     if(d.goalName&&d.goalTarget){setSGoals(p=>[...p,{id:Date.now().toString(),name:d.goalName,target:parseFloat(d.goalTarget),saved:0,monthly:0,icon:"🎯",color:C.accent}]);}
@@ -2274,7 +2289,7 @@ function AppInner(){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
               <div>
                 <div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:C.text}}>
-                  {new Date().getHours()<12?"Good morning":new Date().getHours()<17?"Good afternoon":"Good evening"} {appName.split("'")[0].split(" ")[0]||"there"} {getProfession(profCategory).icon}
+                  {new Date().getHours()<12?"Good morning":new Date().getHours()<17?"Good afternoon":"Good evening"} {greetName||"there"} {getProfession(profCategory).icon}
                 </div>
                 <div style={{fontSize:13,color:C.textLight,marginTop:2}}>{new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>
               </div>
@@ -2459,7 +2474,7 @@ function AppInner(){
               {expenses.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,4).map(e=>{
                 const cat=categories.find(c=>c.name===e.category);
                 return(<div key={e.id} onClick={()=>setEditItem({type:"expense",data:e})} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
-                  <div style={{width:36,height:36,borderRadius:10,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{cat?.icon||"💸"}</div>
+                  <div style={{width:36,height:36,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,position:"relative"}}>{cat?.icon||"💸"}</div>
                   <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{e.name}</div><div style={{fontSize:11,color:C.textLight}}>{e.date} · {e.category}</div></div>
                   <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>-{fmt(e.amount)}</div>
                 </div>);
@@ -2533,13 +2548,13 @@ function AppInner(){
         {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} onNavigate={navTo}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Notifications</div><div style={{fontSize:13,color:C.textLight}}>{notifs.filter(n=>!n.read).length} unread</div></div>
-              <div style={{display:"flex",gap:8}}>{notifs.some(n=>!n.read)&&<button className="ba" onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.textMid,cursor:"pointer"}}>Mark read</button>}{notifs.length>0&&<button className="ba" onClick={()=>{if(window.confirm("Clear all?"))setNotifs([]);}} style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.red,cursor:"pointer"}}>Clear</button>}</div>
+              <div style={{display:"flex",gap:8}}>{notifs.some(n=>!n.read)&&<button className="ba" onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.textMid,cursor:"pointer"}}>Mark all read</button>}{notifs.length>0&&<button className="ba" onClick={()=>{if(window.confirm("Clear all?"))setNotifs([]);}} style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.red,cursor:"pointer"}}>Clear</button>}</div>
             </div>
             {notifs.length===0&&<Empty text="All clear — alerts will show here" icon={Bell}/>}
             {notifs.map(n=>{const S={danger:{bg:C.redBg,br:C.redMid,c:C.red,ic:"🚨"},warning:{bg:C.amberBg,br:C.amberMid,c:C.amber,ic:"⚠️"},success:{bg:C.greenBg,br:C.greenMid,c:C.green,ic:"✅"},info:{bg:C.accentBg,br:C.accentMid,c:C.accent,ic:"💡"}}[n.type]||{bg:C.bg,br:C.border,c:C.text,ic:"🔔"};const ago=Date.now()-n.time;const ta=ago<60000?"just now":ago<3600000?Math.floor(ago/60000)+"m ago":ago<86400000?Math.floor(ago/3600000)+"h ago":Math.floor(ago/86400000)+"d ago";return(<div key={n.id} style={{background:n.read?C.surface:S.bg,border:`1.5px solid ${n.read?C.border:S.br}`,borderRadius:14,padding:"13px 14px",marginBottom:8}}><div style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{fontSize:20,flexShrink:0}}>{S.ic}</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:n.read?C.textMid:S.c}}>{n.title}</div><div style={{fontSize:12,color:C.textLight,marginTop:3,lineHeight:1.4}}>{n.body}</div><div style={{fontSize:11,color:C.textLight,marginTop:4}}>{ta}</div></div>{!n.read&&<div style={{width:8,height:8,borderRadius:"50%",background:S.c,flexShrink:0,marginTop:4}}/>}</div><div style={{display:"flex",gap:7,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}><button className="ba" onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))} style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 0",color:C.textMid,fontWeight:600,fontSize:12,cursor:"pointer"}}>Dismiss</button><button className="ba" onClick={()=>setNotifs(p=>p.filter(x=>x.id!==n.id))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",color:C.textLight,cursor:"pointer",display:"flex",alignItems:"center"}}><X size={13}/></button></div></div>);})}
