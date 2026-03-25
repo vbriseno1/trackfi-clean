@@ -45,16 +45,17 @@ async function signIn(email, password) {
 }
 
 const C = {
-  bg:"#E8ECF4",       surface:"#FFFFFF",    surfaceAlt:"#F4F6FB",
-  border:"#CBD5E1",   borderLight:"#DDE3EE",
-  navy:"#0D1B2A",     navyMid:"#1A3557",    navyLight:"#2A4A7F",
-  accent:"#2563EB",   accentBg:"#EFF6FF",   accentMid:"#BFDBFE",
-  green:"#10B981",    greenBg:"#DCFCE7",    greenMid:"#6EE7B7",
-  red:"#EF4444",      redBg:"#FEE2E2",      redMid:"#FCA5A5",
-  amber:"#F59E0B",    amberBg:"#FEF3C7",    amberMid:"#FDE68A",
+  bg:"#F0F2F8",       surface:"#FFFFFF",    surfaceAlt:"#F7F8FC",
+  border:"#E2E5EE",   borderLight:"#ECEEF5",
+  navy:"#0A1628",     navyMid:"#1A2E50",    navyLight:"#243B6B",
+  accent:"#6366F1",   accentBg:"#EEF2FF",   accentMid:"#C7D2FE",
+  green:"#059669",    greenBg:"#ECFDF5",    greenMid:"#6EE7B7",
+  red:"#DC2626",      redBg:"#FEF2F2",      redMid:"#FCA5A5",
+  amber:"#D97706",    amberBg:"#FFFBEB",    amberMid:"#FDE68A",
   purple:"#7C3AED",   purpleBg:"#F5F3FF",   purpleMid:"#DDD6FE",
-  text:"#0D1B2A",     textMid:"#334155",    textLight:"#64748B",  textFaint:"#94A3B8",
-  slate:"#64748B",
+  teal:"#0D9488",     tealBg:"#F0FDFA",     tealMid:"#5EEAD4",
+  text:"#0A1628",     textMid:"#374151",    textLight:"#6B7280",  textFaint:"#9CA3AF",
+  slate:"#6B7280",
 };
 const PIE_COLORS = [C.accent,C.green,C.amber,C.red,C.purple,"#0891B2","#DB2777","#EA580C","#16A34A","#DC2626"];
 const MF="'Manrope',sans-serif";
@@ -154,28 +155,35 @@ const DEF_CATS = [
 ];
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{background:#E8ECF4;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased}
-::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#dde1e7;border-radius:4px}
+html,body{background:#F0F2F8;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior:none}
+::-webkit-scrollbar{display:none}
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 input,select,button,textarea{font-family:'Inter',sans-serif}
-@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-@keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+@keyframes pop{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+@keyframes shimmer{0%{background-position:-200px 0}100%{background-position:calc(200px + 100%) 0}}
 @keyframes spin{to{transform:rotate(360deg)}}
-.fu{animation:fadeUp .22s ease both}
-.ba{transition:opacity .12s,transform .1s}.ba:active{transform:scale(.97)}
-.hl{transition:box-shadow .18s,transform .18s}.hl:hover{box-shadow:0 2px 16px rgba(0,0,0,.08);transform:translateY(-1px)}
-.db{opacity:0;transition:opacity .12s}.rw:hover .db{opacity:1}
-.blurred{filter:blur(8px);user-select:none;transition:filter .2s}
-.unblurred{filter:none;transition:filter .2s}
-textarea:focus,input:focus,select:focus{outline:none}
+.fu{animation:fadeUp .26s cubic-bezier(.22,1,.36,1) both}
+.si{animation:slideIn .22s cubic-bezier(.22,1,.36,1) both}
+.pop{animation:pop .28s cubic-bezier(.34,1.56,.64,1) both}
+.ba{transition:all .15s cubic-bezier(.22,1,.36,1);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ba:active{transform:scale(.96)!important;opacity:.8}
+.hl:hover{box-shadow:0 8px 24px rgba(99,102,241,.14)!important;transform:translateY(-2px)!important}
+.db{opacity:0;transition:opacity .15s}.rw:hover .db{opacity:1}
+.blurred{filter:blur(8px);user-select:none;transition:filter .25s}
+.unblurred{filter:none;transition:filter .25s}
+.card{background:#fff;border-radius:16px;box-shadow:0 1px 3px rgba(10,22,40,.05),0 4px 12px rgba(10,22,40,.04);transition:box-shadow .2s,transform .15s}
+.card:active{box-shadow:0 1px 2px rgba(10,22,40,.06)!important;transform:scale(.99)!important}
+.glass{background:rgba(255,255,255,.8);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
 .swipe-row{position:relative;overflow:hidden}
-.swipe-content{transition:transform .2s ease}
+.swipe-content{transition:transform .22s cubic-bezier(.22,1,.36,1)}
 .swipe-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center}
-.card{background:#fff;border-radius:16px;border:1px solid #E4E8F0;box-shadow:0 1px 8px rgba(0,0,0,.05);transition:box-shadow .18s}
-.card:active{box-shadow:0 1px 3px rgba(0,0,0,.08)}
+textarea:focus,input:focus,select:focus{outline:none}
 input,select{-webkit-appearance:none}
 button{-webkit-tap-highlight-color:transparent}
 `;
@@ -200,7 +208,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-const iS = (focused,err) => ({width:"100%",background:focused?"#fff":C.surfaceAlt,border:`1.5px solid ${err?C.red:focused?C.accent:C.border}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:14,outline:"none",transition:"all .15s",boxSizing:"border-box"});
+const iS = (focused,err) => ({width:"100%",background:focused?"#fff":C.surfaceAlt,border:`1.5px solid ${err?C.red:focused?C.accent:C.border}`,borderRadius:12,padding:"12px 14px",color:C.text,fontSize:14,outline:"none",transition:"all .18s cubic-bezier(.22,1,.36,1)",boxSizing:"border-box",boxShadow:focused&&!err?`0 0 0 3px ${C.accent}18`:"none"});
 
 function FI({label,half,error,...p}){
   const[f,sf]=useState(false);
@@ -226,42 +234,47 @@ function FS({label,options,...p}){
 
 function Modal({title,icon:Icon,onClose,onSubmit,submitLabel="Save",accent=C.accent,children,wide}){
   return(
-    <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(0,0,0,.45)",backdropFilter:"blur(4px)",animation:"fadeIn .18s ease"}}
+    <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(10,22,40,.5)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",animation:"fadeIn .2s ease"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:wide?640:480,maxHeight:"92vh",overflowY:"auto",padding:"8px 24px 36px",animation:"slideUp .22s ease",boxShadow:"0 -8px 40px rgba(0,0,0,.18)"}}>
-        <div style={{width:36,height:4,background:C.border,borderRadius:99,margin:"12px auto 20px"}}/>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {Icon&&<div style={{background:accent+"18",borderRadius:10,padding:"8px 9px",display:"flex"}}><Icon size={18} color={accent}/></div>}
-            <span style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>{title}</span>
+      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:wide?640:480,maxHeight:"94vh",overflowY:"auto",padding:"0 0 40px",animation:"slideUp .26s cubic-bezier(.22,1,.36,1)",boxShadow:"0 -4px 60px rgba(10,22,40,.22)"}}>
+        <div style={{width:40,height:4,background:C.border,borderRadius:99,margin:"14px auto 4px"}}/>
+        <div style={{padding:"16px 24px 20px",borderBottom:`1px solid ${C.borderLight}`,marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            {Icon&&<div style={{background:accent+"14",borderRadius:12,padding:"9px 10px",display:"flex"}}><Icon size={20} color={accent}/></div>}
+            <span style={{fontFamily:MF,fontSize:17,fontWeight:800,color:C.text,letterSpacing:-.3}}>{title}</span>
           </div>
-          <button onClick={onClose} style={{background:C.bg,border:"none",cursor:"pointer",color:C.slate,padding:"6px 7px",borderRadius:8,display:"flex"}}><X size={16}/></button>
+          <button onClick={onClose} className="ba" style={{background:C.surfaceAlt,border:"none",cursor:"pointer",color:C.textMid,padding:"7px 8px",borderRadius:10,display:"flex"}}><X size={15}/></button>
         </div>
-        {children}
-        {onSubmit&&<button className="ba" onClick={onSubmit} style={{width:"100%",background:accent,border:"none",borderRadius:14,padding:"16px 0",color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",marginTop:12,boxShadow:`0 4px 16px ${accent}44`,letterSpacing:.3}}>{submitLabel}</button>}
+        <div style={{padding:"0 24px"}}>
+          {children}
+          {onSubmit&&<button className="ba" onClick={onSubmit} style={{width:"100%",background:`linear-gradient(135deg,${accent},${accent}dd)`,border:"none",borderRadius:14,padding:"16px 0",color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",marginTop:16,boxShadow:`0 4px 20px ${accent}40`,letterSpacing:.4}}>{submitLabel}</button>}
+        </div>
       </div>
     </div>
   );
 }
 
 function BarProg({pct,color=C.accent,h=5}){
+  const p=Math.min(100,Math.max(0,pct));
   return(
-    <div style={{height:h,background:C.bg,borderRadius:99,overflow:"hidden"}}>
-      <div style={{height:"100%",width:`${Math.min(100,Math.max(0,pct))}%`,background:color,borderRadius:99,transition:"width .6s cubic-bezier(.4,0,.2,1)"}}/>
+    <div style={{height:h,background:C.borderLight,borderRadius:99,overflow:"hidden"}}>
+      <div style={{height:"100%",width:`${p}%`,background:`linear-gradient(90deg,${color},${color}cc)`,borderRadius:99,transition:"width .6s cubic-bezier(.22,1,.36,1)"}}/>
     </div>
   );
 }
-
 function SH({title,sub,onAdd,addLabel="Add",right}){
   return(
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-      <div>
-        <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>{title}</div>
-        {sub&&<div style={{fontSize:13,color:C.textLight,marginTop:1}}>{sub}</div>}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
+      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+        <div style={{width:3,height:sub?38:26,background:`linear-gradient(180deg,${C.accent},${C.purple}88)`,borderRadius:99,marginTop:2,flexShrink:0}}/>
+        <div>
+          <div style={{fontFamily:MF,fontSize:19,fontWeight:800,color:C.text,letterSpacing:-.4,lineHeight:1.2}}>{title}</div>
+          {sub&&<div style={{fontSize:12,color:C.textLight,marginTop:3,fontWeight:500}}>{sub}</div>}
+        </div>
       </div>
-      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,marginTop:2}}>
         {right}
-        {onAdd&&<button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>{addLabel}</button>}
+        {onAdd&&<button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:`0 2px 8px ${C.accent}40`,letterSpacing:.2}}><Plus size={12}/>{addLabel}</button>}
       </div>
     </div>
   );
@@ -269,14 +282,13 @@ function SH({title,sub,onAdd,addLabel="Add",right}){
 
 function Empty({text,icon:Icon=DollarSign,cta,onCta}){
   return(
-    <div style={{textAlign:"center",padding:"44px 20px",color:C.textLight}}>
-      <div style={{background:C.bg,borderRadius:14,width:52,height:52,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}><Icon size={20} color={C.border}/></div>
-      <div style={{fontSize:13,fontWeight:500,marginBottom:cta?12:0}}>{text}</div>
-      {cta&&<button className="ba" onClick={onCta} style={{background:C.accent,border:"none",borderRadius:10,padding:"9px 20px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}>{cta}</button>}
+    <div style={{textAlign:"center",padding:"52px 24px",animation:"fadeUp .3s ease"}}>
+      <div style={{width:64,height:64,borderRadius:20,background:`linear-gradient(135deg,${C.accentBg},${C.purpleBg})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",boxShadow:`0 4px 16px ${C.accent}18`}}><Icon size={26} color={C.accent}/></div>
+      <div style={{fontSize:14,color:C.textMid,maxWidth:220,margin:"0 auto 0",lineHeight:1.6,fontWeight:500}}>{text}</div>
+      {cta&&<button className="ba" onClick={onCta} style={{marginTop:16,background:C.accent,border:"none",borderRadius:10,padding:"10px 20px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:`0 2px 8px ${C.accent}40`}}>{cta}</button>}
     </div>
   );
 }
-
 function PINLock({onUnlock,appName,darkMode}){
   const[pin,setPin]=useState("");const[error,setError]=useState("");const[tries,setTries]=useState(0);
   const bg=darkMode?C.navy:C.bg;const surf=darkMode?C.navyMid:C.surface;
@@ -358,7 +370,7 @@ function OnboardingWizard({onComplete}){
   return(
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0D1B2A 0%,#2563EB 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:C.surface,borderRadius:24,width:"100%",maxWidth:480,boxShadow:"0 20px 60px rgba(0,0,0,.25)",overflow:"hidden"}}>
-        <div style={{height:4,background:C.borderLight}}><div style={{height:"100%",width:`${((step+1)/STEPS.length)*100}%`,background:"linear-gradient(90deg,#1B4FD8,#00C896)",transition:"width .4s",borderRadius:99}}/></div>
+        <div style={{height:4,background:C.borderLight}}><div style={{height:"100%",width:`${((step+1)/STEPS.length)*100}%`,background:`linear-gradient(90deg,${C.accent},${C.teal})`,transition:"width .4s",borderRadius:99}}/></div>
         <div style={{padding:"26px 24px 30px",maxHeight:"88vh",overflowY:"auto"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
             <span style={{fontSize:12,color:C.textLight,fontWeight:600}}>Step {step+1} of {STEPS.length}</span>
@@ -659,7 +671,7 @@ function PaycheckView({bills,income,expenses,accounts,onAdd}){
         <button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Log Spending</button>
       </div>
       <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>Plan your spending around your next paycheck</div>
-      <div style={{background:`linear-gradient(145deg,${C.navy} 0%,${C.navyLight} 60%,${C.accent} 100%)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
+      <div style={{background:`linear-gradient(145deg,${C.navy} 0%,${C.navyMid} 50%,${C.accent} 100%)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Next Payday</div>
         <div style={{fontFamily:MF,fontSize:32,fontWeight:800,color:"#fff",marginBottom:4}}>{daysUntilPay===0?"Today!":daysUntilPay+" days"}</div>
         <div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginBottom:16}}>{nextPay.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>
@@ -768,7 +780,7 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
       <div
         onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
         onClick={swipeX===0?onEdit:undefined}
-        style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,cursor:"pointer",transform:`translateX(${swipeX}px)`,transition:swiping?"none":"transform .2s ease",position:"relative",zIndex:1}}>
+        style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:C.surface,border:"none",borderRadius:16,cursor:"pointer",transform:`translateX(${swipeX}px)`,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",transition:swiping?"none":"transform .2s ease",position:"relative",zIndex:1}}>
         <div style={{width:38,height:38,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat?.icon||"💸"}</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:14,fontWeight:600,color:C.text}}>{e.name}</div>
@@ -850,9 +862,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
           ))}
         </div>
       )}
-      {budgetGoals.length===0&&<button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:10,padding:"10px 14px",color:C.purple,fontSize:13,cursor:"pointer",marginBottom:14,width:"100%",justifyContent:"center"}}><Target size={13}/>Add Budget Goal</button>}
-
-      {!searchQ&&filteredExp.length>=3&&(()=>{
+      {budgetGoals.length===0&&<button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:10,padding:"10px 14px",color:C.purple,fontSize:13,cursor:"pointer",marginBottom:14,width:"100%",justifyContent:"center"}}><Target size={13}/>Add Budget Goal</button>}{!searchQ&&filteredExp.length>=3&&(()=>{
         const merchants=filteredExp.reduce((m,e)=>{const k=(e.name||'').toLowerCase().trim();if(!k)return m;m[k]=(m[k]||0)+(parseFloat(e.amount)||0);return m;},{});
         const top=Object.entries(merchants).sort((a,b)=>b[1]-a[1])[0];
         const dayOfMo=new Date().getDate();
@@ -883,7 +893,9 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       {showAdd&&<Modal title="Budget Goal" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Set Goal" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Monthly Limit ($)" type="number" placeholder="400" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
     </div>
   );
-}function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
+}
+
+function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
   const unpaid=bills.filter(b=>!b.paid);
   const paid=bills.filter(b=>b.paid);
@@ -1203,7 +1215,7 @@ function SavingsGoalsView({goals,setGoals,income,showToast}){
     const mo=goal.monthly||0;const rem=Math.max(0,goal.target-goal.saved);
     const months=mo>0?Math.ceil(rem/mo):0;
     return(
-      <div style={{background:C.surface,border:`1px solid ${C.borderLight}`,borderRadius:20,padding:20,display:"flex",flexDirection:"column",alignItems:"center",position:"relative"}}>
+      <div style={{background:C.surface,borderRadius:20,padding:20,display:"flex",flexDirection:"column",alignItems:"center",position:"relative",boxShadow:"0 2px 8px rgba(10,22,40,.06),0 1px 3px rgba(10,22,40,.04)"}}>
         <div style={{position:"relative",width:120,height:120,marginBottom:12}}>
           <svg width="120" height="120" viewBox="0 0 120 120" style={{transform:"rotate(-90deg)"}}>
             <circle cx="60" cy="60" r={r} fill="none" stroke={C.borderLight} strokeWidth="10"/>
@@ -1337,7 +1349,7 @@ function CalendarView({expenses,bills,calColors,setCalColors,setExpenses,onAdd})
       onTouchEnd={e=>{const dx=window._cvts-(e.changedTouches[0].clientX||0);if(Math.abs(dx)>50){if(dx>0)setViewDate(new Date(yr,mo+1,1));else setViewDate(new Date(yr,mo-1,1));}}}
     >
     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:3}}>{["Su","Mo","Tu","We","Th","Fr","Sa"].map(d=><div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:C.textLight,padding:"4px 0"}}>{d}</div>)}</div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:16}}>{cells.map((day,i)=>{if(!day)return <div key={i}/>;const isToday=day===TODAY.getDate()&&mo===TODAY.getMonth()&&yr===TODAY.getFullYear(),hasBill=!!billByDay[day],hasExp=!!expByDay[day],isSel=selected===day,br=dotStyle==="square"?3:dotStyle==="diamond"?0:"50%",tf=dotStyle==="diamond"?"rotate(45deg)":"none";return(<button key={i} className="ba" onClick={()=>setSelected(isSel?null:day)} style={{border:`1.5px solid ${isSel?todayCol:isToday?todayCol+"66":C.border}`,borderRadius:10,padding:"6px 4px",cursor:"pointer",background:isSel?todayCol+"15":isToday?todayCol+"0d":C.surface,display:"flex",flexDirection:"column",alignItems:"center",gap:2,minHeight:52}}><span style={{fontFamily:MF,fontSize:13,fontWeight:isToday?800:500,color:isSel||isToday?todayCol:C.text}}>{day}</span><div style={{display:"flex",gap:2,justifyContent:"center"}}>{hasExp&&<div style={{width:6,height:6,borderRadius:br,background:expCol,transform:tf}}/>}{hasBill&&<div style={{width:6,height:6,borderRadius:br,background:billCol,transform:tf}}/>}</div>{hasExp&&<span style={{fontSize:9,color:expCol,fontWeight:700,lineHeight:1}}>{fmtK(expByDay[day])}</span>}</button>);})}</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:16}}>{cells.map((day,i)=>{if(!day)return <div key={i}/>;const isToday=day===TODAY.getDate()&&mo===TODAY.getMonth()&&yr===TODAY.getFullYear(),hasBill=!!billByDay[day],hasExp=!!expByDay[day],isSel=selected===day,br=dotStyle==="square"?3:dotStyle==="diamond"?0:"50%",tf=dotStyle==="diamond"?"rotate(45deg)":"none";return(<button key={i} className="ba" onClick={()=>setSelected(isSel?null:day)} style={{border:`1.5px solid ${isSel?todayCol:isToday?todayCol+"66":C.border}`,borderRadius:10,padding:"6px 4px",cursor:"pointer",background:isSel?todayCol+"18":isToday?todayCol+"0f":C.surface,boxShadow:isSel?`0 2px 8px ${todayCol}30`:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minHeight:52}}><span style={{fontFamily:MF,fontSize:13,fontWeight:isToday?800:500,color:isSel||isToday?todayCol:C.text}}>{day}</span><div style={{display:"flex",gap:2,justifyContent:"center"}}>{hasExp&&<div style={{width:6,height:6,borderRadius:br,background:expCol,transform:tf}}/>}{hasBill&&<div style={{width:6,height:6,borderRadius:br,background:billCol,transform:tf}}/>}</div>{hasExp&&<span style={{fontSize:9,color:expCol,fontWeight:700,lineHeight:1}}>{fmtK(expByDay[day])}</span>}</button>);})}</div>
     </div>
     {selected&&(selExp.length>0||selBills.length>0)&&<div style={{background:C.surface,border:`1.5px solid ${todayCol}44`,borderRadius:16,padding:18}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>{MOS[mo]} {selected}</div>{selBills.length>0&&<div style={{marginBottom:selExp.length>0?12:0}}><div style={{fontSize:11,fontWeight:700,color:billCol,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Bills</div>{selBills.map(b=><div key={b.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",background:billCol+"18",borderRadius:9,marginBottom:5}}><span style={{fontSize:13,fontWeight:500,color:C.text}}>{b.name}</span><span style={{fontSize:13,fontWeight:700,color:billCol}}>{fmt(b.amount)}</span></div>)}</div>}{selExp.length>0&&<div><div style={{fontSize:11,fontWeight:700,color:expCol,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Expenses</div>{selExp.map(e=><div key={e.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",background:expCol+"18",borderRadius:9,marginBottom:5}}><span style={{fontSize:13,fontWeight:500,color:C.text}}>{e.name}</span><span style={{fontSize:13,fontWeight:700,color:expCol}}>{fmt(e.amount)}</span></div>)}</div>}<button onClick={()=>{if(onAdd)onAdd();}} style={{marginTop:12,width:"100%",background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"9px",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><Plus size={13}/>Add for {MOS[mo]} {selected}</button></div>}
     {selected&&selExp.length===0&&selBills.length===0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:16,padding:"20px",textAlign:"center"}}><div style={{fontSize:13,color:C.textLight,marginBottom:12}}>Nothing logged on {MOS[mo]} {selected}</div><button onClick={()=>{if(onAdd)onAdd();}} style={{background:C.accent,border:"none",borderRadius:10,padding:"10px 20px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}><Plus size={14}/>Add Expense</button></div>}
@@ -1680,7 +1692,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills}){
 
       </div>
       <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>Based on savings, debt, spending & payments</div>
-      <div style={{background:`linear-gradient(135deg,${C.navy} 0%,#1a3a6e 100%)`,borderRadius:18,padding:24,marginBottom:16,display:"flex",alignItems:"center",gap:20}}>
+      <div style={{background:`linear-gradient(145deg,${C.navy} 0%,${C.navyMid} 60%,${C.accent}88 100%)`,borderRadius:18,padding:24,marginBottom:16,display:"flex",alignItems:"center",gap:20}}>
         <div style={{position:"relative",width:100,height:100,flexShrink:0}}>
           <svg width="100" height="100"><circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="10"/><circle cx="50" cy="50" r="42" fill="none" stroke={col} strokeWidth="10" strokeDasharray={2*Math.PI*42} strokeDashoffset={2*Math.PI*42*(1-overall/10)} strokeLinecap="round" transform="rotate(-90 50 50)"/></svg>
           <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:col,lineHeight:1}}>{overall}</div><div style={{fontSize:10,color:"rgba(255,255,255,.5)",letterSpacing:.5}}>/ 10</div></div>
@@ -1688,7 +1700,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills}){
         <div style={{flex:1}}><div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:"#fff",marginBottom:4}}>{label}</div><div style={{fontSize:13,color:"rgba(255,255,255,.6)",marginBottom:10}}>Financial Health Score</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{[["Savings",srS],["DTI",dtiS],["E-Fund",efS],["Debt",nwS],["Bills",psS]].map(([l,s])=><div key={l} style={{background:"rgba(255,255,255,.1)",borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:600,color:gc(s)}}>{l} {gr(s)}</div>)}</div></div>
       </div>
       {[{l:"Savings Rate",s:Math.round(srS),tip:`${sr.toFixed(1)}% — target 20%+`},{l:"Debt-to-Income",s:Math.round(dtiS),tip:`${dti.toFixed(1)}% DTI — under 28% is healthy`},{l:"Emergency Fund",s:Math.round(efS),tip:`${efMo.toFixed(1)} months — target 6 months`},{l:"Debt Load",s:Math.round(nwS),tip:td===0?"No debt — excellent!":fmt(td)+" total debt"},{l:"Payment History",s:psS,tip:ov===0?"All bills current":ov+" overdue bill"+(ov!==1?"s":"")}].map(it=>(
-        <div key={it.l} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,marginBottom:8}}>
+        <div key={it.l} style={{background:C.surfaceAlt,border:`1px solid ${C.borderLight}`,borderRadius:12,padding:14,marginBottom:8}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:13,fontWeight:600,color:C.text}}>{it.l}</span><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:13,fontWeight:700,color:gc(it.s)}}>{it.s}/100</span><div style={{width:24,height:24,borderRadius:"50%",background:gc(it.s)+"18",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MF,fontWeight:800,fontSize:11,color:gc(it.s)}}>{gr(it.s)}</div></div></div>
           <BarProg pct={it.s} color={gc(it.s)} h={5}/>
           <div style={{fontSize:11,color:C.textLight,marginTop:4}}>{it.tip}</div>
@@ -1797,7 +1809,7 @@ function SwipeRow({children,onDelete}){
 
 function ConfirmDialog({title,message,onConfirm,onCancel,danger=false}){
   return(
-    <div style={{position:"fixed",inset:0,zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.5)",backdropFilter:"blur(4px)",padding:20,animation:"fadeIn .15s ease"}} onClick={e=>e.target===e.currentTarget&&onCancel()}>
+    <div style={{position:"fixed",inset:0,zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(10,22,40,.55)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",backdropFilter:"blur(4px)",padding:20,animation:"fadeIn .15s ease"}} onClick={e=>e.target===e.currentTarget&&onCancel()}>
       <div style={{background:C.surface,borderRadius:20,padding:24,width:"100%",maxWidth:340,boxShadow:"0 8px 40px rgba(0,0,0,.2)",animation:"slideUp .2s ease"}}>
         <div style={{fontFamily:MF,fontSize:17,fontWeight:800,color:C.text,marginBottom:8}}>{title}</div>
         <div style={{fontSize:14,color:C.textLight,lineHeight:1.5,marginBottom:20}}>{message}</div>
@@ -1920,7 +1932,7 @@ function AuthScreen({onAuth,onSkip}){
     catch(e){setErr(e.message||"Network error.");}
     setLoading(false);
   }
-  if(confirmed)return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><style>{CSS}</style><div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"36px 28px",textAlign:"center"}}><div style={{fontSize:52,marginBottom:16}}>📧</div><div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:C.navy,marginBottom:8}}>Check your email</div><div style={{fontSize:14,color:C.textLight,marginBottom:24,lineHeight:1.6}}>We sent a confirmation link to <strong>{email}</strong>.</div><button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12}}>Sign In Now</button>{onSkip&&<button onClick={onSkip} style={{width:"100%",padding:"12px",borderRadius:14,border:`1px solid ${C.border}`,background:"transparent",color:C.textLight,fontWeight:600,fontSize:14,cursor:"pointer"}}>Continue without account</button>}</div></div>);
+  if(confirmed)return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.navyMid} 50%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><style>{CSS}</style><div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"36px 28px",textAlign:"center"}}><div style={{fontSize:52,marginBottom:16}}>📧</div><div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:C.navy,marginBottom:8}}>Check your email</div><div style={{fontSize:14,color:C.textLight,marginBottom:24,lineHeight:1.6}}>We sent a confirmation link to <strong>{email}</strong>.</div><button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12}}>Sign In Now</button>{onSkip&&<button onClick={onSkip} style={{width:"100%",padding:"12px",borderRadius:14,border:`1px solid ${C.border}`,background:"transparent",color:C.textLight,fontWeight:600,fontSize:14,cursor:"pointer"}}>Continue without account</button>}</div></div>);
   return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><style>{CSS}</style><div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"32px 28px",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}><div style={{textAlign:"center",marginBottom:24}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:C.navy,marginBottom:4}}>💰 Trackfi</div><div style={{fontSize:14,color:C.textLight}}>{mode==="login"?"Welcome back":"Create your free account"}</div></div>{mode==="signup"&&<div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Your Name</div><input value={name} onChange={e=>setName(e.target.value)} placeholder="Victor" style={iS(false,false)} autoCapitalize="words"/></div>}<div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Email</div><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" style={iS(false,false)} autoCapitalize="none"/></div><div style={{marginBottom:err?8:20}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Password</div><input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={mode==="login"?"Password":"Min 6 characters"} style={iS(false,false)} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/></div>{err&&<div style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.red,marginBottom:14}}>{err}</div>}<button onClick={submit} disabled={loading} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:loading?C.border:`linear-gradient(135deg,${C.accent},${C.green})`,color:loading?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading?"default":"pointer",marginBottom:14}}>{loading?"Signing in...":(mode==="login"?"Sign In":"Create Account")}</button><div style={{textAlign:"center",fontSize:13,color:C.textLight,marginBottom:16}}>{mode==="login"?"Don't have an account? ":"Already have an account? "}<button onClick={()=>{setMode(mode==="login"?"signup":"login");setErr("");}} style={{background:"none",border:"none",color:C.accent,fontWeight:700,cursor:"pointer",fontSize:13}}>{mode==="login"?"Sign up":"Sign in"}</button></div>{onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}><button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer"}}>Continue without account →</button><div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data saved locally on this device</div></div>}</div></div>);
 }
 
@@ -2251,10 +2263,10 @@ function AppInner(){
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
 
   return(
-    <div style={{minHeight:"100vh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",maxWidth:640,margin:"0 auto"}}>
+    <div style={{minHeight:"100vh",background:darkMode?"#0A1628":C.bg,fontFamily:IF,display:"flex",flexDirection:"column",maxWidth:640,margin:"0 auto",minHeight:"100vh",position:"relative"}}>
       <style>{CSS}</style>
-      <div id="fv-scroll" style={{flex:1,overflowY:"auto",padding:"20px 16px",paddingBottom:90}}>
-        {["spend","bills","debt","savings","paycheck","calendar","recurring","statement","home"].includes(tab)&&<button className="ba" onClick={()=>om("expense")} style={{position:"fixed",right:16,bottom:80,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(37,99,235,.4)",zIndex:50}}><Plus size={22} color="#fff"/></button>}
+      <div id="fv-scroll" style={{flex:1,overflowY:"auto",padding:"16px 16px 110px"}}>
+        {["spend","bills","debt","savings","paycheck","calendar","recurring","statement","home"].includes(tab)&&<button className="ba" onClick={()=>om("expense")} style={{position:"fixed",right:16,bottom:90,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:15,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
         {tab==="home"&&(
@@ -2535,11 +2547,11 @@ function AppInner(){
         )}
       </div>
 
-      {toast&&<div style={{position:"fixed",bottom:74,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==='success'?C.green:toast.type==='error'?C.red:C.navy,color:"#fff",borderRadius:12,padding:"11px 20px",fontSize:14,fontWeight:600,boxShadow:"0 4px 20px rgba(0,0,0,.25)",display:"flex",alignItems:"center",gap:8,maxWidth:320,animation:"fadeUp .2s ease"}}>{toast.type==='success'?'✓':toast.type==='error'?'✗':'ℹ'} {toast.msg}</div>}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(255,255,255,.97)",backdropFilter:"blur(24px)",borderTop:`1px solid ${C.borderLight}`,display:"flex",padding:"6px 0 max(10px,env(safe-area-inset-bottom))",zIndex:100}}>
+      {toast&&<div style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?"#059669":toast.type==="error"?"#DC2626":"#0A1628",color:"#fff",borderRadius:14,padding:"12px 20px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:8,maxWidth:300,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1}}>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</div>}
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px 8px max(14px,env(safe-area-inset-bottom))",zIndex:100,boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)"}}>
         {NAV.map(n=>{const active=n.id==="more"?isMoreTab||tab==="more":tab===n.id;return(
-          <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"6px 4px",background:"none",border:"none",cursor:"pointer",color:active?C.accent:C.textLight,position:"relative"}}>
-            <div style={{position:"relative"}}><n.icon size={22} strokeWidth={active?2.5:1.8}/>{n.badge&&n.badge>0&&<div style={{position:"absolute",top:-4,right:-6,width:16,height:16,background:C.red,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff",border:"2px solid #fff"}}>{n.badge>9?"9+":n.badge}</div>}</div>
+          <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"6px 4px",background:"none",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",background:active?"rgba(99,102,241,.08)":"transparent",transition:"all .18s"}}>
+            <div style={{position:"relative"}}><n.icon size={21} strokeWidth={active?2.4:1.6}/>{n.badge&&n.badge>0&&<div style={{position:"absolute",top:-4,right:-6,width:16,height:16,background:C.red,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff",border:"2px solid #fff"}}>{n.badge>9?"9+":n.badge}</div>}</div>
             <span style={{fontSize:10,fontWeight:active?700:500}}>{n.label}</span>
           </button>
         );})}
