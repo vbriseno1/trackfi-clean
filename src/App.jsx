@@ -1844,8 +1844,7 @@ function TaxView({expenses,income,trades,shifts,appName}){
   const shiftEarnings=shifts.filter(s=>s.date?.startsWith(String(yr))).reduce((s,x)=>s+(parseFloat(x.gross)||0),0);
   const catMap=expenses.filter(e=>e.date?.startsWith(String(yr))).reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
   const totalExp=Object.values(catMap).reduce((s,v)=>s+v,0);
-  function exportCSV(){const rows=[["Date","Name","Category","Amount"],...expenses.filter(e=>e.date?.startsWith(String(yr))).map(e=>[e.date,e.name,e.category,e.amount])];const csv=rows.map(r=>r.join(",")).join("\
-");const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${appName||"trackfi"}-${yr}-expenses.csv`;a.click();URL.revokeObjectURL(u);}
+  function exportCSV(){const hdr=["Date","Name","Category","Amount"];const rowData=expenses.filter(e=>e.date?.startsWith(String(yr))).map(e=>[e.date,e.name.replace(/,/g," "),e.category,parseFloat(e.amount).toFixed(2)]);const csv=[hdr,...rowData].map(r=>r.join(",")).join("\r\n");const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"trackfi")+"-ytd-"+yr+".csv";a.click();URL.revokeObjectURL(u);}
   return(
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
@@ -2039,7 +2038,7 @@ function CategoriesView({categories,setCategories,showToast}){
         <button onClick={()=>setShowAdd(true)} style={{background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>Add</button>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {categories.map(cat=>{const isDefault=DEFAULT_IDS.includes(cat.id);return(<div key={cat.id} style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}><div style={{width:40,height:40,borderRadius:10,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{cat.icon}</div><div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{cat.name}</div>{isDefault&&<div style={{fontSize:11,color:C.textFaint}}>Default</div>}</div>{!isDefault&&<><button onClick={()=>{setEditCat(cat);setEditForm({name:cat.name,icon:cat.icon||""});}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 6px",fontSize:12,fontWeight:600}}>Edit</button><button onClick={()=>{setCategories(p=>p.filter(c=>c.id!==cat.id));showToast&&showToast("Category removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={14}/></button></></>}</div>);})}
+        {categories.map(cat=>{const isDefault=DEFAULT_IDS.includes(cat.id);return(<div key={cat.id} style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}><div style={{width:40,height:40,borderRadius:10,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{cat.icon}</div><div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{cat.name}</div>{isDefault&&<div style={{fontSize:11,color:C.textFaint}}>Default</div>}</div>{!isDefault&&<><button onClick={()=>{setEditCat(cat);setEditForm({name:cat.name,icon:cat.icon||""});}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 6px",fontSize:12,fontWeight:600}}>Edit</button><button onClick={()=>{setCategories(p=>p.filter(c=>c.id!==cat.id));showToast&&showToast("Category removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={14}/></button></>}</div>);})}
       </div>
       {editCat&&<Modal title="Edit Category" icon={Target} onClose={()=>setEditCat(null)} onSubmit={()=>{setCategories(p=>p.map(c=>c.id===editCat.id?{...c,name:editForm.name||c.name,icon:editForm.icon||c.icon}:c));showToast&&showToast("✓ Category updated");setEditCat(null);}} submitLabel="Save"><div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Icon</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{["🍔","🚗","🏠","💊","🎮","✈️","👗","📱","💰","🐶","🎵","⚽","🎓","💅","🍺","🎁","🏋️","🛁","🐱","🌿","🔧","💻","🎨","📚","☕","🍕","🏖️","🎯","💳","🛍️"].map(e=><button key={e} onClick={()=>setEditForm(p=>({...p,icon:e}))} style={{fontSize:20,background:editForm.icon===e?C.accentBg:C.surfaceAlt,border:editForm.icon===e?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"4px 6px",cursor:"pointer"}}>{e}</button>)}</div></div><FI label="Category Name" value={editForm.name||""} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}/></Modal>}
       {showAdd&&<Modal title="New Category" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={add} submitLabel="Add Category">
@@ -2105,9 +2104,9 @@ function AppInner(){
   useEffect(()=>{
     (async()=>{
       try{
-        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName"];
+        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName","fv6:merchantCats"];
         const vals=await Promise.all(keys.map(k=>sg(k)));
-        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn]=vals;
+        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn,mc]=vals;
         try{if(exp&&exp.length)setExpenses(exp);}catch{}
         try{if(bll&&bll.length)setBills(bll);}catch{}
         try{if(dbt&&dbt.length)setDebts(dbt);}catch{}
@@ -2128,7 +2127,7 @@ function AppInner(){
         try{if(dc)setDashConfig(a=>({...a,...dc}));}catch{}
         try{if(an)setAppName(an);}catch{}
         try{if(gn)setGreetName(gn);}catch{}
-        try{const mc=await sg("fv6:merchantCats");if(mc)window._merchantCats=mc;}catch{}
+        try{if(mc)window._merchantCats=mc;}catch{}
       }catch(e){console.error("Load error",e);}
       setReady(true);
     })();
