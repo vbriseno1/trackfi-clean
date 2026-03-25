@@ -616,11 +616,10 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals,onAd
           </div>);
         })}
       </div>}
+      {catSorted.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><BarChart data={catSorted.slice(0,5)} layout="vertical" barSize={16} margin={{left:4,right:50}}><XAxis type="number" hide/><YAxis type="category" dataKey="name" tick={{fontSize:11,fill:C.textMid}} width={80} axisLine={false} tickLine={false}/><Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>}
     </div>
   );
 }
-      {catSorted.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><BarChart data={catSorted.slice(0,5)} layout="vertical" barSize={16} margin={{left:4,right:50}}><XAxis type="number" hide/><YAxis type="category" dataKey="name" tick={{fontSize:11,fill:C.textMid}} width={80} axisLine={false} tickLine={false}/><Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>}
-      
 
 function PaycheckView({bills,income,expenses,accounts,onAdd}){
   const now=new Date();
