@@ -131,15 +131,7 @@ const dueIn  = d => Math.ceil((new Date(d)-new Date(todayStr()))/86400000);
 const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); };
 const dayOfMonth  = () => new Date().getDate();
 const fmtDate = s => { if(!s)return""; const d=new Date(s+"T00:00:00"); return MOS[d.getMonth()]+" "+d.getDate(); };
-const getScope = () => {
-  try {
-    const sess = JSON.parse(localStorage.getItem("fv_session")||"null");
-    if(sess?.user?.id) return "fv6_"+sess.user.id.slice(0,8)+":";
-    let did = localStorage.getItem("fv_device_id");
-    if(!did){ did="d_"+Math.random().toString(36).slice(2,10); localStorage.setItem("fv_device_id",did); }
-    return "fv6_"+did+":";
-  } catch { return "fv6_local:"; }
-};
+const getScope=()=>{try{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(s?.user?.id)return"fv6_"+s.user.id.slice(0,8)+":";let d=localStorage.getItem("fv_device_id");if(!d){d="d_"+Math.random().toString(36).slice(2,10);localStorage.setItem("fv_device_id",d);}return"fv6_"+d+":";}catch{return"fv6_local:";}};
 const sg = async k => { try { const r=localStorage.getItem(getScope()+k.replace("fv6:","")); if(r!==null)return JSON.parse(r); const legacy=localStorage.getItem(k); return legacy?JSON.parse(legacy):null; } catch { return null; } };
 const ss = async (k,v) => { try { localStorage.setItem(getScope()+k.replace("fv6:",""),JSON.stringify(v)); } catch {} };
 const notifSupported  = () => typeof window!=="undefined"&&"Notification" in window;
@@ -872,9 +864,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         </div>
       )}
       {budgetGoals.length===0&&<button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:10,padding:"10px 14px",color:C.purple,fontSize:13,cursor:"pointer",marginBottom:14,width:"100%",justifyContent:"center"}}><Target size={13}/>Add Budget Goal</button>}
-      {!searchQ&&filteredExp.length>=7&&(()=>{const DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];const dow=[0,1,2,3,4,5,6].map(d=>filteredExp.filter(e=>new Date(e.date+"T00:00:00").getDay()===d).reduce((s,e)=>s+(parseFloat(e.amount)||0),0));const max=Math.max(...dow)||1;const topDay=dow.indexOf(max);return(<div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Spending by Day</div><div style={{display:"flex",gap:4,alignItems:"flex-end",height:60}}>{dow.map((amt,d)=>{const h=Math.max(4,Math.round((amt/max)*52));return(<div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div style={{width:"100%",height:h,background:d===topDay?`linear-gradient(135deg,${C.accent},${C.purple})`:C.accentBg,borderRadius:"4px 4px 0 0",transition:"height .4s"}}/><div style={{fontSize:9,color:d===topDay?C.accent:C.textFaint,fontWeight:d===topDay?700:400}}>{DAYS[d]}</div></div>);})}</div><div style={{fontSize:11,color:C.textLight,marginTop:8}}>{DAYS[topDay]} is your highest spending day · {fmt(max)}</div></div>);})()}
-
-      {!searchQ&&filteredExp.length>=3&&(()=>{
+      {!searchQ&&filteredExp.length>=7&&(()=>{const DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];const dow=[0,1,2,3,4,5,6].map(d=>filteredExp.filter(e=>new Date(e.date+"T00:00:00").getDay()===d).reduce((s,e)=>s+(parseFloat(e.amount)||0),0));const max=Math.max(...dow)||1;const topDay=dow.indexOf(max);return(<div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Spending by Day</div><div style={{display:"flex",gap:4,alignItems:"flex-end",height:60}}>{dow.map((amt,d)=>{const h=Math.max(4,Math.round((amt/max)*52));return(<div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div style={{width:"100%",height:h,background:d===topDay?`linear-gradient(135deg,${C.accent},${C.purple})`:C.accentBg,borderRadius:"4px 4px 0 0",transition:"height .4s"}}/><div style={{fontSize:9,color:d===topDay?C.accent:C.textFaint,fontWeight:d===topDay?700:400}}>{DAYS[d]}</div></div>);})}</div><div style={{fontSize:11,color:C.textLight,marginTop:8}}>{DAYS[topDay]} is your highest spending day · {fmt(max)}</div></div>);})()}{!searchQ&&filteredExp.length>=3&&(()=>{
         const merchants=filteredExp.reduce((m,e)=>{const k=(e.name||'').toLowerCase().trim();if(!k)return m;m[k]=(m[k]||0)+(parseFloat(e.amount)||0);return m;},{});
         const top=Object.entries(merchants).sort((a,b)=>b[1]-a[1])[0];
         const dayOfMo=new Date().getDate();
@@ -905,7 +895,9 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       {showAdd&&<Modal title="Budget Goal" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Set Goal" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Monthly Limit ($)" type="number" placeholder="400" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
     </div>
   );
-}function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
+}
+
+function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
   const unpaid=bills.filter(b=>!b.paid);
   const paid=bills.filter(b=>b.paid);
@@ -1576,9 +1568,7 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
     </div>
     <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:12}}>
       <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-        {[["💸",expenses.length,"Expenses"],["📅",bills.length,"Bills"],["💳",debts.length,"Debts"],["🎯",savingsGoals.length,"Goals"],["📈",trades.length,"Trades"]].map(([ic,n,l])=>(
-          <div key={l} style={{flex:"1 1 60px",background:C.surfaceAlt,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:60}}>
-            <div style={{fontSize:18,marginBottom:2}}>{ic}</div>
+        {[["💸",expenses.length,"Expenses"],["📅",bills.length,"Bills"],["💳",debts.length,"Debts"],["🎯",savingsGoals.length,"Goals"],["📈",trades.length,"Trades"]].map(([ic,n,l])=>(          <div key={l} style={{flex:"1 1 60px",background:C.surfaceAlt,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:60}}>            <div style={{fontSize:18,marginBottom:2}}>{ic}</div>
             <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.text}}>{n}</div>
             <div style={{fontSize:10,color:C.textLight,fontWeight:600}}>{l}</div>
           </div>
@@ -1736,9 +1726,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills}){
       ))}
     </div>
   );
-}
-
-function IncomeSpendingView({expenses,income,trades}){
+}function IncomeSpendingView({expenses,income,trades}){
   const[range,setRange]=useState("3M");
   const now=new Date();
   const ti=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
@@ -1767,7 +1755,9 @@ function IncomeSpendingView({expenses,income,trades}){
         </div>);
       })()}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-        <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Income vs Spending</div></div>
+        <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Income vs Spending</div>
+        
+      </div>
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:10,padding:3,marginBottom:16}}>
         {["3M","6M","1Y"].map(r=><button key={r} className="ba" onClick={()=>setRange(r)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:range===r?"#fff":"transparent",color:range===r?C.accent:C.textLight,fontWeight:range===r?700:500,fontSize:13,cursor:"pointer"}}>{r}</button>)}
       </div>
@@ -2072,25 +2062,7 @@ function AppInner(){
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const authToken=authSession?.access_token||null;
   useEffect(()=>{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(!s?.access_token){setAuthLoading(false);return;}supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+s.access_token}}).then(u=>{if(u?.data?.id||u?.id){setAuthSession(s);}else{localStorage.removeItem("fv_session");}setAuthLoading(false);}).catch(()=>setAuthLoading(false));},[]);
-  function handleAuth(sess){
-  setAuthSession(sess);
-  localStorage.setItem("fv_session",JSON.stringify(sess));
-  // Migrate any legacy fv6: keys to user-scoped keys
-  try{
-    const uid=sess?.user?.id?.slice(0,8);
-    if(uid){
-      const scope="fv6_"+uid+":";
-      const legacyKeys=["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName"];
-      legacyKeys.forEach(k=>{
-        const legacy=localStorage.getItem("fv6:"+k);
-        const scoped=localStorage.getItem(scope+k);
-        if(legacy&&!scoped){
-          localStorage.setItem(scope+k,legacy);
-        }
-      });
-    }
-  }catch{}
-}
+  function handleAuth(sess){setAuthSession(sess);localStorage.setItem("fv_session",JSON.stringify(sess));try{const uid=sess?.user?.id?.slice(0,8);if(uid){const scope="fv6_"+uid+":";["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName"].forEach(k=>{const legacy=localStorage.getItem("fv6:"+k);const scoped=localStorage.getItem(scope+k);if(legacy&&!scoped)localStorage.setItem(scope+k,legacy);});}}catch{}}
   function handleSkip(){localStorage.setItem("fv_skip_auth","1");setSkipAuth(true);}
   function handleSignOut(){if(authToken)supaFetch("/auth/v1/logout",{method:"POST"});setAuthSession(null);localStorage.removeItem("fv_session");localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}
   const[ready,setReady]=useState(false);
@@ -2133,8 +2105,7 @@ function AppInner(){
 
   useEffect(()=>{
     (async()=>{
-      try{
-        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName"];
+try{ const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName"];
         const vals=await Promise.all(keys.map(k=>sg(k)));
         const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn]=vals;
         try{if(exp&&exp.length)setExpenses(exp);}catch{}
@@ -2162,27 +2133,7 @@ function AppInner(){
     })();
   },[]);
 
-  useEffect(()=>{
-  if(!ready)return;
-  ss("fv6:accounts",accounts);
-  // Auto-snapshot balance history (weekly)
-  const today=todayStr();
-  setBalHist(prev=>{
-    const last=prev[prev.length-1];
-    if(last?.date===today)return prev; // already snapped today
-    const daysSince=last?Math.floor((new Date(today)-new Date(last.date+"T00:00:00"))/86400000):999;
-    if(daysSince<6)return prev; // only snap once per week
-    const snap={
-      date:today,
-      checking:parseFloat(accounts.checking||0),
-      savings:parseFloat(accounts.savings||0),
-      cushion:parseFloat(accounts.cushion||0),
-      investments:parseFloat(accounts.investments||0),
-      total:parseFloat(accounts.checking||0)+parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0)+parseFloat(accounts.investments||0)
-    };
-    return[...prev,snap].slice(-104); // keep 2 years max
-  });
-},[accounts,ready]);
+  useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;return[...prev,{date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),total:parseFloat(accounts.checking||0)+parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0)+parseFloat(accounts.investments||0)}].slice(-104);});},[accounts,ready]);
   useEffect(()=>{if(ready)ss("fv6:income",income);},[income,ready]);
   useEffect(()=>{if(ready)ss("fv6:expenses",expenses);},[expenses,ready]);
   useEffect(()=>{if(ready)ss("fv6:bills",bills);},[bills,ready]);
@@ -2223,8 +2174,7 @@ function AppInner(){
   useEffect(()=>{
     if(!ready)return;
     bills.forEach(b=>{if(b.paid)return;const d=dueIn(b.dueDate);if(d<0)pushNotif('ov_'+b.id,'🚨 Overdue: '+b.name,fmt(b.amount)+' was due '+Math.abs(d)+'d ago','danger');else if(d<=3)pushNotif('due3_'+b.id,'⚠️ Due soon: '+b.name,fmt(b.amount)+' due in '+d+' day'+(d!==1?'s':''),'warning');});
-    const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0');
-    budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
+const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0'); budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
   },[ready,bills,budgetGoals,expenses]);
   const detectedSubs=useMemo(()=>{
     if(expenses.length<2)return[];
@@ -2327,6 +2277,7 @@ function AppInner(){
   if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
   if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip}/>;
   if(!ready)return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.navyMid} 100%)`,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:20}}>💰 Trackfi</div><div style={{width:36,height:36,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading your data...</div></div></div>);
+
   if(!onboarded)return(<><style>{CSS}</style><OnboardingWizard onComplete={async d=>{
     if(d.name)setGreetName(d.name);
     setAppName("Trackfi");
@@ -2522,21 +2473,7 @@ function AppInner(){
               );
             })()}
 
-            {expenses.length===0&&<div style={{marginBottom:14}}>
-              <div style={{background:`linear-gradient(135deg,${C.navy},${C.navyMid})`,borderRadius:18,padding:24,marginBottom:10,textAlign:"center"}}>
-                <div style={{fontSize:40,marginBottom:10}}>👋</div>
-                <div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:"#fff",marginBottom:6}}>Welcome to Trackfi</div>
-                <div style={{fontSize:13,color:"rgba(255,255,255,.7)",marginBottom:20,lineHeight:1.6}}>Log expenses, track bills, and manage your money — all in one place.</div>
-                <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-                  <button onClick={()=>om("expense")} style={{background:C.accent,border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Log Expense</button>
-                  <button onClick={()=>om("bill")} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Add Bill</button>
-                </div>
-              </div>
-              <button onClick={()=>setConfirm({title:"Load Demo Data",message:"Loads 1 year of sample data so you can explore every feature. Your real data will be replaced.",onConfirm:()=>{loadDemo();setConfirm(null);},danger:false})} style={{width:"100%",background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 0",color:C.textLight,fontWeight:600,fontSize:13,cursor:"pointer"}}>🧪 Explore with demo data</button>
-            </div>}        )}
-
-        {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}><div style={{marginBottom:14}}><div style={{fontFamily:MF,fontSize:18,fontWeight:800}}>AI Assistant</div><div style={{fontSize:13,color:C.textLight,marginTop:1}}>Log everything offline — just type naturally</div></div><div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
-        {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats} showToast={showToast}/>}
+            {expenses.length===0&&<div style={{marginBottom:14}}><div style={{background:`linear-gradient(135deg,${C.navy},${C.navyMid})`,borderRadius:18,padding:24,marginBottom:10,textAlign:"center"}}>  <div style={{fontSize:40,marginBottom:10}}>👋</div>  <div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:"#fff",marginBottom:6}}>Welcome to Trackfi</div>  <div style={{fontSize:13,color:"rgba(255,255,255,.7)",marginBottom:20,lineHeight:1.6}}>Log expenses, track bills, and manage your money — all in one place.</div>  <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>    <button onClick={()=>om("expense")} style={{background:C.accent,border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Log Expense</button>    <button onClick={()=>om("bill")} style={{background:"rgba(255,255,255,.15)",border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Add Bill</button>  </div></div><button onClick={()=>setConfirm({title:"Load Demo Data",message:"Loads 1 year of sample data so you can explore every feature. Your real data will be replaced.",onConfirm:()=>{loadDemo();setConfirm(null);},danger:false})} style={{width:"100%",background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 0",color:C.textLight,fontWeight:600,fontSize:13,cursor:"pointer"}}>🧪 Explore with demo data</button>            </div>}        )}        {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}><div style={{marginBottom:14}}><div style={{fontFamily:MF,fontSize:18,fontWeight:800}}>AI Assistant</div><div style={{fontSize:13,color:C.textLight,marginTop:1}}>Log everything offline — just type naturally</div></div><div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}        {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats} showToast={showToast}/>}
         {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast}/>}
         {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast}/>}
         {tab==="more"&&!isMoreTab&&(
