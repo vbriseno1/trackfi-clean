@@ -549,7 +549,7 @@ function SearchView({expenses,bills,debts,trades,categories,setEditItem,onNaviga
   );
 }
 
-function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals,onAdd}){
+function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
   const now=new Date();
   const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const lastMs=new Date(now.getFullYear(),now.getMonth()-1,1).getFullYear()+"-"+String(new Date(now.getFullYear(),now.getMonth()-1,1).getMonth()+1).padStart(2,"0");
@@ -569,7 +569,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals,onAd
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
         <div style={{fontFamily:MF,fontSize:19,fontWeight:800,color:C.text,letterSpacing:-.3}}>Spending Insights</div>
-        <button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Expense</button>
+
       </div>
       <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>Deep dive into your spending patterns</div>
       <div style={{background:C.navy,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
@@ -657,7 +657,7 @@ function PaycheckView({bills,income,expenses,accounts,onAdd}){
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
         <div style={{fontFamily:MF,fontSize:19,fontWeight:800,color:C.text,letterSpacing:-.3}}>Paycheck Planner</div>
-        <button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Expense</button>
+        <button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Log Spending</button>
       </div>
       <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>Plan your spending around your next paycheck</div>
       <div style={{background:`linear-gradient(145deg,${C.navy} 0%,${C.navyLight} 60%,${C.accent} 100%)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
@@ -1425,7 +1425,7 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
   </div>);
 }
 
-function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoals,onAdd}){
+function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoals}){
   const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const annualIncome=ti*12;
   const te=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
@@ -1450,7 +1450,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   return(<div className="fu">
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
       <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Financial Physical</div>
-      <button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Expense</button>
+
     </div>
     <div style={{background:C.navy,borderRadius:18,padding:20,marginBottom:16,color:"#fff"}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -1589,7 +1589,7 @@ function generateDemoData(){
   return{expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,balHist};
 }
 
-function HealthScoreView({income,expenses,debts,accounts,bills,onAdd}){
+function HealthScoreView({income,expenses,debts,accounts,bills}){
   const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const te=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
@@ -1614,7 +1614,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onAdd}){
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
         <div style={{fontFamily:MF,fontSize:19,fontWeight:800,color:C.text,letterSpacing:-.3}}>Health Score</div>
-        <button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Expense</button>
+
       </div>
       <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>Based on savings, debt, spending & payments</div>
       <div style={{background:`linear-gradient(135deg,${C.navy} 0%,#1a3a6e 100%)`,borderRadius:18,padding:24,marginBottom:16,display:"flex",alignItems:"center",gap:20}}>
@@ -1635,7 +1635,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onAdd}){
   );
 }
 
-function IncomeSpendingView({expenses,income,trades,onAdd}){
+function IncomeSpendingView({expenses,income,trades}){
   const[range,setRange]=useState("3M");
   const now=new Date();
   const ti=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
@@ -1664,9 +1664,7 @@ function IncomeSpendingView({expenses,income,trades,onAdd}){
         </div>);
       })()}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-        <div style={{fontFamily:MF,fontSize:19,fontWeight:800,color:C.text,letterSpacing:-.3}}>Income vs Spending</div>
-        <button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Expense</button>
-      </div>
+        <div style={{fontFamily:MF,fontSize:19,fontWeight:800,color:C.text,letterSpacing:-.3}}>Income vs Spending</div></div>
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:10,padding:3,marginBottom:16}}>
         {["3M","6M","1Y"].map(r=><button key={r} className="ba" onClick={()=>setRange(r)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:range===r?"#fff":"transparent",color:range===r?C.accent:C.textLight,fontWeight:range===r?700:500,fontSize:13,cursor:"pointer"}}>{r}</button>)}
       </div>
@@ -1679,7 +1677,9 @@ function IncomeSpendingView({expenses,income,trades,onAdd}){
       </div>
     </div>
   );
-}function DashSettingsView({config,setConfig,showTrading}){
+}
+
+function DashSettingsView({config,setConfig,showTrading}){
   const toggle=k=>setConfig(p=>({...p,[k]:!p[k]}));
   const items=[{k:"showIncomeChart",icon:"📊",label:"Income vs Spending Chart",desc:"3-month bar chart on home"},{k:"showMetrics",icon:"📐",label:"Key Metrics Grid",desc:"Net worth, health, emergency fund"},{k:"showAccounts",icon:"🏦",label:"Account Cards",desc:"Scrollable balance overview"},{k:"showForecast",icon:"🔮",label:"Month Forecast",desc:"Burn rate and projected spend"},{k:"showBills",icon:"📅",label:"Upcoming Bills",desc:"Next 3 bills with countdown"},{k:"showRecent",icon:"🕒",label:"Recent Transactions",desc:"Last 4 logged expenses"},...(showTrading?[{k:"showTradeCard",icon:"📈",label:"Trading Summary",desc:"P&L and record"}]:[])];
   return(
@@ -2190,7 +2190,7 @@ function AppInner(){
     <div style={{minHeight:"100vh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",maxWidth:640,margin:"0 auto"}}>
       <style>{CSS}</style>
       <div id="fv-scroll" style={{flex:1,overflowY:"auto",padding:"20px 16px",paddingBottom:90}}>
-        {tab!=="chat"&&<button className="ba" onClick={()=>om("expense")} style={{position:"fixed",right:16,bottom:80,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(37,99,235,.4)",zIndex:50}}><Plus size={22} color="#fff"/></button>}
+        {["spend","bills","debt","savings","paycheck","calendar","recurring","statement","home"].includes(tab)&&<button className="ba" onClick={()=>om("expense")} style={{position:"fixed",right:16,bottom:80,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(37,99,235,.4)",zIndex:50}}><Plus size={22} color="#fff"/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:15,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
         {tab==="home"&&(
@@ -2415,9 +2415,9 @@ function AppInner(){
         {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem}/>}
         {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} showToast={showToast}/>}
         {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready}/>}
-        {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades} onAdd={()=>om("expense")}/>}
-        {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals} onAdd={()=>om("expense")}/>}
-        {tab==="health"&&<HealthScoreView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} onAdd={()=>om("expense")}/>}
+        {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
+        {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals}/>}
+        {tab==="health"&&<HealthScoreView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills}/>}
         {tab==="trading"&&settings.showTrading&&<TradingView trades={trades} setTrades={setTrades} account={tradingAccount} setAccount={setTradingAccount} showToast={showToast}/>}
         {tab==="calendar"&&<CalendarView expenses={expenses} bills={bills} calColors={calColors} setCalColors={setCalColors} setExpenses={setExpenses} onAdd={()=>om("expense")}/>}
         {tab==="shifts"&&<ShiftView shifts={shifts} setShifts={setShifts} income={income} profCategory={profCategory} profSub={profSub} showToast={showToast}/>}
@@ -2425,7 +2425,7 @@ function AppInner(){
         {tab==="statement"&&<StatementView expenses={expenses} bills={bills} income={income} accounts={accounts} debts={debts} trades={trades} appName={appName} categories={categories} onAdd={()=>om("expense")}/>}
         {tab==="search"&&<SearchView expenses={expenses} bills={bills} debts={debts} trades={trades} categories={categories} setEditItem={setEditItem} onNavigate={navTo}/>}
         {tab==="subscriptions"&&<SubsView detectedSubs={detectedSubs} expenses={expenses}/>}
-        {tab==="insights"&&<InsightsView expenses={expenses} income={income} bills={bills} debts={debts} budgetGoals={budgetGoals} savingsGoals={savingsGoals} onAdd={()=>om("expense")}/>}
+        {tab==="insights"&&<InsightsView expenses={expenses} income={income} bills={bills} debts={debts} budgetGoals={budgetGoals} savingsGoals={savingsGoals}/>}
         {tab==="paycheck"&&<PaycheckView bills={bills} income={income} expenses={expenses} accounts={accounts} onAdd={()=>om("expense")}/>}
         {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} onNavigate={navTo}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
