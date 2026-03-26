@@ -442,9 +442,16 @@ function OnboardingWizard({onComplete}){
     ),btnLabel:"Continue →",canSkip:true},
 
     // ── STEP 4: Starting Balances ────────────────────────────
-    {title:"Starting balances",body:(
+    {title:"Almost there! 🎉",body:(
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:4}}>Optional — powers your net worth, safe-to-spend, and balance trend. Skip and add later anytime.</div>
+        {d.name&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+        <div style={{fontSize:13,fontWeight:600,color:C.accent,marginBottom:4}}>Welcome, {d.name.split(" ")[0]}! Here's what we've set up:</div>
+        <div style={{display:"flex",flexDirection:"column",gap:3}}>
+          <div style={{fontSize:12,color:C.textMid}}>✓ Profile — {getProfession(d.profCategory).icon} {getProfSub(d.profCategory,d.profSub).label}</div>
+          {parseFloat(d.income?.primary||0)>0&&<div style={{fontSize:12,color:C.textMid}}>✓ Income — {fmt(parseFloat(d.income.primary))} / month</div>}
+        </div>
+      </div>}
+      <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:12}}>Last step — add your account balances to unlock net worth tracking and safe-to-spend. Totally optional, you can skip and add later.</div>
         {[{k:"checking",l:"Checking",ic:"🏦",ph:"2500"},{k:"savings",l:"Savings",ic:"💰",ph:"5000"},{k:"cushion",l:"Emergency / Cushion",ic:"🛡️",ph:"1000"},{k:"investments",l:"Investments (401k, etc)",ic:"📈",ph:"0"}].map(a=>(
           <div key={a.k} style={{display:"flex",alignItems:"center",gap:12,background:C.surfaceAlt,borderRadius:12,padding:"11px 14px"}}>
             <span style={{fontSize:20,flexShrink:0}}>{a.ic}</span>
@@ -1704,10 +1711,13 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
   return(<div className="fu">
 
     {/* ── Header ─────────────────────────────────── */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
       <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Settings</div>
-      {userEmail&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:99,padding:"5px 14px",fontSize:12,fontWeight:700,color:C.accent}}>{userEmail.split("@")[0]}</div>}
     </div>
+    {userEmail&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+      <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MF,fontWeight:800,fontSize:13,color:"#fff",flexShrink:0}}>{userEmail[0].toUpperCase()}</div>
+      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.accent}}>{userEmail}</div><div style={{fontSize:11,color:C.textLight}}>Signed in</div></div>
+    </div>}
 
     {/* ── 1. PROFILE ─────────────────────────────── */}
     <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
@@ -1939,7 +1949,9 @@ function HealthScoreView({income,expenses,debts,accounts,bills}){
       ))}
     </div>
   );
-}function IncomeSpendingView({expenses,income,trades}){
+}
+
+function IncomeSpendingView({expenses,income,trades}){
   const[range,setRange]=useState("3M");
   const now=new Date();
   const ti=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
@@ -1983,9 +1995,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills}){
       </div>
     </div>
   );
-}
-
-function DashSettingsView({config,setConfig,showTrading}){
+}function DashSettingsView({config,setConfig,showTrading}){
   const toggle=k=>setConfig(p=>({...p,[k]:!p[k]}));
   const items=[{k:"showIncomeChart",icon:"📊",label:"Income vs Spending Chart",desc:"3-month bar chart on home"},{k:"showMetrics",icon:"📐",label:"Key Metrics Grid",desc:"Net worth, health, emergency fund"},{k:"showAccounts",icon:"🏦",label:"Account Cards",desc:"Scrollable balance overview"},{k:"showForecast",icon:"🔮",label:"Month Forecast",desc:"Burn rate and projected spend"},{k:"showBills",icon:"📅",label:"Upcoming Bills",desc:"Next 3 bills with countdown"},{k:"showRecent",icon:"🕒",label:"Recent Transactions",desc:"Last 4 logged expenses"},...(showTrading?[{k:"showTradeCard",icon:"📈",label:"Trading Summary",desc:"P&L and record"}]:[])];
   return(
@@ -2667,30 +2677,53 @@ function AppInner(){
             })()}
 
             {(()=>{
-              const todayStr2=new Date().toISOString().split('T')[0];
-              const todayExp=expenses.filter(e=>e.date===todayStr2);
-              const todayTotal=todayExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-              const todayBills=bills.filter(b=>!b.paid&&b.dueDate===todayStr2);
-              const overdueBills=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
-              const ms3=new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+              const now2=new Date();
+              const ms3=now2.getFullYear()+'-'+String(now2.getMonth()+1).padStart(2,'0');
+              const dayOfMo=now2.getDate();
+              const daysInMo=new Date(now2.getFullYear(),now2.getMonth()+1,0).getDate();
               const mtdSpend=expenses.filter(e=>e.date?.startsWith(ms3)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-              const dayOfMo=new Date().getDate();
-              const dailyAvg=dayOfMo>0?(mtdSpend/dayOfMo):0;
-              const daysLeft=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate()-dayOfMo;
-              const forecast=mtdSpend+(dailyAvg*daysLeft);
-              if(todayTotal===0&&todayBills.length===0&&overdueBills.length===0)return null;
-              return(<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:'14px 16px',marginBottom:14}}>
-                <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text,marginBottom:10}}>Today</div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
-                  <div style={{textAlign:'center'}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:3}}>SPENT</div><div className={hidden?'blurred':'unblurred'} style={{fontFamily:MF,fontWeight:800,fontSize:16,color:todayTotal>0?C.red:C.textLight}}>{todayTotal>0?fmt(todayTotal):'$0'}</div></div>
-                  <div style={{textAlign:'center'}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:3}}>DAILY AVG</div><div className={hidden?'blurred':'unblurred'} style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.textMid}}>{fmt(dailyAvg)}</div></div>
-                  <div style={{textAlign:'center'}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:3}}>FORECAST</div><div className={hidden?'blurred':'unblurred'} style={{fontFamily:MF,fontWeight:800,fontSize:16,color:forecast>totalIncome?C.red:C.amber}}>{fmt(forecast)}</div></div>{spendingStreak>1&&<div style={{textAlign:'center'}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:3}}>STREAK</div><div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.green}}>🔥{spendingStreak}d</div></div>}
+              const dailyAvg=dayOfMo>0?mtdSpend/dayOfMo:0;
+              const forecast=mtdSpend+(dailyAvg*(daysInMo-dayOfMo));
+              const overdueBills=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
+              const pctOfMonth=daysInMo>0?(dayOfMo/daysInMo)*100:0;
+              const pctOfIncome=totalIncome>0?Math.min(100,(mtdSpend/totalIncome)*100):0;
+              const isWinning=totalIncome>0&&mtdSpend<totalIncome*(dayOfMo/daysInMo)*1.05;
+              const todayStr2=now2.toISOString().split('T')[0];
+              const todaySpend=expenses.filter(e=>e.date===todayStr2).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+              return(
+                <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:'16px',marginBottom:14}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                    <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>{MOS[now2.getMonth()]} so far</div>
+                    <div style={{fontSize:12,fontWeight:700,color:isWinning?C.green:C.red,background:isWinning?C.greenBg:C.redBg,borderRadius:99,padding:'3px 10px'}}>{isWinning?'✓ On track':'⚠ Over pace'}</div>
+                  </div>
+                  {totalIncome>0&&<><div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+                    <span style={{fontSize:12,color:C.textLight}}>Spent <span className={hidden?'blurred':'unblurred'} style={{fontWeight:700,color:C.text}}>{fmt(mtdSpend)}</span> of <span className={hidden?'blurred':'unblurred'} style={{fontWeight:700,color:C.green}}>{fmt(totalIncome)}</span> income</span>
+                    <span style={{fontSize:12,fontWeight:600,color:pctOfIncome>pctOfMonth+10?C.red:C.green}}>{pctOfIncome.toFixed(0)}%</span>
+                  </div>
+                  <div style={{height:8,background:C.borderLight,borderRadius:99,overflow:'hidden',marginBottom:4}}>
+                    <div style={{height:'100%',width:pctOfIncome.toFixed(1)+'%',background:pctOfIncome>90?C.red:pctOfIncome>70?C.amber:C.green,borderRadius:99,transition:'width .4s'}}/>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:12}}>
+                    <span style={{fontSize:11,color:C.textLight}}>Day {dayOfMo} of {daysInMo}</span>
+                    <span style={{fontSize:11,color:C.textLight}}>Forecast: <span className={hidden?'blurred':'unblurred'} style={{fontWeight:600,color:forecast>totalIncome?C.red:C.textMid}}>{fmt(forecast)}</span></span>
+                  </div></>}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                    <div style={{textAlign:'center',background:C.surfaceAlt,borderRadius:10,padding:'8px 4px'}}>
+                      <div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>TODAY</div>
+                      <div className={hidden?'blurred':'unblurred'} style={{fontFamily:MF,fontWeight:800,fontSize:15,color:todaySpend>0?C.red:C.textFaint}}>{todaySpend>0?fmt(todaySpend):'—'}</div>
+                    </div>
+                    <div style={{textAlign:'center',background:C.surfaceAlt,borderRadius:10,padding:'8px 4px'}}>
+                      <div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>DAILY AVG</div>
+                      <div className={hidden?'blurred':'unblurred'} style={{fontFamily:MF,fontWeight:800,fontSize:15,color:C.textMid}}>{fmt(dailyAvg)}</div>
+                    </div>
+                    <div style={{textAlign:'center',background:C.surfaceAlt,borderRadius:10,padding:'8px 4px'}}>
+                      <div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>{spendingStreak>1?'STREAK':'SAFE'}</div>
+                      <div style={{fontFamily:MF,fontWeight:800,fontSize:15,color:spendingStreak>1?C.green:C.textMid}}>{spendingStreak>1?'🔥'+spendingStreak+'d':fmt(sts)}</div>
+                    </div>
+                  </div>
+                  {overdueBills.length>0&&<div onClick={()=>navTo('bills')} style={{marginTop:10,background:C.redBg,borderRadius:8,padding:'8px 12px',fontSize:12,color:C.red,fontWeight:600,cursor:'pointer'}}>⚠ {overdueBills.length} bill{overdueBills.length!==1?'s':''} overdue — tap to resolve</div>}
                 </div>
-                {(todayBills.length>0||overdueBills.length>0)&&<div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
-                  {overdueBills.length>0&&<div style={{fontSize:12,color:C.red,fontWeight:600}}>⚠ {overdueBills.length} overdue bill{overdueBills.length!==1?'s':''} — <span onClick={()=>navTo('bills')} style={{cursor:'pointer',textDecoration:'underline'}}>pay now</span></div>}
-                  {todayBills.map(b=><div key={b.id} style={{fontSize:12,color:C.amber,fontWeight:600}}>📅 {b.name} {fmt(b.amount)} due today</div>)}
-                </div>}
-              </div>);
+              );
             })()}
 
             {expenses.length>0&&(()=>{
@@ -2714,7 +2747,7 @@ function AppInner(){
               ].filter(Boolean);
               const insight=insights[new Date().getDate()%insights.length]||insights[0];
               if(!insight)return null;
-              return(<div onClick={()=>navTo("insights")} style={{background:`linear-gradient(135deg,${C.accentBg},${C.purpleBg})`,border:`1px solid ${C.accentMid}`,borderRadius:16,padding:"14px 16px",marginBottom:14,cursor:"pointer",display:"flex",gap:12,alignItems:"center"}}><div style={{width:36,height:36,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>💡</div><div style={{flex:1}}><div style={{fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Today's Insight</div><div style={{fontSize:13,color:C.text,lineHeight:1.5,fontWeight:500}}>{insight}</div></div><ChevronRight size={14} color={C.accent}/></div>);
+              return(<div onClick={()=>navTo("insights")} style={{background:`linear-gradient(135deg,${C.accentBg},${C.purpleBg})`,border:`1px solid ${C.accentMid}`,borderRadius:16,padding:"14px 16px",marginBottom:14,cursor:"pointer",display:"flex",gap:12,alignItems:"center"}}><div style={{width:36,height:36,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18}}>💡</div><div style={{flex:1}}><div style={{fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Insight · {insights.length} this month</div><div style={{fontSize:13,color:C.text,lineHeight:1.5,fontWeight:500}}>{insight}</div></div><ChevronRight size={14} color={C.accent}/></div>);
             })()}
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
@@ -2819,6 +2852,19 @@ function AppInner(){
         {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast}/>}
         {tab==="more"&&!isMoreTab&&(
           <div className="fu">
+            {/* Account pill at top of More */}
+            {authSession?(
+              <div style={{background:C.navy,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MF,fontWeight:800,fontSize:16,color:"#fff",flexShrink:0}}>{(authSession?.user?.email||"?")[0].toUpperCase()}</div>
+                <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{authSession?.user?.email}</div><div style={{fontSize:11,color:"rgba(255,255,255,.5)",marginTop:2}}>Signed in · data synced</div></div>
+                <button onClick={()=>setConfirm({title:"Sign Out",message:"You'll stay in offline mode. Your local data is safe.",onConfirm:()=>{handleSignOut();setConfirm(null);},danger:false})} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,.7)",fontSize:12,fontWeight:600,cursor:"pointer"}}>Sign Out</button>
+              </div>
+            ):(
+              <div style={{background:`linear-gradient(135deg,${C.accent},${C.purple})`,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
+                <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>Using offline mode</div><div style={{fontSize:11,color:"rgba(255,255,255,.7)"}}>Sign in to sync across devices</div></div>
+                <button onClick={()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:8,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>Sign In</button>
+              </div>
+            )}
             <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:2}}>More</div>
             <div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Everything in one place</div>
             {GROUPS.map(sec=>(
