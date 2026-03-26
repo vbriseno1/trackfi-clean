@@ -355,93 +355,139 @@ function PINSetup({onSave,onCancel,darkMode}){
 }
 
 function OnboardingWizard({onComplete}){
-  const [step,setStep]=useState(0);
-  const [d,setD]=useState({name:"",appName:"Trackfi",profCategory:"nurse",profSub:"rn",income:{primary:"",other:"",freelance:"",trading:""},accounts:{checking:"",savings:"",cushion:"",investments:""}});
-  const IS={width:"100%",border:`1.5px solid ${C.border}`,borderRadius:14,padding:"13px 15px",fontSize:16,color:C.text,outline:"none",background:C.surfaceAlt,boxSizing:"border-box",fontFamily:IF,transition:"border-color .15s"};
+  const[step,setStep]=useState(0);
+  const[d,setD]=useState({name:"",appName:"Trackfi",profCategory:"healthcare",profSub:"nurse_rn",income:{primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""},accounts:{checking:"",savings:"",cushion:"",investments:""}});
   const sel=getProfession(d.profCategory);
-  const selSub=sel.subs.find(s=>s.id===d.profSub)||sel.subs[0];
-  const isTrader=(parseFloat(d.income.trading||0)>0)||(d.profCategory==="trader");
-  const firstName=(d.name||d.appName||"").split(" ")[0].replace(/[^a-zA-Z]/g,"")||"there";
+  const firstName=(d.name||"").split(" ")[0].replace(/[^a-zA-Z]/g,"")||"";
+
   const STEPS=[
-    {icon:"💰",title:"Welcome to Trackfi",body:<div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:15,color:C.textMid,lineHeight:1.7}}>Your personal finance command center. Track every dollar, plan every bill, and build real wealth — all in one place.</div>
-      <div style={{background:C.navy,borderRadius:14,padding:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        {[["💸","Track spending"],["📅","Plan bills"],["💳","Pay off debt"],["🎯","Grow savings"],["📈","Log trades"],["🧾","File taxes"]].map(([ic,l])=>(<div key={l} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}><span style={{fontSize:16}}>{ic}</span><span style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.85)"}}>{l}</span></div>))}
+    // ── STEP 1: Welcome ─────────────────────────────────────
+    {title:null,body:(
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",padding:"8px 0 16px"}}>
+        <div style={{fontFamily:MF,fontSize:42,fontWeight:900,color:C.navy,letterSpacing:-2,marginBottom:8}}>💰 Trackfi</div>
+        <div style={{fontSize:17,color:C.textMid,lineHeight:1.7,marginBottom:24,maxWidth:340}}>The finance app that actually works for your life — not just for spreadsheet people.</div>
+        <div style={{width:"100%",display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+          {[["💸","Track every dollar","Know where it all goes"],["📅","Never miss a bill","Due dates + auto-pay tracking"],["💳","Crush debt faster","Avalanche & snowball plans"],["🎯","Build real savings","Goals with projected dates"],["📈","Log your trades","P&L, win rate, equity curve"],["🏆","Your health score","A–F grade on 5 pillars"]].map(([ic,t,s])=>(
+            <div key={t} style={{background:C.surfaceAlt,borderRadius:14,padding:"12px 10px",textAlign:"left"}}>
+              <div style={{fontSize:20,marginBottom:6}}>{ic}</div>
+              <div style={{fontSize:13,fontWeight:700,color:C.text,lineHeight:1.3}}>{t}</div>
+              <div style={{fontSize:11,color:C.textLight,marginTop:3,lineHeight:1.4}}>{s}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{fontSize:11,color:C.textFaint}}>Your data stays on your device — sync to cloud anytime</div>
       </div>
-      <div style={{fontSize:11,color:C.textFaint,textAlign:"center",marginTop:4}}>Built for real people who want financial clarity 🚀</div>
-    </div>},
-    {icon:"👋",title:"First, what's your name?",body:<div>
-      <div style={{fontSize:14,color:C.textMid,marginBottom:14,lineHeight:1.6}}>This personalizes your greeting and reports.</div>
-      <FI label="Your name" placeholder="Victor B" value={d.name||""} onChange={e=>setD(p=>({...p,name:e.target.value}))} autoFocus/>
-      {d.name&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:14,color:C.accent,fontWeight:600}}>👋 Nice to meet you, {d.name.split(" ")[0]}!</div>}
-    </div>},
-    {icon:"💼",title:firstName?"What do you do, "+firstName+"?":"What do you do?",body:<div>
-      <div style={{fontSize:13,color:C.textLight,marginBottom:12}}>This tailors shift tracking, income labels, and insights to your work.</div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflowY:"auto"}}>{PROFESSIONS.map(p=><button key={p.id} onClick={()=>setD(x=>({...x,profCategory:p.id}))} style={{background:d.profCategory===p.id?C.accentBg:C.surfaceAlt,border:`2px solid ${d.profCategory===p.id?C.accent:C.border}`,borderRadius:14,padding:"12px 16px",cursor:"pointer",color:C.text,textAlign:"left",display:"flex",alignItems:"center",gap:10,transition:"all .15s"}}><span style={{fontSize:22}}>{p.icon}</span><div><div style={{fontWeight:700,fontSize:13,color:d.profCategory===p.id?C.accent:C.text}}>{p.label}</div><div style={{fontSize:11,color:C.textLight}}>{p.subs?.[0]?.label||""}</div></div></button>)}</div>
-    </div>},
-    {icon:"💰",title:firstName?"What do you bring home, "+firstName+"?":"Your monthly income",body:<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{fontSize:13,color:C.textLight,marginBottom:4}}>Enter your take-home pay (after taxes). Used for budgets, safe-to-spend, and savings rate.</div>
-      <FI label="Primary income / month" type="number" placeholder="4500" value={d.income?.primary||""} onChange={e=>setD(p=>({...p,income:{...(p.income||{}),primary:e.target.value}}))}/>
-      <FI label="Side income (freelance, rental...)" type="number" placeholder="0" value={d.income?.other||""} onChange={e=>setD(p=>({...p,income:{...(p.income||{}),other:e.target.value}}))}/>
-      {parseFloat(d.income?.primary||0)>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.green,fontWeight:600}}>
-        Annual estimate: ${(parseFloat(d.income?.primary||0)*12+parseFloat(d.income?.other||0)*12).toLocaleString()}
-      </div>}
-    </div>},
-    {icon:"🏦",title:"Where does your money live?",body:<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{fontSize:13,color:C.textLight,marginBottom:4}}>Enter current balances. This powers your net worth, safe-to-spend, and balance trend — skip anything that doesn't apply.</div>
-      <FI label="Checking account" type="number" placeholder="2500" value={d.accounts?.checking||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),checking:e.target.value}}))}/>
-      <FI label="Savings account" type="number" placeholder="5000" value={d.accounts?.savings||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),savings:e.target.value}}))}/>
-      <FI label="Investments (401k, brokerage...)" type="number" placeholder="0" value={d.accounts?.investments||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),investments:e.target.value}}))}/>
-      {(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0))>0&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,fontWeight:600}}>
-        Liquid savings: ${(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0)).toLocaleString()}
-      </div>}
-    </div>},
-    {icon:"📅",title:"Any recurring bills?",body:<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{fontSize:13,color:C.textLight,marginBottom:4}}>Add your biggest monthly bills to see upcoming due dates and safe-to-spend. Skip for now and add later.</div>
-      {(d.bills||[]).map((b,i)=><div key={i} style={{display:"flex",gap:8,alignItems:"center"}}>
-        <input placeholder="Bill name (e.g. Rent)" value={b.name||""} onChange={e=>setD(p=>({...p,bills:(p.bills||[]).map((x,j)=>j===i?{...x,name:e.target.value}:x)}))} style={{flex:2,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none"}}/>
-        <input type="number" placeholder="$" value={b.amount||""} onChange={e=>setD(p=>({...p,bills:(p.bills||[]).map((x,j)=>j===i?{...x,amount:e.target.value}:x)}))} style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none"}}/>
-        <button onClick={()=>setD(p=>({...p,bills:(p.bills||[]).filter((_,j)=>j!==i)}))} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:6,display:"flex"}}><X size={16}/></button>
-      </div>)}
-      <button onClick={()=>setD(p=>({...p,bills:[...(p.bills||[]),{name:"",amount:""}]}))} style={{background:C.surfaceAlt,border:`1.5px dashed ${C.border}`,borderRadius:10,padding:"10px 0",color:C.textLight,fontWeight:600,fontSize:13,cursor:"pointer"}}>+ Add a bill</button>
-    </div>},
-    {icon:"🎯",title:firstName?"What are you saving for, "+firstName+"?":"Set a savings goal",body:<div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{fontSize:13,color:C.textLight,marginBottom:4}}>A goal gives you something to work toward. Emergency fund is the most important one to start.</div>
-      <FI label="Goal name" placeholder="Emergency Fund" value={d.goalName||""} onChange={e=>setD(p=>({...p,goalName:e.target.value}))}/>
-      <FI label="Target amount ($)" type="number" placeholder="5000" value={d.goalTarget||""} onChange={e=>setD(p=>({...p,goalTarget:e.target.value}))}/> 
-      {d.goalName&&d.goalTarget&&parseFloat(d.income?.primary||0)>0&&(()=>{const mo=Math.ceil(parseFloat(d.goalTarget)/(parseFloat(d.income?.primary||0)*0.2));return(<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.green,fontWeight:600}}>At 20% savings rate: ~{mo} months to reach {d.goalName} 🎯</div>);})()}
-    </div>},
+    ),btnLabel:"Get Started →",canSkip:false},
+
+    // ── STEP 2: Name + Profession ────────────────────────────
+    {title:"A little about you",body:(
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Your Name</div>
+          <input autoFocus placeholder="Victor B" value={d.name||""} onChange={e=>setD(p=>({...p,name:e.target.value}))}
+            style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${d.name?C.accent:C.border}`,borderRadius:12,padding:"12px 14px",fontSize:16,color:C.text,outline:"none",boxSizing:"border-box",transition:"border-color .15s"}}/>
+          {firstName&&<div style={{marginTop:8,fontSize:13,color:C.accent,fontWeight:600}}>👋 Nice to meet you, {firstName}!</div>}
+        </div>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>What do you do?</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
+            {PROFESSIONS.map(p=>(
+              <button key={p.id} onClick={()=>setD(x=>({...x,profCategory:p.id,profSub:p.subs[0].id}))}
+                style={{display:"flex",alignItems:"center",gap:7,padding:"8px 14px",borderRadius:99,border:`1.5px solid ${d.profCategory===p.id?C.accent:C.border}`,background:d.profCategory===p.id?C.accentBg:"#fff",cursor:"pointer",transition:"all .15s"}}>
+                <span style={{fontSize:16}}>{p.icon}</span>
+                <span style={{fontSize:13,fontWeight:d.profCategory===p.id?700:500,color:d.profCategory===p.id?C.accent:C.text}}>{p.label}</span>
+              </button>
+            ))}
+          </div>
+          {sel.subs.length>1&&(
+            <div>
+              <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Your Role — {sel.label}</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {sel.subs.map(s=>(
+                  <button key={s.id} onClick={()=>setD(x=>({...x,profSub:s.id}))}
+                    style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${d.profSub===s.id?C.accent:C.border}`,background:d.profSub===s.id?C.accentBg:"#fff",fontSize:12,fontWeight:d.profSub===s.id?700:400,color:d.profSub===s.id?C.accent:C.textMid,cursor:"pointer",transition:"all .12s"}}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    ),btnLabel:"Continue →",canSkip:false},
+
+    // ── STEP 3: Income ───────────────────────────────────────
+    {title:firstName?"What do you bring home, "+firstName+"?":"Your monthly income",body:(
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:4}}>Used for safe-to-spend, savings rate, and paycheck planning. You can update this anytime in Accounts.</div>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>{getProfession(d.profCategory).icon} Primary Take-Home / Month</div>
+          <input type="number" placeholder="e.g. 4500" value={d.income?.primary||""}
+            onChange={e=>setD(p=>({...p,income:{...(p.income||{}),primary:e.target.value}}))}
+            style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${parseFloat(d.income?.primary||0)>0?C.accent:C.border}`,borderRadius:12,padding:"12px 14px",fontSize:22,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+        </div>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Other Income (side jobs, rental, etc)</div>
+          <input type="number" placeholder="0" value={d.income?.other||""}
+            onChange={e=>setD(p=>({...p,income:{...(p.income||{}),other:e.target.value}}))}
+            style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"11px 14px",fontSize:16,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+        </div>
+        {parseFloat(d.income?.primary||0)>0&&(
+          <div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"12px 14px"}}>
+            <div style={{fontSize:12,color:C.green,fontWeight:600,marginBottom:2}}>Annual estimate</div>
+            <div style={{fontFamily:MF,fontWeight:800,fontSize:20,color:C.green}}>${((parseFloat(d.income?.primary||0)+parseFloat(d.income?.other||0))*12).toLocaleString()}</div>
+          </div>
+        )}
+      </div>
+    ),btnLabel:"Continue →",canSkip:true},
+
+    // ── STEP 4: Starting Balances ────────────────────────────
+    {title:"Starting balances",body:(
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:4}}>Optional — powers your net worth, safe-to-spend, and balance trend. Skip and add later anytime.</div>
+        {[{k:"checking",l:"Checking",ic:"🏦",ph:"2500"},{k:"savings",l:"Savings",ic:"💰",ph:"5000"},{k:"cushion",l:"Emergency / Cushion",ic:"🛡️",ph:"1000"},{k:"investments",l:"Investments (401k, etc)",ic:"📈",ph:"0"}].map(a=>(
+          <div key={a.k} style={{display:"flex",alignItems:"center",gap:12,background:C.surfaceAlt,borderRadius:12,padding:"11px 14px"}}>
+            <span style={{fontSize:20,flexShrink:0}}>{a.ic}</span>
+            <div style={{flex:1,fontSize:13,fontWeight:600,color:C.text}}>{a.l}</div>
+            <input type="number" placeholder={a.ph} value={d.accounts?.[a.k]||""}
+              onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),(a.k):e.target.value}}))}
+              style={{width:110,background:"#fff",border:`1.5px solid ${parseFloat(d.accounts?.[a.k]||0)>0?C.accent:C.border}`,borderRadius:10,padding:"8px 10px",fontSize:15,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right"}}/>
+          </div>
+        ))}
+        {(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0)+parseFloat(d.accounts?.cushion||0))>0&&(
+          <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",fontSize:13,color:C.accent,fontWeight:600}}>
+            💰 Liquid total: ${(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0)+parseFloat(d.accounts?.cushion||0)).toLocaleString()}
+          </div>
+        )}
+      </div>
+    ),btnLabel:"Launch Trackfi 🚀",canSkip:true},
   ];
+
   const cur=STEPS[step];
+  const isLast=step===STEPS.length-1;
+
   return(
     <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:C.surface,borderRadius:24,width:"100%",maxWidth:480,boxShadow:"0 20px 60px rgba(0,0,0,.25)",overflow:"hidden"}}>
-        <div style={{height:4,background:C.borderLight}}><div style={{height:"100%",width:`${((step+1)/STEPS.length)*100}%`,background:`linear-gradient(90deg,${C.accent},${C.teal})`,transition:"width .4s",borderRadius:99}}/></div>
-        <div style={{padding:"26px 24px 30px",maxHeight:"88vh",overflowY:"auto"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-            <span style={{fontSize:12,color:C.textLight,fontWeight:600}}>Step {step+1} of {STEPS.length}</span>
-            {step>0&&step<STEPS.length-1&&<button onClick={()=>setStep(s=>s-1)} style={{background:"none",border:"1px solid #E4E8F0",borderRadius:8,padding:"5px 12px",fontSize:12,color:C.textMid,cursor:"pointer"}}>← Back</button>}
-          </div>
-          <div style={{textAlign:"center",marginBottom:20}}>
-            <div style={{fontSize:44,marginBottom:10}}>{cur.icon}</div>
-            <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>{cur.title}</div>
-          </div>
+      <div style={{background:C.surface,borderRadius:24,width:"100%",maxWidth:500,boxShadow:"0 20px 60px rgba(0,0,0,.25)",overflow:"hidden"}}>
+        {step>0&&<div style={{height:4,background:C.borderLight}}><div style={{height:"100%",width:`${(step/(STEPS.length-1))*100}%`,background:`linear-gradient(90deg,${C.accent},${C.teal})`,transition:"width .4s",borderRadius:99}}/></div>}
+        <div style={{padding:"28px 24px 32px",maxHeight:"90vh",overflowY:"auto"}}>
+          {step>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+            <button onClick={()=>setStep(s=>s-1)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,color:C.textMid,cursor:"pointer"}}>← Back</button>
+            <span style={{fontSize:12,color:C.textLight,fontWeight:600}}>Step {step} of {STEPS.length-1}</span>
+          </div>}
+          {cur.title&&<div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:18,letterSpacing:-.3}}>{cur.title}</div>}
           {cur.body}
-          <button onClick={()=>{if(step<STEPS.length-1){setStep(s=>s+1);}else{onComplete({...d,isTrader,isHealthcare:d.profCategory==="healthcare"});}}} style={{width:"100%",marginTop:20,background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:14,padding:"15px 0",color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer"}}>
-            {step===STEPS.length-1?"🚀 Launch Trackfi":step===0?"Get Started →":"Continue →"}
+          <button onClick={()=>{if(isLast){onComplete({...d,isTrader:parseFloat(d.income?.trading||0)>0});}else{setStep(s=>s+1);}}}
+            style={{width:"100%",marginTop:20,background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:14,padding:"15px 0",color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",letterSpacing:.2}}>
+            {cur.btnLabel}
           </button>
-          {step>0&&step<STEPS.length-1&&<button onClick={()=>setStep(s=>s+1)} style={{width:"100%",marginTop:10,background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer"}}>Skip for now</button>}
+          {cur.canSkip&&!isLast&&<button onClick={()=>setStep(s=>s+1)} style={{width:"100%",marginTop:10,background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer",padding:"4px 0"}}>Skip for now →</button>}
+          {cur.canSkip&&isLast&&<button onClick={()=>onComplete({...d,isTrader:false})} style={{width:"100%",marginTop:10,background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer",padding:"4px 0"}}>Skip for now →</button>}
         </div>
       </div>
     </div>
   );
 }
-
-
-
-
-
-
 function parseMsg(text,categories,debts){
   const t=text.toLowerCase().trim();
   // Pre-process: split bill
@@ -1646,7 +1692,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   </div>);
 }
 
-function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail}){
+function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast}){
   const[nm,setNm]=useState(appName||"");const[showPIN,setShowPIN]=useState(false);
   function exportData(){const d={exportedAt:new Date().toISOString(),appName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,version:"2.0"};const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;a.click();URL.revokeObjectURL(u);}
   async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(d.accounts)setAccounts(d.accounts);if(d.income)setIncome(d.income);if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);alert("✅ Imported!");}catch(e){alert("❌ "+e.message);}}
@@ -1675,6 +1721,24 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
         <button className="ba" onClick={exportData} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export</button>
         <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={async e=>importData(e.target.files[0])}/></label>
       </div>
+    </div>
+    <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:12}}>
+      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:12}}>Income & Balances</div>
+      <div style={{fontSize:12,color:C.textLight,marginBottom:10}}>Everything you set in onboarding — edit anytime</div>
+      <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text,marginBottom:8}}>Monthly Income</div>
+      {[{k:"primary",l:`${getProfession(profCategory).icon} Primary (take-home)`,ph:"4500"},{k:"other",l:"Other / Side Income",ph:"0"},{k:"trading",l:"Trading (avg/mo)",ph:"0"},{k:"rental",l:"Rental Income",ph:"0"},{k:"dividends",l:"Dividends",ph:"0"},{k:"freelance",l:"Freelance",ph:"0"}].map(i=>(
+        <div key={i.k} style={{marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.slate,letterSpacing:.3,marginBottom:4}}>{i.l}</div>
+          <input type="number" placeholder={i.ph} value={income[i.k]||""} onChange={e=>setIncome(p=>({...p,[i.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast&&showToast("✓ Income saved");}} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${income[i.k]?C.accent:C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:14,outline:"none",transition:"border-color .15s"}}/>
+        </div>
+      ))}
+      <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text,marginBottom:8,marginTop:16}}>Account Balances</div>
+      {[{k:"checking",l:"🏦 Checking",ph:"0"},{k:"savings",l:"💰 Savings",ph:"0"},{k:"cushion",l:"🛡️ Cushion / Emergency",ph:"0"},{k:"investments",l:"📈 Investments",ph:"0"},{k:"property",l:"🏠 Property",ph:"0"},{k:"vehicles",l:"🚗 Vehicles",ph:"0"}].map(a=>(
+        <div key={a.k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+          <div style={{flex:1,fontSize:13,color:C.textMid}}>{a.l}</div>
+          <input type="number" placeholder={a.ph} value={accounts[a.k]||""} onChange={e=>setAccounts(p=>({...p,[a.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast&&showToast("✓ Balance saved");}} style={{width:120,background:C.surfaceAlt,border:`1.5px solid ${accounts[a.k]?C.accent:C.border}`,borderRadius:10,padding:"8px 10px",fontSize:14,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right",transition:"border-color .15s"}}/>
+        </div>
+      ))}
     </div>
     <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:12}}>
       <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Features</div>
@@ -2470,8 +2534,8 @@ function AppInner(){
     setAppName("Trackfi");
     if(d.profCategory)setProfCategory(d.profCategory);if(d.profSub)setProfSub(d.profSub);
     if(d.income)setIncome(d.income);if(d.accounts)setAccounts({...d.accounts});
-    if(d.goalName&&d.goalTarget){setSGoals(p=>[...p,{id:Date.now().toString(),name:d.goalName,target:parseFloat(d.goalTarget),saved:0,monthly:0,icon:"🎯",color:C.accent}]);}
-    if(d.bills&&d.bills.length){const validBills=d.bills.filter(b=>b.name&&b.amount);if(validBills.length){setBills(p=>[...p,...validBills.map(b=>({id:Date.now()+Math.random(),name:b.name,amount:String(parseFloat(b.amount)||0),dueDate:"",recurring:"Monthly",paid:false,autoPay:false}))]);}}
+    
+
     const hasTrading=parseFloat(d.income?.trading||0)>0;
     setSettings(p=>({...p,showTrading:hasTrading,showHealth:true,showSavings:true,showForecast:true}));
     try{localStorage.setItem("fv_onboarded","1");}catch{}
@@ -2756,7 +2820,7 @@ function AppInner(){
         {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} onNavigate={navTo}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
