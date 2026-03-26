@@ -1693,46 +1693,63 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
 }
 
 function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast}){
-  const[nm,setNm]=useState(appName||"");const[showPIN,setShowPIN]=useState(false);
+  const[nm,setNm]=useState(appName||"");
+  const[showPIN,setShowPIN]=useState(false);
+
   function exportData(){const d={exportedAt:new Date().toISOString(),appName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,version:"2.0"};const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;a.click();URL.revokeObjectURL(u);}
-  async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(d.accounts)setAccounts(d.accounts);if(d.income)setIncome(d.income);if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);alert("✅ Imported!");}catch(e){alert("❌ "+e.message);}}
-  const S=(k,l,d,ic)=>(<div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{ic}</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>{l}</div><div style={{fontSize:12,color:C.textLight}}>{d}</div></div></div><button onClick={()=>setSettings(p=>({...p,[k]:!p[k]}))} style={{background:"none",border:"none",cursor:"pointer",color:settings[k]?C.accent:C.borderLight,padding:0}}>{settings[k]?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>);
+  async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(d.accounts)setAccounts(d.accounts);if(d.income)setIncome(d.income);if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);showToast&&showToast("✅ Data imported!");} catch(e){showToast&&showToast("❌ "+e.message,"error");}}
+
+  const Tog=(k,l,d,ic)=>(<div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{ic}</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>{l}</div><div style={{fontSize:12,color:C.textLight}}>{d}</div></div></div><button onClick={()=>setSettings(p=>({...p,[k]:!p[k]}))} style={{background:"none",border:"none",cursor:"pointer",color:settings[k]?C.accent:C.borderLight,padding:0,flexShrink:0}}>{settings[k]?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>);
+
   return(<div className="fu">
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Settings</div>{userEmail&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600,color:C.accent}}>{userEmail.split("@")[0]}</div>}</div>
-    <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:12}}>
-      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>App Name</div>
-      <div style={{display:"flex",gap:8,marginBottom:14}}><input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Trackfi" style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none"}}/><button className="ba" onClick={()=>nm.trim()&&setAppName(nm.trim())} style={{background:C.accent,border:"none",borderRadius:10,padding:"0 16px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>Save</button></div>
-      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6,marginTop:14}}>Greeting Name</div>
-      <div style={{fontSize:11,color:C.textLight,marginBottom:6}}>Used in your home screen greeting — "Good morning, ____"</div>
-      <div style={{display:"flex",gap:8,marginBottom:14}}><input value={greetName||""} onChange={e=>setGreetName(e.target.value)} placeholder="Your first name" style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none"}}/><button className="ba" onClick={()=>setGreetName(greetName.trim())} style={{background:C.green,border:"none",borderRadius:10,padding:"0 16px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>Save</button></div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
-        {PROFESSIONS.map(p=><button key={p.id} onClick={()=>{setProfCategory(p.id);setProfSub(p.subs[0].id);showToast&&showToast("✓ Profession updated — "+p.label);}} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:10,border:`1.5px solid ${profCategory===p.id?C.accent:C.border}`,background:profCategory===p.id?C.accentBg:C.surfaceAlt,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:12,fontWeight:600,color:profCategory===p.id?C.accent:C.text}}>{p.label}</span></button>)}
-      </div>
+
+    {/* ── Header ─────────────────────────────────── */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+      <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Settings</div>
+      {userEmail&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:99,padding:"5px 14px",fontSize:12,fontWeight:700,color:C.accent}}>{userEmail.split("@")[0]}</div>}
     </div>
-    <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:12}}>
-      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>{[["💸",expenses.length,"Expenses"],["📅",bills.length,"Bills"],["💳",debts.length,"Debts"],["🎯",savingsGoals.length,"Goals"],["📈",trades.length,"Trades"]].map(([ic,n,l])=>(<div key={l} style={{flex:"1 1 60px",background:C.surfaceAlt,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:60}}><div style={{fontSize:18,marginBottom:2}}>{ic}</div><div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.text}}>{n}</div><div style={{fontSize:10,color:C.textLight,fontWeight:600}}>{l}</div></div>))}</div>
-      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Appearance & Security</div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{darkMode?"🌙":"☀️"}</span><div style={{fontSize:14,fontWeight:600,color:C.text}}>Dark Mode</div></div><button onClick={()=>setDarkMode(d=>!d)} style={{background:"none",border:"none",cursor:"pointer",color:darkMode?C.accent:C.borderLight,padding:0}}>{darkMode?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>
-      <div style={{padding:"12px 0",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>🔒</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>PIN Lock</div><div style={{fontSize:12,color:C.textLight}}>{pinEnabled?"Enabled":"Disabled"}</div></div></div><button onClick={()=>{if(pinEnabled){localStorage.removeItem("fv_pin_hash");setPinEnabled(false);}else setShowPIN(true);}} style={{background:"none",border:"none",cursor:"pointer",color:pinEnabled?C.accent:C.borderLight,padding:0}}>{pinEnabled?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>
-        {showPIN&&<div style={{marginTop:10}}><PINSetup onSave={()=>{setPinEnabled(true);setShowPIN(false);}} onCancel={()=>setShowPIN(false)} darkMode={darkMode}/></div>}
+
+    {/* ── 1. PROFILE ─────────────────────────────── */}
+    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+        <span style={{fontSize:18}}>👤</span>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Profile</div>
       </div>
-      <div style={{display:"flex",gap:8,paddingTop:12}}>
-        <button className="ba" onClick={exportData} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export</button>
-        <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={async e=>importData(e.target.files[0])}/></label>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Display Name</div>
+          <input value={greetName||""} onChange={e=>setGreetName(e.target.value)} placeholder="Victor B" style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:14,outline:"none"}}/>
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>App Name</div>
+          <input value={nm} onChange={e=>setNm(e.target.value)} placeholder="Trackfi" style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:14,outline:"none"}}/>
+        </div>
       </div>
+      <button className="ba" onClick={()=>{if(nm.trim())setAppName(nm.trim());if(greetName?.trim())setGreetName(greetName.trim());showToast&&showToast("✓ Profile saved");}} style={{width:"100%",background:C.accent,border:"none",borderRadius:10,padding:"10px 0",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:14}}>Save Profile</button>
+      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Profession</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+        {PROFESSIONS.map(p=><button key={p.id} onClick={()=>{setProfCategory(p.id);setProfSub(p.subs[0].id);showToast&&showToast("✓ "+p.label);}} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:99,border:`1.5px solid ${profCategory===p.id?C.accent:C.border}`,background:profCategory===p.id?C.accentBg:"#fff",cursor:"pointer"}}><span style={{fontSize:14}}>{p.icon}</span><span style={{fontSize:12,fontWeight:profCategory===p.id?700:500,color:profCategory===p.id?C.accent:C.text}}>{p.label}</span></button>)}
+      </div>
+      {getProfession(profCategory).subs.length>1&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+        {getProfession(profCategory).subs.map(s=><button key={s.id} onClick={()=>{setProfSub(s.id);showToast&&showToast("✓ Role updated");}} style={{padding:"5px 10px",borderRadius:8,border:`1.5px solid ${profSub===s.id?C.accent:C.border}`,background:profSub===s.id?C.accentBg:"#fff",fontSize:11,fontWeight:profSub===s.id?700:400,color:profSub===s.id?C.accent:C.textMid,cursor:"pointer"}}>{s.label}</button>)}
+      </div>}
     </div>
-    <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:12}}>
-      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:12}}>Income & Balances</div>
-      <div style={{fontSize:12,color:C.textLight,marginBottom:10}}>Everything you set in onboarding — edit anytime</div>
-      <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text,marginBottom:8}}>Monthly Income</div>
+
+    {/* ── 2. MONEY SETUP ─────────────────────────── */}
+    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+        <span style={{fontSize:18}}>💰</span>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Money Setup</div>
+        <div style={{marginLeft:"auto",fontSize:11,color:C.green,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><div style={{width:6,height:6,borderRadius:"50%",background:C.green}}/>Auto-saved</div>
+      </div>
+      <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Monthly Income</div>
       {[{k:"primary",l:`${getProfession(profCategory).icon} Primary (take-home)`,ph:"4500"},{k:"other",l:"Other / Side Income",ph:"0"},{k:"trading",l:"Trading (avg/mo)",ph:"0"},{k:"rental",l:"Rental Income",ph:"0"},{k:"dividends",l:"Dividends",ph:"0"},{k:"freelance",l:"Freelance",ph:"0"}].map(i=>(
         <div key={i.k} style={{marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:600,color:C.slate,letterSpacing:.3,marginBottom:4}}>{i.l}</div>
           <input type="number" placeholder={i.ph} value={income[i.k]||""} onChange={e=>setIncome(p=>({...p,[i.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast&&showToast("✓ Income saved");}} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${income[i.k]?C.accent:C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:14,outline:"none",transition:"border-color .15s"}}/>
         </div>
       ))}
-      <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text,marginBottom:8,marginTop:16}}>Account Balances</div>
+      <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:16}}>Account Balances</div>
       {[{k:"checking",l:"🏦 Checking",ph:"0"},{k:"savings",l:"💰 Savings",ph:"0"},{k:"cushion",l:"🛡️ Cushion / Emergency",ph:"0"},{k:"investments",l:"📈 Investments",ph:"0"},{k:"property",l:"🏠 Property",ph:"0"},{k:"vehicles",l:"🚗 Vehicles",ph:"0"}].map(a=>(
         <div key={a.k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
           <div style={{flex:1,fontSize:13,color:C.textMid}}>{a.l}</div>
@@ -1740,23 +1757,63 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
         </div>
       ))}
     </div>
-    <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:12}}>
-      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Features</div>
-      {S("showTrading","Futures Trading","Track P&L, win rate","📈")}
-      {S("showCrypto","Crypto","Add to net worth","🪙")}
-      {S("showHealth","Health Score","Gamified financial score","🏆")}
-      {S("showSavings","Savings Goals","Track goals with timelines","🎯")}
+
+    {/* ── 3. APPEARANCE ──────────────────────────── */}
+    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <span style={{fontSize:18}}>🎨</span>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Appearance & Security</div>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{darkMode?"🌙":"☀️"}</span><div style={{fontSize:14,fontWeight:600,color:C.text}}>Dark Mode</div></div>
+        <button onClick={()=>setDarkMode(d=>!d)} style={{background:"none",border:"none",cursor:"pointer",color:darkMode?C.accent:C.borderLight,padding:0}}>{darkMode?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button>
+      </div>
+      <div style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>🔒</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>PIN Lock</div><div style={{fontSize:12,color:C.textLight}}>{pinEnabled?"Enabled — tap to remove":"Disabled"}</div></div></div>
+          <button onClick={()=>{if(pinEnabled){localStorage.removeItem("fv_pin_hash");setPinEnabled(false);showToast&&showToast("PIN removed");}else setShowPIN(true);}} style={{background:"none",border:"none",cursor:"pointer",color:pinEnabled?C.accent:C.borderLight,padding:0}}>{pinEnabled?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button>
+        </div>
+        {showPIN&&<div style={{marginTop:10}}><PINSetup onSave={()=>{setPinEnabled(true);setShowPIN(false);showToast&&showToast("✓ PIN set");}} onCancel={()=>setShowPIN(false)} darkMode={darkMode}/></div>}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>📊</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>Data Summary</div><div style={{fontSize:12,color:C.textLight}}>{expenses.length} expenses · {bills.length} bills · {debts.length} debts · {trades.length} trades</div></div></div>
+      </div>
     </div>
-    {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:10}}><RefreshCw size={14}/>Re-run Setup Wizard</button>}
-    {onResetAllData&&<button className="ba" onClick={onResetAllData} style={{width:"100%",background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:10}}><Trash2 size={14}/>Reset All Data</button>}
-    <div style={{marginTop:8,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
-      
-      {onSignOut&&<button className="ba" onClick={()=>onSignOut()} style={{width:"100%",marginBottom:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out & Clear Session</button>}
+
+    {/* ── 4. FEATURES ────────────────────────────── */}
+    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <span style={{fontSize:18}}>🔧</span>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Features</div>
+      </div>
+      {Tog("showTrading","Futures Trading","Track P&L, win rate, equity curve","📈")}
+      {Tog("showHealth","Health Score","A–F grade on your finances","🏆")}
+      {Tog("showSavings","Savings Goals","Goal rings with projected dates","🎯")}
+      {Tog("showForecast","Month Forecast","Burn rate + spending projection","🔮")}
+    </div>
+
+    {/* ── 5. DATA ────────────────────────────────── */}
+    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <span style={{fontSize:18}}>📦</span>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Data</div>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:10}}>
+        <button className="ba" onClick={exportData} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export JSON</button>
+        <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={async e=>importData(e.target.files[0])}/></label>
+      </div>
+      {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:8}}><RefreshCw size={13}/>Re-run Setup Wizard</button>}
+      {onResetAllData&&<button className="ba" onClick={onResetAllData} style={{width:"100%",background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"11px 0",color:C.red,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:8}}><Trash2 size={13}/>Reset All Data</button>}
+    </div>
+
+    {/* ── Account ────────────────────────────────── */}
+    <div style={{paddingTop:4,borderTop:`1px solid ${C.border}`}}>
+      {onSignOut&&<button className="ba" onClick={()=>onSignOut()} style={{width:"100%",marginBottom:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}
       {onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}
     </div>
+
   </div>);
 }
-
 function generateDemoData(){
   const now=new Date(),yr=now.getFullYear();
   const expenses=[],bills=[],debts=[],trades=[],shifts=[],savingsGoals=[],budgetGoals=[],balHist=[];
@@ -1882,9 +1939,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills}){
       ))}
     </div>
   );
-}
-
-function IncomeSpendingView({expenses,income,trades}){
+}function IncomeSpendingView({expenses,income,trades}){
   const[range,setRange]=useState("3M");
   const now=new Date();
   const ti=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
@@ -1928,7 +1983,9 @@ function IncomeSpendingView({expenses,income,trades}){
       </div>
     </div>
   );
-}function DashSettingsView({config,setConfig,showTrading}){
+}
+
+function DashSettingsView({config,setConfig,showTrading}){
   const toggle=k=>setConfig(p=>({...p,[k]:!p[k]}));
   const items=[{k:"showIncomeChart",icon:"📊",label:"Income vs Spending Chart",desc:"3-month bar chart on home"},{k:"showMetrics",icon:"📐",label:"Key Metrics Grid",desc:"Net worth, health, emergency fund"},{k:"showAccounts",icon:"🏦",label:"Account Cards",desc:"Scrollable balance overview"},{k:"showForecast",icon:"🔮",label:"Month Forecast",desc:"Burn rate and projected spend"},{k:"showBills",icon:"📅",label:"Upcoming Bills",desc:"Next 3 bills with countdown"},{k:"showRecent",icon:"🕒",label:"Recent Transactions",desc:"Last 4 logged expenses"},...(showTrading?[{k:"showTradeCard",icon:"📈",label:"Trading Summary",desc:"P&L and record"}]:[])];
   return(
@@ -2486,19 +2543,18 @@ function AppInner(){
   const today=todayStr();
   const unread=unreadNotifs;
   const GROUPS=[
-    {key:"daily",label:"Daily Drivers",desc:"Most-used",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"recurring",icon:RefreshCw,label:"Recurring Expenses"},{id:"calendar",icon:Calendar,label:"Calendar"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"chat",icon:MessageCircle,label:"AI Assistant"}]},
-    {key:"work",label:"Work & Income",desc:"Shifts and trading",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"cashflow",icon:BarChart2,label:"Income vs Spending"}]},
-    {key:"reports",label:"Reports",desc:"History and analysis",items:[{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
-    {key:"tools",label:"Tools",desc:"Search, settings, help",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"},{id:"insights",icon:Zap,label:"Spending Insights"},{id:"health",icon:Activity,label:"Health Score"},{id:"categories",icon:Filter,label:"Categories"},{id:"settings",icon:Settings,label:"Settings"}]},
+    {key:"money",label:"Money",desc:"Accounts, bills & goals",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"bills",icon:CalendarClock,label:"Bills"},{id:"debt",icon:CreditCard,label:"Debt Tracker"},{id:"savings",icon:Target,label:"Savings Goals"},{id:"recurring",icon:RefreshCw,label:"Recurring"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"}]},
+    {key:"analytics",label:"Analytics",desc:"Insights & trends",items:[{id:"insights",icon:Zap,label:"Spending Insights"},{id:"health",icon:Activity,label:"Health Score"},{id:"cashflow",icon:BarChart2,label:"Income vs Spending"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"}]},
+    {key:"work",label:"Work & Reports",desc:"Shifts, trading & docs",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
+    {key:"tools",label:"Tools",desc:"Search & customize",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"categories",icon:Filter,label:"Categories"},{id:"dashsettings",icon:Settings,label:"Dashboard Layout"}]},
   ];
   const allTabIds=GROUPS.flatMap(g=>g.items.map(i=>i.id));
   const isMoreTab=allTabIds.includes(tab);
   const NAV=[
     {id:"home",icon:LayoutDashboard,label:"Home"},
     {id:"spend",icon:Wallet,label:"Spending"},
-    {id:"bills",icon:CalendarClock,label:"Bills"},
-    {id:"debt",icon:CreditCard,label:"Debt"},
-    {id:"savings",icon:Target,label:"Goals"},
+    {id:"chat",icon:MessageCircle,label:"Log"},
+    {id:"calendar",icon:Calendar,label:"Calendar"},
     {id:"more",icon:Menu,label:"More",badge:unread>0?unread:null},
   ];
 
@@ -2547,7 +2603,7 @@ function AppInner(){
     <div style={{minHeight:"100vh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",maxWidth:640,margin:"0 auto",minHeight:"100vh",position:"relative"}}>
       <style>{CSS}</style>
       <div id="fv-scroll" style={{flex:1,overflowY:"auto",padding:"16px 16px 110px"}}>
-        {["spend","home"].includes(tab)&&<button className="ba" onClick={()=>om("expense")} style={{position:"fixed",right:16,bottom:90,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
+        {["spend","home","chat"].includes(tab)&&<button className="ba" onClick={()=>om("expense")} style={{position:"fixed",right:16,bottom:90,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:16,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
         {tab==="home"&&(
@@ -2711,6 +2767,8 @@ function AppInner(){
                 {id:"shift",l:"Log Shift",ic:"🏥",a:()=>navTo("shifts"),bg:C.accentBg,c:C.accent},
                 {id:"trade",l:"Log Trade",ic:"📈",a:()=>navTo("trading"),bg:C.greenBg,c:C.green},
                 {id:"savings",l:"Add Goal",ic:"🎯",a:()=>navTo("savings"),bg:C.amberBg,c:C.amber},
+                {id:"bills_nav",l:"View Bills",ic:"📅",a:()=>navTo("bills"),bg:C.amberBg,c:C.amber},
+                {id:"debt_nav",l:"View Debts",ic:"💳",a:()=>navTo("debt"),bg:C.redBg,c:C.red},
                 {id:"networth",l:"Net Worth",ic:"📊",a:()=>navTo("networthtrend"),bg:C.accentBg,c:C.accent},
                 {id:"insights",l:"Insights",ic:"🔍",a:()=>navTo("insights"),bg:C.purpleBg,c:C.purple},
                 {id:"paycheck",l:"Paycheck",ic:"💰",a:()=>navTo("paycheck"),bg:C.greenBg,c:C.green},
@@ -2755,7 +2813,7 @@ function AppInner(){
           </div>
         )}
 
-        {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}><div style={{marginBottom:14}}><div style={{fontFamily:MF,fontSize:18,fontWeight:800}}>AI Assistant</div><div style={{fontSize:13,color:C.textLight,marginTop:1}}>Log everything offline — just type naturally</div></div><div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
+        {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}><div style={{marginBottom:14}}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>AI Logger</div><div style={{fontSize:13,color:C.textLight,marginTop:1}}>Type naturally — "lunch 12", "rent 1200 due 28th", "checked 3200"</div></div><div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
         {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats} showToast={showToast}/>}
         {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast}/>}
         {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast}/>}
@@ -2777,6 +2835,11 @@ function AppInner(){
                 </div>
               </div>
             ))}
+            <button className="ba" onClick={()=>navTo("settings")} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:C.accent,borderRadius:12,cursor:"pointer",textAlign:"left",width:"100%",border:"none",marginTop:4}}>
+              <div style={{width:36,height:36,background:"rgba(255,255,255,.2)",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Settings size={17} color="#fff"/></div>
+              <span style={{fontSize:14,fontWeight:700,color:"#fff",flex:1}}>Settings</span>
+              <ChevronRight size={15} color="rgba(255,255,255,.7)"/>
+            </button>
           </div>
         )}
 
