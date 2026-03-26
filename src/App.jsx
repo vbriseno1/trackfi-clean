@@ -450,7 +450,7 @@ function OnboardingWizard({onComplete}){
             <span style={{fontSize:20,flexShrink:0}}>{a.ic}</span>
             <div style={{flex:1,fontSize:13,fontWeight:600,color:C.text}}>{a.l}</div>
             <input type="number" placeholder={a.ph} value={d.accounts?.[a.k]||""}
-              onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),(a.k):e.target.value}}))}
+              onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),[a.k]:e.target.value}}))}
               style={{width:110,background:"#fff",border:`1.5px solid ${parseFloat(d.accounts?.[a.k]||0)>0?C.accent:C.border}`,borderRadius:10,padding:"8px 10px",fontSize:15,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right"}}/>
           </div>
         ))}
