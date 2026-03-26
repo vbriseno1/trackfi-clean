@@ -64,6 +64,7 @@ const PIE_COLORS = [C.accent,C.green,C.amber,C.red,C.purple,C.teal,C.purple,C.am
 const MF="'Manrope',sans-serif";
 const IF="'Inter',sans-serif";
 const MOS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const FULL_MOS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const TODAY = new Date();
 
 const PROFESSIONS = [
@@ -2078,10 +2079,10 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
 
 
 function IncomeSpendingView({expenses,income,trades}){
-  const[range,setRange]=useState("3M");
+  const[range,setRange]=useState("1M");
   const now=new Date();
   const ti=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
-  const months=range==="3M"?3:range==="6M"?6:12;
+  const months=range==="1M"?1:range==="3M"?3:range==="6M"?6:12;
   const data=useMemo(()=>Array.from({length:months},(_,i)=>{
     const d=new Date(now.getFullYear(),now.getMonth()-months+1+i,1);
     const ms=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
@@ -2110,7 +2111,7 @@ function IncomeSpendingView({expenses,income,trades}){
         
       </div>
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:10,padding:3,marginBottom:16}}>
-        {["3M","6M","1Y"].map(r=><button key={r} className="ba" onClick={()=>setRange(r)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:range===r?"#fff":"transparent",color:range===r?C.accent:C.textLight,fontWeight:range===r?700:500,fontSize:13,cursor:"pointer"}}>{r}</button>)}
+        {["1M","3M","6M","1Y"].map(r=><button key={r} className="ba" onClick={()=>setRange(r)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:range===r?"#fff":"transparent",color:range===r?C.accent:C.textLight,fontWeight:range===r?700:500,fontSize:13,cursor:"pointer"}}>{r}</button>)}
       </div>
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"20px 4px 12px",marginBottom:14}}>
         <div style={{display:"flex",gap:16,paddingLeft:16,marginBottom:12}}>{[[C.green,"Income"],[C.red,"Spending"],[C.accent,"Saved"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:3,background:c}}/><span style={{fontSize:12,color:C.textLight}}>{l}</span></div>)}</div>
@@ -2814,15 +2815,15 @@ function AppInner(){
               <button onClick={()=>setConfirm({title:"Exit Demo",message:"This will clear all demo data.",onConfirm:()=>{exitDemo();setConfirm(null);},danger:false})} style={{background:"rgba(255,255,255,.25)",border:"none",borderRadius:8,padding:"7px 12px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Exit</button>
             </div>}
 
-            {sts>0&&expenses.length>0&&<div style={{background:`linear-gradient(135deg,${sts>500?C.green:sts>0?C.amber:C.red},${sts>500?"#059669":sts>0?"#b45309":C.red}cc)`,borderRadius:16,padding:"14px 18px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}} onClick={()=>navTo("paycheck")}><div><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.7)",textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Safe to Spend</div><div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontSize:28,fontWeight:800,color:"#fff",lineHeight:1}}>{fmt(sts)}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>after bills</div><ChevronRight size={16} color="rgba(255,255,255,.7)"/></div></div>}
+
       {overdue.length>0&&<div onClick={()=>navTo("bills")} style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:14,padding:"12px 16px",marginBottom:12,display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><AlertCircle size={16} color={C.red} style={{flexShrink:0}}/><div style={{flex:1,fontSize:13,color:C.red,fontWeight:600}}>{overdue.length} bill{overdue.length!==1?"s":""} overdue — tap to resolve</div><ChevronRight size={14} color={C.red}/></div>}
             {!overdue.length&&dueSoon.length>0&&<div onClick={()=>navTo("bills")} style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:14,padding:"12px 16px",marginBottom:12,display:"flex",gap:10,alignItems:"center",cursor:"pointer"}}><AlertCircle size={16} color={C.amber} style={{flexShrink:0}}/><div style={{flex:1,fontSize:13,color:C.amber,fontWeight:600}}>{dueSoon.length} bill{dueSoon.length!==1?"s":""} due within 7 days</div><ChevronRight size={14} color={C.amber}/></div>}
 
             {(()=>{
               const cards=[
-                {label:"Safe to Spend",sub:"Tap for paycheck breakdown",val:fmt(sts),color:sts>500?C.green:sts>0?C.amber:C.red,tab:"paycheck",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Left",fmt(Math.max(0,totalIncome-totalExp)),cashflow>=0?C.green:C.red]]},
+                {label:"Monthly Cashflow",sub:"Tap for income vs spending",val:(cashflow>=0?"+":"")+fmt(cashflow),color:cashflow>=0?C.green:C.red,tab:"cashflow",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Saved",savingsRate.toFixed(1)+"%",savingsRate>=15?C.green:savingsRate>=5?C.amber:C.red]]},
                 {label:"Net Worth",sub:"Tap to see wealth over time",val:fmt(totalAssets-totalDebt),color:totalAssets-totalDebt>=0?C.green:C.red,tab:"networthtrend",spark:balHist.slice(-8).map((h,i)=>({i,v:Object.values(h.accounts||{}).reduce((s,v)=>s+(parseFloat(v)||0),0)})),stats:[["Assets",fmt(totalAssets),C.green],["Debt",fmt(totalDebt),C.red],["Trend",totalAssets-totalDebt>=0?"Positive":"Negative",totalAssets-totalDebt>=0?C.green:C.red]]},
-                {label:"Monthly Cashflow",sub:"Tap to see income vs spending",val:(cashflow>=0?"+":"")+fmt(cashflow),color:cashflow>=0?C.green:C.red,tab:"cashflow",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Saved",savingsRate.toFixed(1)+"%",savingsRate>=15?C.green:savingsRate>=5?C.amber:C.red]]},
+                {label:"Safe to Spend",sub:"Tap for paycheck planner",val:fmt(sts),color:sts>500?C.green:sts>0?C.amber:C.red,tab:"paycheck",stats:[["Income",fmt(totalIncome),C.green],["Spent",fmt(totalExp),C.red],["Left",fmt(Math.max(0,totalIncome-totalExp)),cashflow>=0?C.green:C.red]]},
                 {label:"Debt Overview",sub:"Tap to see payoff plan",val:fmt(totalDebt),color:totalDebt===0?C.green:C.red,tab:"debt",stats:[["Accounts",String(debts.length),C.textFaint],["Min/mo",fmt(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)),C.red],["DTI",((debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/Math.max(1,totalIncome))*100).toFixed(1)+"%",C.textFaint]]},
                 {label:"Savings Progress",sub:savingsGoals.length?"Tap to track goals":"Add your first goal",val:savingsGoals.length?Math.round((parseFloat(savingsGoals[0].saved||0)/parseFloat(savingsGoals[0].target||1))*100)+"%":"--",color:C.green,tab:"savings",stats:savingsGoals.length?[["Saved",fmt(savingsGoals[0].saved||0),C.green],["Target",fmt(savingsGoals[0].target||0),C.textFaint],["Goals",String(savingsGoals.length),C.textFaint]]:[["Tap","to add",C.textFaint],["your","first",C.textFaint],["goal","→",C.textFaint]]},
                 {label:"Bills This Month",sub:"Tap to manage bills",val:fmt(bills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0)),color:bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0).length>0?C.red:C.amber,tab:"bills",stats:[["Unpaid",String(bills.filter(b=>!b.paid).length),C.red],["Paid",String(bills.filter(b=>b.paid).length),C.green],["Overdue",String(bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0).length),bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0).length>0?C.red:C.textFaint]]},
@@ -2874,7 +2875,7 @@ function AppInner(){
                 <div onClick={()=>navTo('cashflow')} style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:'16px',marginBottom:14,cursor:'pointer'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
                     <div>
-                      <div style={{fontFamily:MF,fontWeight:700,fontSize:15,color:C.text}}>{MOS[now2.getMonth()]} — Full Month</div>
+                      <div style={{fontFamily:MF,fontWeight:700,fontSize:15,color:C.text}}>{FULL_MOS[now2.getMonth()]} Breakdown</div>
                       <div style={{fontSize:11,color:C.textLight}}>Day {dayOfMo} of {daysInMo} · tap for full breakdown</div>
                     </div>
                     <div style={{textAlign:'right'}}>
