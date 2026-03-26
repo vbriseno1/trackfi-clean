@@ -1,4 +1,4 @@
-// v2 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { LayoutDashboard, Wallet, CalendarClock, CreditCard, Target, PiggyBank,
   Plus, Trash2, CheckCircle2, Circle, TrendingUp, AlertCircle, X, Scan,
   Calculator, Edit3, Save, MessageCircle, Send, DollarSign,
