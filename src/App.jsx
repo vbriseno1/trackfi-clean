@@ -360,8 +360,8 @@ function OnboardingWizard({onComplete}){
   const isTrader=(parseFloat(d.income.trading||0)>0)||(d.profCategory==="trader");
   const firstName=(d.name||d.appName||"").split(" ")[0].replace(/[^a-zA-Z]/g,"")||"there";
   const STEPS=[
-    {icon:"👋",title:"Welcome to Trackfi",body:<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{fontSize:16,color:C.textMid,lineHeight:1.6}}>Your personal finance command center — built to give you complete control over your money.</div><div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:4}}>{["Track spending","Plan bills","Pay off debt","Grow savings","File taxes"].map(f=><div key={f} style={{background:C.accentBg,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:600,color:C.accent}}>{f}</div>)}</div></div>},
-    {icon:"😊",title:"What should we call you?",body:<div><FI label="Your first name" placeholder="Alex" value={d.name||""} onChange={e=>setD(p=>({...p,name:e.target.value}))} style={{marginBottom:0}}/></div>},
+    {icon:"👋",title:"Welcome to Trackfi",body:<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{fontSize:16,color:C.textMid,lineHeight:1.6}}>Your personal finance command center — built to give you complete control over your money.</div><div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:4}}>{["Track spending","Plan bills","Pay off debt","Grow savings","File taxes"].map(f=><div key={f} style={{background:C.accentBg,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:600,color:C.accent}}>{f}</div>)}<div style={{marginTop:12,fontSize:11,color:C.textFaint,textAlign:"center"}}>Built for real financial clarity · by Victor B 🚀</div></div></div>},
+    {icon:"😊",title:"First, what's your name?",body:<div><FI label="Your first name" placeholder="Victor B" value={d.name||""} onChange={e=>setD(p=>({...p,name:e.target.value}))} style={{marginBottom:0}}/></div>},
     {icon:"💼",title:"What do you do?",body:<div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:240,overflowY:"auto"}}>{PROFESSIONS.map(p=><button key={p.id} onClick={()=>setD(x=>({...x,profCategory:p.id}))} style={{background:d.profCategory===p.id?C.accentBg:C.surfaceAlt,border:`2px solid ${d.profCategory===p.id?C.accent:C.border}`,borderRadius:14,padding:"12px 16px",cursor:"pointer",color:C.text,textAlign:"left",display:"flex",alignItems:"center",gap:10,transition:"all .15s"}}><span style={{fontSize:22}}>{p.icon}</span><div><div style={{fontWeight:700,fontSize:13,color:d.profCategory===p.id?C.accent:C.text}}>{p.label}</div><div style={{fontSize:11,color:C.textLight}}>{p.subs?.[0]?.label||""}</div></div></button>)}</div>},
     {icon:"💰",title:"Your monthly income",body:<div style={{display:"flex",flexDirection:"column",gap:10}}><FI label="Primary income (take-home)" type="number" placeholder="4500" value={d.income?.primary||""} onChange={e=>setD(p=>({...p,income:{...(p.income||{}),primary:e.target.value}}))}/><FI label="Other income (side jobs, rental...)" type="number" placeholder="0" value={d.income?.other||""} onChange={e=>setD(p=>({...p,income:{...(p.income||{}),other:e.target.value}}))}/></div>},
     {icon:"🏦",title:"Account balances",body:<div style={{display:"flex",flexDirection:"column",gap:10}}><FI label="Checking account" type="number" placeholder="2500" value={d.accounts?.checking||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),checking:e.target.value}}))}/><FI label="Savings account" type="number" placeholder="5000" value={d.accounts?.savings||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),savings:e.target.value}}))}/></div>},
@@ -861,7 +861,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
                   <span style={{fontSize:13,fontWeight:600,color:C.text}}>{g.category}</span>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:13,fontWeight:700,color:over?C.red:C.green}}>{fmt(sp)} / {editingBudget===g.id?<input autoFocus type="number" defaultValue={g.limit} onBlur={e=>{const v=parseFloat(e.target.value);if(v>0)setBGoals(p=>p.map(x=>x.id===g.id?{...x,limit:String(v)}:x));setEditingBudget(null);}} onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditingBudget(null);}} style={{width:70,background:C.surfaceAlt,border:`1.5px solid ${C.accent}`,borderRadius:6,padding:"2px 6px",fontSize:13,fontWeight:700,color:C.accent,outline:"none",textAlign:"right"}}/>:<span onClick={()=>setEditingBudget(g.id)} style={{fontWeight:400,color:C.textLight,cursor:"pointer",borderBottom:`1px dashed ${C.textLight}`}}>{fmt(lim)} ✎</span>}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:over?C.red:C.green}}>{fmt(sp)} / {editingBudget===g.id?<input autoFocus type="number" defaultValue={g.limit} onBlur={e=>{const v=parseFloat(e.target.value);if(v>0){setBGoals(p=>p.map(x=>x.id===g.id?{...x,limit:String(v)}:x));showToast&&showToast("✓ Budget limit updated");}setEditingBudget(null);}} onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditingBudget(null);}} style={{width:70,background:C.surfaceAlt,border:`1.5px solid ${C.accent}`,borderRadius:6,padding:"2px 6px",fontSize:13,fontWeight:700,color:C.accent,outline:"none",textAlign:"right"}}/>:<span onClick={()=>setEditingBudget(g.id)} style={{fontWeight:400,color:C.textLight,cursor:"pointer",borderBottom:`1px dashed ${C.textLight}`}}>{fmt(lim)} ✎</span>}</span>
                     <button onClick={()=>{if(window.confirm("Remove budget goal?"))setBGoals(p=>p.filter(x=>x.id!==g.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><X size={12}/></button>
                   </div>
                 </div>
@@ -977,7 +977,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
   );
 }
 
-function DebtView({debts,setDebts,setModal,setEditItem}){
+function DebtView({debts,setDebts,setModal,setEditItem,showToast}){
   const[selectedDebt,setSelectedDebt]=useState(null);
   const[strategy,setStrategy]=useState("avalanche");
   const[payModal,setPayModal]=useState(null);
@@ -1336,7 +1336,7 @@ function TradingView({trades,setTrades,account,setAccount,showToast}){
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}><div><div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:"#fff",lineHeight:1}}>{fmt(bal)}</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginTop:4}}>Current Balance</div></div><div style={{textAlign:"right"}}><div style={{fontFamily:MF,fontSize:20,fontWeight:700,color:totalPnl>=0?C.green:C.red}}>{totalPnl>=0?"+":""}{fmt(totalPnl)}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>Total P&L</div></div></div>
       <div style={{display:"flex",gap:4}}>{[["Deposited",fmt(dep)],["Return",ret+"%"],["Trades",String(trades.length)]].map(([l,v])=><div key={l} style={{flex:1,background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 10px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l}</div><div style={{fontFamily:MF,fontSize:14,fontWeight:700,color:"#fff"}}>{v}</div></div>)}</div>
     </div>
-    <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.slate,marginBottom:10}}>Update Balances</div><div style={{display:"flex",gap:10}}><div style={{flex:1}}><div style={{fontSize:11,color:C.textLight,marginBottom:4}}>Total Deposited</div><input type="number" placeholder="0.00" value={account.deposit||""} onChange={e=>setAccount(p=>({...p,deposit:e.target.value}))} style={{...iS(false),padding:"9px 12px",fontSize:13}}/></div><div style={{flex:1}}><div style={{fontSize:11,color:C.textLight,marginBottom:4}}>Current Balance</div><input type="number" placeholder="0.00" value={account.balance||""} onChange={e=>setAccount(p=>({...p,balance:e.target.value}))} style={{...iS(false),padding:"9px 12px",fontSize:13}}/></div></div></div>
+    <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.slate,marginBottom:10}}>Update Balances</div><div style={{display:"flex",gap:10,marginBottom:10}}><div style={{flex:1}}><div style={{fontSize:11,color:C.textLight,marginBottom:4}}>Total Deposited</div><input type="number" placeholder="0.00" value={account.deposit||""} onChange={e=>setAccount(p=>({...p,deposit:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ Deposit saved");}} style={{...iS(false),padding:"9px 12px",fontSize:13}}/></div><div style={{flex:1}}><div style={{fontSize:11,color:C.textLight,marginBottom:4}}>Current Balance</div><input type="number" placeholder="0.00" value={account.balance||""} onChange={e=>setAccount(p=>({...p,balance:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ Balance saved");}} style={{...iS(false),padding:"9px 12px",fontSize:13}}/></div></div><div style={{display:"flex",justifyContent:"center"}}><div style={{fontSize:11,color:C.green,fontWeight:600,display:"flex",alignItems:"center",gap:5}}><div style={{width:6,height:6,borderRadius:"50%",background:C.green}}/>Changes save automatically</div></div></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>{[{l:"Win Rate",v:winRate+"%",c:parseFloat(winRate)>=50?C.green:C.red},{l:"Profit Factor",v:avgLoss>0?(avgWin/avgLoss).toFixed(2):"∞",c:C.accent},{l:"Avg Win",v:fmt(avgWin),c:C.green},{l:"Avg Loss",v:"-"+fmt(avgLoss),c:C.red}].map(s=><div key={s.l} style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:14}}><div style={{fontSize:11,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.4,marginBottom:4}}>{s.l}</div><div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:s.c}}>{s.v}</div></div>)}</div>
     {chartData.length>0&&<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Monthly P&L</div><ResponsiveContainer width="100%" height={160}><BarChart data={chartData} margin={{left:-20,right:4,top:4,bottom:0}}><XAxis dataKey="month" tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/><YAxis tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}} formatter={v=>[fmt(v),"P&L"]}/><Bar dataKey="pnl" radius={[6,6,0,0]}>{chartData.map((d,i)=><Cell key={i} fill={d.pnl>=0?C.green:C.red}/>)}</Bar></BarChart></ResponsiveContainer></div>}
     {equityData.length>1&&<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Equity Curve</div><div style={{fontSize:12,color:C.textLight,marginBottom:14}}>Cumulative account value per trade</div><ResponsiveContainer width="100%" height={160}><AreaChart data={equityData} margin={{left:-20,right:4,top:4,bottom:0}}><defs><linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(tradingAccount.deposit||0))?C.green:C.red} stopOpacity={.2}/><stop offset="95%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(tradingAccount.deposit||0))?C.green:C.red} stopOpacity={0}/></linearGradient></defs><XAxis dataKey="i" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><Tooltip formatter={(v,n)=>n==="equity"?[fmt(v),"Account Value"]:[fmt(v),"Trade P&L"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Area type="monotone" dataKey="equity" name="equity" stroke={equityData[equityData.length-1]?.equity>=(parseFloat(tradingAccount.deposit||0))?C.green:C.red} strokeWidth={2.5} fill="url(#eqGrad)" dot={false}/></AreaChart></ResponsiveContainer></div>}
@@ -1388,7 +1388,7 @@ function CalendarView({expenses,bills,calColors,setCalColors,setExpenses,onAdd})
 function ShiftView({shifts,setShifts,income,profCategory,profSub,showToast}){
   const[showAdd,setShowAdd]=useState(false);const[form,setForm]=useState({date:todayStr(),type:"Regular",hours:"",rate:"",note:""});const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
   const prof=getProfession(profCategory);const OT=prof.shiftTypes;
-  const DEFAULT_RATE=parseFloat(income.primary||0)>0?(((parseFloat(income.primary)/4)/40).toFixed(2)):"";
+  const DEFAULT_RATE=parseFloat(income.primary||0)>0?(((parseFloat(income.primary)/4)/40).toFixed(2)):"35.00";
   function add(){if(!form.hours||!form.rate)return;const mult=OT[form.type]||1;const gross=(parseFloat(form.hours)*parseFloat(form.rate)*mult).toFixed(2);setShifts(p=>[{id:Date.now(),...form,gross,mult},...p]);showToast&&showToast("✓ Shift logged — "+fmt(gross));setForm({date:todayStr(),type:"Regular",hours:"",rate:form.rate,note:""});setShowAdd(false);}
   const now2=new Date();const thisMonth=now2.getFullYear()+"-"+String(now2.getMonth()+1).padStart(2,"0");const ms=shifts.filter(s=>s.date?.startsWith(thisMonth));
   const mh=ms.reduce((s,x)=>s+(parseFloat(x.hours)||0),0),mg=ms.reduce((s,x)=>s+(parseFloat(x.gross)||0),0),mot=ms.filter(s=>s.type!=="Regular").reduce((s,x)=>s+(parseFloat(x.gross)||0),0);
@@ -1585,7 +1585,7 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
       <div style={{fontSize:11,color:C.textLight,marginBottom:6}}>Used in your home screen greeting — "Good morning, ____"</div>
       <div style={{display:"flex",gap:8,marginBottom:14}}><input value={greetName||""} onChange={e=>setGreetName(e.target.value)} placeholder="Your first name" style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 13px",color:C.text,fontSize:14,outline:"none"}}/><button className="ba" onClick={()=>setGreetName(greetName.trim())} style={{background:C.green,border:"none",borderRadius:10,padding:"0 16px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>Save</button></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
-        {PROFESSIONS.map(p=><button key={p.id} onClick={()=>{setProfCategory(p.id);setProfSub(p.subs[0].id);}} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:10,border:`1.5px solid ${profCategory===p.id?C.accent:C.border}`,background:profCategory===p.id?C.accentBg:C.surfaceAlt,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:12,fontWeight:600,color:profCategory===p.id?C.accent:C.text}}>{p.label}</span></button>)}
+        {PROFESSIONS.map(p=><button key={p.id} onClick={()=>{setProfCategory(p.id);setProfSub(p.subs[0].id);showToast&&showToast("✓ Profession updated — "+p.label);}} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:10,border:`1.5px solid ${profCategory===p.id?C.accent:C.border}`,background:profCategory===p.id?C.accentBg:C.surfaceAlt,cursor:"pointer",textAlign:"left"}}><span style={{fontSize:16}}>{p.icon}</span><span style={{fontSize:12,fontWeight:600,color:profCategory===p.id?C.accent:C.text}}>{p.label}</span></button>)}
       </div>
     </div>
     <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:12}}>
@@ -1789,7 +1789,9 @@ function IncomeSpendingView({expenses,income,trades}){
       </div>
     </div>
   );
-}function DashSettingsView({config,setConfig,showTrading}){
+}
+
+function DashSettingsView({config,setConfig,showTrading}){
   const toggle=k=>setConfig(p=>({...p,[k]:!p[k]}));
   const items=[{k:"showIncomeChart",icon:"📊",label:"Income vs Spending Chart",desc:"3-month bar chart on home"},{k:"showMetrics",icon:"📐",label:"Key Metrics Grid",desc:"Net worth, health, emergency fund"},{k:"showAccounts",icon:"🏦",label:"Account Cards",desc:"Scrollable balance overview"},{k:"showForecast",icon:"🔮",label:"Month Forecast",desc:"Burn rate and projected spend"},{k:"showBills",icon:"📅",label:"Upcoming Bills",desc:"Next 3 bills with countdown"},{k:"showRecent",icon:"🕒",label:"Recent Transactions",desc:"Last 4 logged expenses"},...(showTrading?[{k:"showTradeCard",icon:"📈",label:"Trading Summary",desc:"P&L and record"}]:[])];
   return(
@@ -1807,9 +1809,7 @@ function IncomeSpendingView({expenses,income,trades}){
       </div>
     </div>
   );
-}
-
-function Row({icon,title,sub,right,rightColor,rightSub,onDelete,badge,onClick}){
+}function Row({icon,title,sub,right,rightColor,rightSub,onDelete,badge,onClick}){
   return(
     <div className="rw" style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"13px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,cursor:onClick?"pointer":"default"}} onClick={onClick}>
       <div style={{width:38,height:38,borderRadius:10,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{icon}</div>
@@ -1954,22 +1954,95 @@ function ExtraPayModal({debt,onConfirm,onClose}){
 
 function AuthScreen({onAuth,onSkip}){
   const[mode,setMode]=useState("login");
-  const[email,setEmail]=useState("");const[pass,setPass]=useState("");const[name,setName]=useState("");
-  const[err,setErr]=useState("");const[loading,setLoading]=useState(false);const[confirmed,setConfirmed]=useState(false);
+  const[email,setEmail]=useState("");const[pass,setPass]=useState("");
+  const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
+  const[confirmed,setConfirmed]=useState(false);
+  const[showPass,setShowPass]=useState(false);
   async function submit(){
     if(!email.trim()||!pass.trim()){setErr("Please fill in all fields.");return;}
     if(mode==="signup"&&pass.length<6){setErr("Password must be at least 6 characters.");return;}
     setLoading(true);setErr("");
     try{
-      if(mode==="login"){const r=await signIn(email.trim(),pass);if(r.error_description||r.msg){setErr(r.error_description||r.msg||"Wrong email or password.");setLoading(false);return;}if(!r.access_token){setErr("Sign in failed.");setLoading(false);return;}onAuth(r);}
-      else{const r=await signUp(email.trim(),pass);if(r.access_token){onAuth(r);return;}if(r.error_description||r.msg){const msg=r.error_description||r.msg||"";if(msg.toLowerCase().includes("already")||msg.toLowerCase().includes("registered")){setErr("Account exists — switching to sign in...");setTimeout(()=>{setMode("login");setErr("Account found — enter your password.");},1200);setLoading(false);return;}else{setErr(msg||"Sign up failed.");}}else{setConfirmed(true);}}}
-    catch(e){setErr(e.message||"Network error.");}
+      if(mode==="login"){
+        const r=await signIn(email.trim(),pass);
+        if(r.error_description||r.msg||r.error){
+          const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
+          if(msg.includes("invalid")||msg.includes("credentials")||msg.includes("password")){setErr("Wrong password. Try again or reset below.");}
+          else if(msg.includes("confirm")||msg.includes("email")){setErr("Please confirm your email first — check your inbox.");}
+          else{setErr("Sign in failed. Check your email and password.");}
+          setLoading(false);return;
+        }
+        if(!r.access_token){setErr("Sign in failed — try again.");setLoading(false);return;}
+        onAuth(r);
+      }else{
+        const r=await signUp(email.trim(),pass);
+        if(r.access_token){onAuth(r);return;}
+        if(r.error_description||r.msg||r.error){
+          const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
+          if(msg.includes("already")||msg.includes("registered")||msg.includes("exists")){
+            setErr("");
+            setMode("login");
+            setTimeout(()=>setErr("Account found for that email — enter your password to sign in."),100);
+          }else{setErr(r.error_description||r.msg||"Sign up failed. Try again.");}
+          setLoading(false);return;
+        }
+        // No access_token and no error = email confirmation required
+        setConfirmed(true);
+      }
+    }catch(e){setErr("Network error — check connection and try again.");}
     setLoading(false);
   }
-  if(confirmed)return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.navyMid} 50%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><style>{CSS}</style><div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"36px 28px",textAlign:"center"}}><div style={{fontSize:52,marginBottom:16}}>📧</div><div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:C.navy,marginBottom:8}}>Check your email</div><div style={{fontSize:14,color:C.textLight,marginBottom:24,lineHeight:1.6}}>We sent a confirmation link to <strong>{email}</strong>.</div><button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12}}>Sign In Now</button>{onSkip&&<button onClick={onSkip} style={{width:"100%",padding:"12px",borderRadius:14,border:`1px solid ${C.border}`,background:"transparent",color:C.textLight,fontWeight:600,fontSize:14,cursor:"pointer"}}>Continue without account</button>}</div></div>);
-  return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}><style>{CSS}</style><div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"32px 28px",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}><div style={{textAlign:"center",marginBottom:24}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:C.navy,marginBottom:4}}>💰 Trackfi</div><div style={{fontSize:14,color:C.textLight}}>{mode==="login"?"Welcome back":"Create your free account"}</div></div>{mode==="signup"&&<div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Your Name</div><input value={name} onChange={e=>setName(e.target.value)} placeholder="Victor" style={iS(false,false)} autoCapitalize="words"/></div>}<div style={{marginBottom:14}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Email</div><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@email.com" style={iS(false,false)} autoCapitalize="none"/></div><div style={{marginBottom:err?8:20}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Password</div><input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder={mode==="login"?"Password":"Min 6 characters"} style={iS(false,false)} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/></div>{err&&<div style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.red,marginBottom:14}}>{err}</div>}<button onClick={submit} disabled={loading} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:loading?C.border:`linear-gradient(135deg,${C.accent},${C.green})`,color:loading?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading?"default":"pointer",marginBottom:14}}>{loading?"Signing in...":(mode==="login"?"Sign In":"Create Account")}</button><div style={{textAlign:"center",fontSize:13,color:C.textLight,marginBottom:16}}>{mode==="login"?"Don't have an account? ":"Already have an account? "}<button onClick={()=>{setMode(mode==="login"?"signup":"login");setErr("");}} style={{background:"none",border:"none",color:C.accent,fontWeight:700,cursor:"pointer",fontSize:13}}>{mode==="login"?"Sign up":"Sign in"}</button></div>{onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}><button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer"}}>Continue without account →</button><div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data saved locally on this device</div></div>}</div></div>);
+  if(confirmed)return(
+    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.navyMid} 50%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <style>{CSS}</style>
+      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"36px 28px",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+        <div style={{width:72,height:72,borderRadius:"50%",background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><div style={{fontSize:36}}>📧</div></div>
+        <div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:C.navy,marginBottom:8}}>Check your inbox</div>
+        <div style={{fontSize:14,color:C.textLight,marginBottom:6,lineHeight:1.6}}>We sent a confirmation link to</div>
+        <div style={{fontWeight:700,color:C.accent,fontSize:15,marginBottom:20}}>{email}</div>
+        <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 16px",fontSize:13,color:C.accent,marginBottom:20,lineHeight:1.5}}>Click the link in the email, then come back here to sign in.</div>
+        <button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12}}>I confirmed — Sign In</button>
+        <button onClick={()=>setConfirmed(false)} style={{width:"100%",padding:"12px",borderRadius:14,border:`1px solid ${C.border}`,background:"transparent",color:C.textLight,fontWeight:600,fontSize:14,cursor:"pointer",marginBottom:12}}>← Back</button>
+        {onSkip&&<button onClick={onSkip} style={{background:"none",border:"none",color:C.textFaint,fontSize:12,cursor:"pointer"}}>Continue without account →</button>}
+      </div>
+    </div>
+  );
+  return(
+    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <style>{CSS}</style>
+      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"32px 28px",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{fontFamily:MF,fontSize:32,fontWeight:900,color:C.navy,marginBottom:6,letterSpacing:-1}}>💰 Trackfi</div>
+          <div style={{fontSize:14,color:C.textLight,lineHeight:1.5}}>{mode==="login"?"Welcome back — your data is ready":"Create your free account to get started"}</div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Email</div>
+          <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} placeholder="you@email.com" style={{...iS(false,!!err),fontSize:15}} autoCapitalize="none" autoComplete="email" onKeyDown={e=>e.key==="Enter"&&document.getElementById("pw-input")?.focus()}/>
+        </div>
+        <div style={{marginBottom:err?8:18}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Password</div>
+            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}const r=await supaFetch("/auth/v1/recover",{method:"POST",body:JSON.stringify({email:email.trim()})});setErr("Reset link sent to "+email+" — check your inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot password?</button>}
+          </div>
+          <div style={{position:"relative"}}>
+            <input id="pw-input" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder={mode==="login"?"Your password":"At least 6 characters"} style={{...iS(false,!!err&&err.toLowerCase().includes("password")),fontSize:15,paddingRight:44}} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/>
+            <button onClick={()=>setShowPass(p=>!p)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.textLight,fontSize:13,fontWeight:600}}>{showPass?"Hide":"Show"}</button>
+          </div>
+        </div>
+        {err&&<div style={{background:err.includes("found")||err.includes("sent")?C.accentBg:C.redBg,border:`1px solid ${err.includes("found")||err.includes("sent")?C.accentMid:C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:err.includes("found")||err.includes("sent")?C.accent:C.red,marginBottom:14,lineHeight:1.5}}>{err}</div>}
+        <button onClick={submit} disabled={loading||!email.trim()||!pass.trim()} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:loading||!email.trim()||!pass.trim()?C.borderLight:`linear-gradient(135deg,${C.accent},${C.green})`,color:loading||!email.trim()||!pass.trim()?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading||!email.trim()||!pass.trim()?"default":"pointer",marginBottom:16,letterSpacing:.2,transition:"all .2s"}}>{loading?"Just a sec...":(mode==="login"?"Sign In →":"Create Account →")}</button>
+        <div style={{textAlign:"center",fontSize:13,color:C.textLight,marginBottom:16}}>
+          {mode==="login"?"No account yet? ":"Already have an account? "}
+          <button onClick={()=>{setMode(mode==="login"?"signup":"login");setErr("");setPass("");}} style={{background:"none",border:"none",color:C.accent,fontWeight:700,cursor:"pointer",fontSize:13}}>{mode==="login"?"Sign up free":"Sign in"}</button>
+        </div>
+        {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}>
+          <button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer",display:"block",margin:"0 auto"}}>Continue without account →</button>
+          <div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data saved locally — sync anytime later</div>
+        </div>}
+      </div>
+    </div>
+  );
 }
-
 function RecurringView({expenses,setExpenses,categories,showToast,appReady}){
   const[showAdd,setShowAdd]=useState(false);
   const[form,setForm]=useState({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});
@@ -1981,6 +2054,7 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady}){
     const updated=recurrings.map(r=>{
       if(r.nextDate<=today&&r.active!==false){
         setExpenses(p=>[...p,{id:Date.now()+Math.random(),name:r.name,amount:r.amount,category:r.category,date:today,notes:"Auto-logged"}]);
+        if(showToast)showToast("🔄 Auto-logged: "+r.name+" "+r.amount);
         const d=new Date(r.nextDate+"T00:00:00");
         if(r.frequency==="Weekly")d.setDate(d.getDate()+7);
         else if(r.frequency==="Bi-weekly")d.setDate(d.getDate()+14);
@@ -2571,21 +2645,21 @@ function AppInner(){
                 <div key={a.k} style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,display:"flex",alignItems:"center",gap:14}}>
                   <div style={{width:44,height:44,borderRadius:12,background:a.c+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{a.ic}</div>
                   <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div></div>
-                  <input type="number" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>setAccounts(p=>({...p,[a.k]:e.target.value}))} style={{width:130,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",fontWeight:800,filter:hidden?"blur(8px)":"none"}}/>
+                  <input type="number" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>setAccounts(p=>({...p,[a.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{width:130,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",fontWeight:800,filter:hidden?"blur(8px)":"none"}}/>
                 </div>
               ))}
             </div>
             <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18}}>
               <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:14}}>Monthly Income</div>
               {[{k:"primary",l:`${getProfession(profCategory).icon} Primary Income`},{k:"other",l:"Other Income"},{k:"trading",l:"Trading avg"},{k:"rental",l:"Rental Income"},{k:"dividends",l:"Dividends"},{k:"freelance",l:"Freelance"}].map(i=>(
-                <div key={i.k} style={{marginBottom:10}}><div style={{fontSize:11,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>{i.l}</div><input type="number" placeholder="0.00" value={income[i.k]||""} onChange={e=>setIncome(p=>({...p,[i.k]:e.target.value}))} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:14,outline:"none"}}/></div>
+                <div key={i.k} style={{marginBottom:10}}><div style={{fontSize:11,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>{i.l}</div><input type="number" placeholder="0.00" value={income[i.k]||""} onChange={e=>setIncome(p=>({...p,[i.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ Income saved");}} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:14,outline:"none"}}/></div>
               ))}
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:10,paddingTop:12,borderTop:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>Total Monthly</span><span style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.green}}>{fmt(totalIncome)}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:10,paddingTop:12,borderTop:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>Total Monthly</span><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:11,color:C.green,fontWeight:600}}>✓ Auto-saved</span><span style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.green}}>{fmt(totalIncome)}</span></div></div>
             </div>
           </div>
         )}
 
-        {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem}/>}
+        {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem} showToast={showToast}/>}
         {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} showToast={showToast}/>}
         {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
