@@ -950,29 +950,82 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         <div style={{fontSize:12,color:C.textLight}}>{filteredExp.length} transaction{filteredExp.length!==1?"s":""}</div>
         <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.red}}>-{fmt(totalExp)}</div>
       </div>
-      {!searchQ&&budgetGoals.length>0&&(
-        <div style={{marginBottom:16}}>
-          <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Budgets</div>
-          {budgetGoals.map(g=>{
-            const sp=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0"))).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-            const lim=parseFloat(g.limit)||1;const pct=(sp/lim)*100;const over=sp>lim;
-            return(
-              <div key={g.id} style={{background:C.surface,border:`1px solid ${over?C.redMid:C.border}`,borderRadius:12,padding:14,marginBottom:8}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
-                  <span style={{fontSize:13,fontWeight:600,color:C.text}}>{g.category}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:13,fontWeight:700,color:over?C.red:C.green}}>{fmt(sp)} / {editingBudget===g.id?<input autoFocus type="number" defaultValue={g.limit} onBlur={e=>{const v=parseFloat(e.target.value);if(v>0){setBGoals(p=>p.map(x=>x.id===g.id?{...x,limit:String(v)}:x));showToast&&showToast("✓ Budget limit updated");}setEditingBudget(null);}} onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditingBudget(null);}} style={{width:70,background:C.surfaceAlt,border:`1.5px solid ${C.accent}`,borderRadius:6,padding:"2px 6px",fontSize:13,fontWeight:700,color:C.accent,outline:"none",textAlign:"right"}}/>:<span onClick={()=>setEditingBudget(g.id)} style={{fontWeight:400,color:C.textLight,cursor:"pointer",borderBottom:`1px dashed ${C.textLight}`}}>{fmt(lim)} ✎</span>}</span>
-                    <button onClick={()=>{if(window.confirm("Remove budget goal?"))setBGoals(p=>p.filter(x=>x.id!==g.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><X size={12}/></button>
+      {!searchQ&&(()=>{
+        const ms_b=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+        const dom_b=now.getDate();
+        const dim_b=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+        const daysLeft_b=dim_b-dom_b;
+        const budgets=budgetGoals.map(g=>{
+          const sp=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(ms_b)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+          const lim=parseFloat(g.limit)||1;
+          const pct=Math.min(100,(sp/lim)*100);
+          const rem=Math.max(0,lim-sp);
+          const over=sp>lim;
+          const warn=!over&&pct>=80;
+          const dailyAllow=daysLeft_b>0?rem/daysLeft_b:0;
+          const status=over?"over":warn?"warn":"ok";
+          return{...g,sp,lim,pct,rem,over,warn,status,dailyAllow};
+        });
+        const totalBudgeted=budgets.reduce((s,b)=>s+b.lim,0);
+        const totalSpentB=budgets.reduce((s,b)=>s+b.sp,0);
+        const overCount=budgets.filter(b=>b.over).length;
+        const warnCount=budgets.filter(b=>b.warn).length;
+        const allGreen=budgets.length>0&&overCount===0&&warnCount===0;
+        return(
+          <div style={{marginBottom:16}}>
+            {/* Budget summary header */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Budgets — {MOS[now.getMonth()]}</div>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                {overCount>0&&<div style={{fontSize:11,fontWeight:700,color:C.red,background:C.redBg,borderRadius:99,padding:"2px 8px"}}>{overCount} over</div>}
+                {warnCount>0&&<div style={{fontSize:11,fontWeight:700,color:C.amber,background:C.amberBg,borderRadius:99,padding:"2px 8px"}}>{warnCount} near limit</div>}
+                {allGreen&&<div style={{fontSize:11,fontWeight:700,color:C.green,background:C.greenBg,borderRadius:99,padding:"2px 8px"}}>✓ All on track</div>}
+                <button className="ba" onClick={()=>setShowAdd(true)} style={{background:C.accent,border:"none",borderRadius:8,padding:"5px 10px",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}><Plus size={10}/>Add</button>
+              </div>
+            </div>
+            {/* Summary bar */}
+            {budgets.length>0&&<div style={{background:C.surface,borderRadius:14,padding:"12px 14px",marginBottom:12,boxShadow:"0 1px 4px rgba(10,22,40,.06)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:12,color:C.textLight}}>Total spent <strong style={{color:C.text}}>{fmt(totalSpentB)}</strong> of <strong style={{color:C.textMid}}>{fmt(totalBudgeted)}</strong></span>
+                <span style={{fontSize:12,fontWeight:700,color:totalSpentB>totalBudgeted?C.red:C.green}}>{totalBudgeted>0?((totalSpentB/totalBudgeted)*100).toFixed(0):0}%</span>
+              </div>
+              <div style={{height:8,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:6}}>
+                <div style={{height:"100%",width:totalBudgeted>0?Math.min(100,(totalSpentB/totalBudgeted)*100).toFixed(1)+"%":"0%",background:totalSpentB>totalBudgeted?C.red:totalSpentB/totalBudgeted>0.8?C.amber:C.green,borderRadius:99,transition:"width .4s"}}/>
+              </div>
+              <div style={{fontSize:11,color:C.textLight}}>{daysLeft_b} days left in {MOS[now.getMonth()]}</div>
+            </div>}
+            {/* Per-category budget cards */}
+            {budgets.map(g=>(
+              <div key={g.id} style={{background:C.surface,border:`1.5px solid ${g.over?C.redMid:g.warn?C.amberMid:C.border}`,borderRadius:14,padding:"13px 14px",marginBottom:8,boxShadow:"0 1px 4px rgba(10,22,40,.04)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:2}}>{g.category}</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                      <span style={{fontSize:12,fontFamily:MF,fontWeight:800,color:g.over?C.red:C.text}}>{fmt(g.sp)}</span>
+                      <span style={{fontSize:12,color:C.textLight}}>of</span>
+                      {editingBudget===g.id
+                        ?<input autoFocus type="number" defaultValue={g.lim} onBlur={e=>{const v=parseFloat(e.target.value);if(v>0){setBGoals(p=>p.map(x=>x.id===g.id?{...x,limit:String(v)}:x));showToast&&showToast("✓ Budget updated");}setEditingBudget(null);}} onKeyDown={e=>{if(e.key==="Enter")e.target.blur();if(e.key==="Escape")setEditingBudget(null);}} style={{width:72,background:C.surfaceAlt,border:`1.5px solid ${C.accent}`,borderRadius:6,padding:"2px 6px",fontSize:13,fontWeight:700,color:C.accent,outline:"none",textAlign:"right"}}/>
+                        :<span onClick={()=>setEditingBudget(g.id)} style={{fontSize:12,color:C.textLight,cursor:"pointer",borderBottom:`1px dashed ${C.textLight}`,fontWeight:600}}>{fmt(g.lim)} ✎</span>
+                      }
+                    </div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+                    <div style={{fontSize:13,fontWeight:800,fontFamily:MF,color:g.over?C.red:g.warn?C.amber:C.green}}>{g.over?"Over by "+fmt(g.sp-g.lim):fmt(g.rem)+" left"}</div>
+                    {!g.over&&g.dailyAllow>0&&<div style={{fontSize:10,color:C.textLight}}>{fmt(g.dailyAllow)}/day to stay on track</div>}
+                    <button onClick={()=>{if(window.confirm("Remove budget for "+g.category+"?"))setBGoals(p=>p.filter(x=>x.id!==g.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textFaint,padding:0}}><X size={11}/></button>
                   </div>
                 </div>
-                <BarProg pct={pct} color={over?C.red:pct>80?C.amber:C.green} h={6}/>
-                {over&&<div style={{fontSize:11,color:C.red,marginTop:4,fontWeight:500}}>Over by {fmt(sp-lim)}</div>}
+                <div style={{height:7,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:g.over?4:0}}>
+                  <div style={{height:"100%",width:g.pct.toFixed(1)+"%",background:g.over?C.red:g.pct>=80?C.amber:C.green,borderRadius:99,transition:"width .4s"}}/>
+                </div>
+                {g.over&&<div style={{fontSize:11,color:C.red,marginTop:4,fontWeight:600}}>⚠ {fmt(g.sp-g.lim)} over — {daysLeft_b} days to recover</div>}
+                {g.warn&&!g.over&&<div style={{fontSize:11,color:C.amber,marginTop:4,fontWeight:500}}>Getting close — {fmt(g.rem)} remaining</div>}
               </div>
-            );
-          })}
-          <button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:`1px dashed ${C.border}`,borderRadius:10,padding:"8px 14px",color:C.textLight,fontSize:13,cursor:"pointer",width:"100%",justifyContent:"center",marginBottom:14}}><Plus size={13}/>Add Budget Goal</button>
-        </div>
-      )}
+            ))}
+            {budgets.length===0&&<button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:10,padding:"10px 14px",color:C.purple,fontSize:13,cursor:"pointer",width:"100%",justifyContent:"center",marginBottom:8}}><Target size={13}/>Set your first budget goal</button>}
+          </div>
+        );
+      })()}
       {catSorted.length>0&&(
         <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:14}}>
           <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>By Category</div>
@@ -985,7 +1038,6 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
           ))}
         </div>
       )}
-      {budgetGoals.length===0&&<button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:10,padding:"10px 14px",color:C.purple,fontSize:13,cursor:"pointer",marginBottom:14,width:"100%",justifyContent:"center"}}><Target size={13}/>Add Budget Goal</button>}
       {!searchQ&&filteredExp.length>=7&&(()=>{const DAYS=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];const dow=[0,1,2,3,4,5,6].map(d=>filteredExp.filter(e=>new Date(e.date+"T00:00:00").getDay()===d).reduce((s,e)=>s+(parseFloat(e.amount)||0),0));const max=Math.max(...dow)||1;const topDay=dow.indexOf(max);return(<div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Spending by Day</div><div style={{display:"flex",gap:4,alignItems:"flex-end",height:60}}>{dow.map((amt,d)=>{const h=Math.max(4,Math.round((amt/max)*52));return(<div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div style={{width:"100%",height:h,background:d===topDay?`linear-gradient(135deg,${C.accent},${C.purple})`:C.accentBg,borderRadius:"4px 4px 0 0",transition:"height .4s"}}/><div style={{fontSize:9,color:d===topDay?C.accent:C.textFaint,fontWeight:d===topDay?700:400}}>{DAYS[d]}</div></div>);})}</div><div style={{fontSize:11,color:C.textLight,marginTop:8}}>{DAYS[topDay]} is your highest spending day · {fmt(max)}</div></div>);})()}
 
       {!searchQ&&filteredExp.length>=3&&(()=>{
@@ -1020,9 +1072,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       {showAdd&&<Modal title="Budget Goal" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Set Goal" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Monthly Limit ($)" type="number" placeholder="400" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
     </div>
   );
-}
-
-function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
+}function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
   const unpaid=bills.filter(b=>!b.paid);
   const paid=bills.filter(b=>b.paid);
@@ -1098,7 +1148,9 @@ function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
     })()}
     </div>
   );
-}function DebtView({debts,setDebts,setModal,setEditItem,showToast}){
+}
+
+function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt}){
   const[selectedDebt,setSelectedDebt]=useState(null);
   const[strategy,setStrategy]=useState("avalanche");
   const[payModal,setPayModal]=useState(null);
@@ -1196,24 +1248,45 @@ function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
         {debts.length>0&&(()=>{
           const totalBal=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
           const totalMin=debts.reduce((s,d)=>{const b=parseFloat(d.balance)||0;const r=(parseFloat(d.rate)||0)/100/12;return s+(parseFloat(d.minPayment)||Math.max(25,b*0.02+r*b));},0);
-          let rem=prioritized.map(d=>{const b=parseFloat(d.balance)||0;const r=(parseFloat(d.rate)||0)/100/12;return{...d,bal:b,rate:r,min:parseFloat(d.minPayment)||Math.max(25,b*0.02+r*b)};});
-          let mo=0,totalInt=0;
-          while(rem.some(d=>d.bal>0.01)&&mo<600){mo++;let extra=0;rem=rem.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;totalInt+=i;const pay=Math.min(d.min,d.bal+i);extra+=Math.max(0,d.min-pay);return{...d,bal:Math.max(0,d.bal+i-pay)};});const focus=rem.find(d=>d.bal>0.01);if(focus){const idx=rem.indexOf(focus);rem[idx].bal=Math.max(0,rem[idx].bal-extra);}}
-          const dfDate=new Date();dfDate.setMonth(dfDate.getMonth()+mo);
-          const yrs=Math.floor(mo/12);const mos=mo%12;
-          const timeStr=yrs>0?yrs+"y "+(mos>0?mos+"mo":""):mos+"mo";
+          function simPayoff(extraPerMo){
+            let rem=prioritized.map(d=>{const b=parseFloat(d.balance)||0;const r=(parseFloat(d.rate)||0)/100/12;return{...d,bal:b,rate:r,min:parseFloat(d.minPayment)||Math.max(25,b*0.02+r*b)};});
+            let mo=0,totalInt=0,extraPool=extraPerMo;
+            while(rem.some(d=>d.bal>0.01)&&mo<600){mo++;let freed=0;rem=rem.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;totalInt+=i;const pay=Math.min(d.min,d.bal+i);freed+=Math.max(0,d.min-pay);return{...d,bal:Math.max(0,d.bal+i-pay)};});const focus=rem.find(d=>d.bal>0.01);if(focus){const idx=rem.indexOf(focus);rem[idx].bal=Math.max(0,rem[idx].bal-(freed+extraPool));}}
+            return{months:mo,interest:totalInt};
+          }
+          const base=simPayoff(0);
+          const withExtra=extraPayDebt>0?simPayoff(extraPayDebt):null;
+          const moSaved=withExtra?Math.max(0,base.months-withExtra.months):0;
+          const intSaved=withExtra?Math.max(0,base.interest-withExtra.interest):0;
+          const dfDate=new Date();dfDate.setMonth(dfDate.getMonth()+base.months);
+          const dfDateExtra=withExtra?new Date():null;if(dfDateExtra)dfDateExtra.setMonth(dfDateExtra.getMonth()+withExtra.months);
+          const yrs=Math.floor(base.months/12);const mos2=base.months%12;
+          const timeStr=yrs>0?yrs+"y "+(mos2>0?mos2+"mo":""):mos2+"mo";
           return(
-            <div style={{background:`linear-gradient(135deg,${C.green},#059669)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
-              <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.6)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>🎯 Debt-Free Date</div>
-              <div style={{fontFamily:MF,fontSize:28,fontWeight:800,color:"#fff",marginBottom:4}}>{mo>=600?"Increase payments":dfDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
-              <div style={{fontSize:13,color:"rgba(255,255,255,.7)",marginBottom:14}}>{mo>=600?"Min payments don't cover interest":""+timeStr+" away · you've got this!"}</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                {[["Total Debt",fmt(totalBal),"rgba(255,255,255,.9)"],["Min/mo",fmt(totalMin),"rgba(255,255,255,.9)"],["Total Interest",mo<600?fmt(totalInt):"High","rgba(255,255,255,.7)"]].map(([l,v,c])=>(
-                  <div key={l} style={{background:"rgba(255,255,255,.12)",borderRadius:10,padding:"9px 8px"}}>
-                    <div style={{fontSize:10,color:"rgba(255,255,255,.5)",fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div>
+            <div style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
+              <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>🎯 Debt-Free Projection</div>
+              <div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:C.greenMid,marginBottom:2,letterSpacing:-.5}}>{base.months>=600?"Increase payments":dfDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
+              <div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginBottom:16}}>{base.months>=600?"Min payments don't cover interest":timeStr+" from today · min payments only"}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
+                {[["Total Owed",fmt(totalBal),"#fca5a5"],["Min/mo",fmt(totalMin),"rgba(255,255,255,.8)"],["Total Interest",base.months<600?fmt(base.interest):"—","rgba(255,255,255,.6)"]].map(([l,v,c])=>(
+                  <div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2,textTransform:"uppercase"}}>{l}</div>
                     <div style={{fontFamily:MF,fontSize:12,fontWeight:700,color:c}}>{v}</div>
                   </div>
                 ))}
+              </div>
+              <div style={{background:"rgba(255,255,255,.06)",borderRadius:12,padding:"12px 14px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.7)"}}>What if you paid extra?</div>
+                  <div style={{fontFamily:MF,fontWeight:800,fontSize:15,color:extraPayDebt>0?C.greenMid:"rgba(255,255,255,.4)"}}>+{fmt(extraPayDebt)}/mo</div>
+                </div>
+                <input type="range" min="0" max="500" step="25" value={extraPayDebt} onChange={e=>setExtraPayDebt(parseInt(e.target.value))} style={{width:"100%",accentColor:C.green,cursor:"pointer",marginBottom:8}}/>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"rgba(255,255,255,.3)",marginBottom:extraPayDebt>0?10:0}}><span>$0</span><span>$250</span><span>$500</span></div>
+                {extraPayDebt>0&&withExtra&&withExtra.months<base.months&&<div style={{background:"rgba(52,211,153,.15)",border:"1px solid rgba(52,211,153,.3)",borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.greenMid,marginBottom:2}}>{dfDateExtra.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,.6)"}}>🎉 {moSaved} months sooner · save {fmt(intSaved)} in interest</div>
+                </div>}
+                {extraPayDebt>0&&withExtra&&withExtra.months>=base.months&&<div style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>Already at minimum threshold</div>}
               </div>
             </div>
           );
@@ -2142,9 +2215,7 @@ function DashSettingsView({config,setConfig,showTrading}){
       </div>
     </div>
   );
-}
-
-function Row({icon,title,sub,right,rightColor,rightSub,onDelete,badge,onClick}){
+}function Row({icon,title,sub,right,rightColor,rightSub,onDelete,badge,onClick}){
   return(
     <div className="rw" style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"13px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,cursor:onClick?"pointer":"default"}} onClick={onClick}>
       <div style={{width:38,height:38,borderRadius:10,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{icon}</div>
@@ -2162,7 +2233,9 @@ function Row({icon,title,sub,right,rightColor,rightSub,onDelete,badge,onClick}){
       {onDelete&&<button className="ba db" onClick={e=>{e.stopPropagation();onDelete();}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:4,display:"flex"}}><Trash2 size={14}/></button>}
     </div>
   );
-}function SwipeRow({children,onDelete}){
+}
+
+function SwipeRow({children,onDelete}){
   const[swiped,setSwiped]=useState(false);
   const startX=useRef(0);
   return(
@@ -2573,6 +2646,7 @@ function AppInner(){
   const[modal,setModal]=useState(null);
   const[form,setForm]=useState({});
   const[editItem,setEditItem]=useState(null);
+  const[extraPayDebt,setExtraPayDebt]=useState(0);
   const[confirm,setConfirm]=useState(null);
   const[syncing,setSyncing]=useState(false);
   const[syncStatus,setSyncStatus]=useState(null);
@@ -3182,7 +3256,7 @@ function AppInner(){
           </div>
         )}
 
-        {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem} showToast={showToast}/>}
+        {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem} showToast={showToast} extraPayDebt={extraPayDebt} setExtraPayDebt={setExtraPayDebt}/>}
         {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} showToast={showToast}/>}
         {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
