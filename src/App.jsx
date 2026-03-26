@@ -9,6 +9,7 @@ import { LayoutDashboard, Wallet, CalendarClock, CreditCard, Target, PiggyBank,
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, BarChart, Bar, Cell, PieChart, Pie } from "recharts";
 
+// 🔑 Replace with your Supabase project URL when ready
 const SUPA_URL = "https://lkxznfbcnvsbugffvobw.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxreHpuZmJjbnZzYnVnZmZ2b2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODQ5MzAsImV4cCI6MjA4OTY2MDkzMH0.Fb1R7H5ltCRSnzTZpgAndrnDXUEPxKfqsy0fZ5ZtAuU";
 
@@ -27,10 +28,11 @@ async function signUp(email, password) {
       method:"POST", headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
       body: JSON.stringify({email, password})
     });
+    if(!res.ok && res.status===0) return {error:"network"};
     const r = await res.json();
     if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
     return r;
-  } catch(e) { return {error:e.message}; }
+  } catch(e) { return {error:"network",message:e.message}; }
 }
 async function signIn(email, password) {
   try {
@@ -38,10 +40,11 @@ async function signIn(email, password) {
       method:"POST", headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
       body: JSON.stringify({email, password})
     });
+    if(!res.ok && res.status===0) return {error:"network"};
     const r = await res.json();
     if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
     return r;
-  } catch(e) { return {error:e.message}; }
+  } catch(e) { return {error:"network",message:e.message}; }
 }
 
 const C = {
@@ -359,13 +362,56 @@ function OnboardingWizard({onComplete}){
   const selSub=sel.subs.find(s=>s.id===d.profSub)||sel.subs[0];
   const isTrader=(parseFloat(d.income.trading||0)>0)||(d.profCategory==="trader");
   const firstName=(d.name||d.appName||"").split(" ")[0].replace(/[^a-zA-Z]/g,"")||"there";
+  const firstName=(d.name||"").split(" ")[0]||"";
   const STEPS=[
-    {icon:"👋",title:"Welcome to Trackfi",body:<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{fontSize:16,color:C.textMid,lineHeight:1.6}}>Your personal finance command center — built to give you complete control over your money.</div><div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:4}}>{["Track spending","Plan bills","Pay off debt","Grow savings","File taxes"].map(f=><div key={f} style={{background:C.accentBg,borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:600,color:C.accent}}>{f}</div>)}<div style={{marginTop:12,fontSize:11,color:C.textFaint,textAlign:"center"}}>Built for real financial clarity · by Victor B 🚀</div></div></div>},
-    {icon:"😊",title:"First, what's your name?",body:<div><FI label="Your first name" placeholder="Victor B" value={d.name||""} onChange={e=>setD(p=>({...p,name:e.target.value}))} style={{marginBottom:0}}/></div>},
-    {icon:"💼",title:"What do you do?",body:<div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:240,overflowY:"auto"}}>{PROFESSIONS.map(p=><button key={p.id} onClick={()=>setD(x=>({...x,profCategory:p.id}))} style={{background:d.profCategory===p.id?C.accentBg:C.surfaceAlt,border:`2px solid ${d.profCategory===p.id?C.accent:C.border}`,borderRadius:14,padding:"12px 16px",cursor:"pointer",color:C.text,textAlign:"left",display:"flex",alignItems:"center",gap:10,transition:"all .15s"}}><span style={{fontSize:22}}>{p.icon}</span><div><div style={{fontWeight:700,fontSize:13,color:d.profCategory===p.id?C.accent:C.text}}>{p.label}</div><div style={{fontSize:11,color:C.textLight}}>{p.subs?.[0]?.label||""}</div></div></button>)}</div>},
-    {icon:"💰",title:"Your monthly income",body:<div style={{display:"flex",flexDirection:"column",gap:10}}><FI label="Primary income (take-home)" type="number" placeholder="4500" value={d.income?.primary||""} onChange={e=>setD(p=>({...p,income:{...(p.income||{}),primary:e.target.value}}))}/><FI label="Other income (side jobs, rental...)" type="number" placeholder="0" value={d.income?.other||""} onChange={e=>setD(p=>({...p,income:{...(p.income||{}),other:e.target.value}}))}/></div>},
-    {icon:"🏦",title:"Account balances",body:<div style={{display:"flex",flexDirection:"column",gap:10}}><FI label="Checking account" type="number" placeholder="2500" value={d.accounts?.checking||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),checking:e.target.value}}))}/><FI label="Savings account" type="number" placeholder="5000" value={d.accounts?.savings||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),savings:e.target.value}}))}/></div>},
-    {icon:"🎯",title:"Your first savings goal",body:<div style={{display:"flex",flexDirection:"column",gap:10}}><div style={{fontSize:13,color:C.textLight,marginBottom:4}}>Optional — you can add more later</div><FI label="Goal name (e.g. Emergency Fund)" placeholder="Emergency Fund" value={d.goalName||""} onChange={e=>setD(p=>({...p,goalName:e.target.value}))}/><FI label="Target amount ($)" type="number" placeholder="5000" value={d.goalTarget||""} onChange={e=>setD(p=>({...p,goalTarget:e.target.value}))}/></div>},
+    {icon:"💰",title:"Welcome to Trackfi",body:<div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:15,color:C.textMid,lineHeight:1.7}}>Your personal finance command center. Track every dollar, plan every bill, and build real wealth — all in one place.</div>
+      <div style={{background:C.navy,borderRadius:14,padding:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {[["💸","Track spending"],["📅","Plan bills"],["💳","Pay off debt"],["🎯","Grow savings"],["📈","Log trades"],["🧾","File taxes"]].map(([ic,l])=>(<div key={l} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}><span style={{fontSize:16}}>{ic}</span><span style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.85)"}}>{l}</span></div>))}
+      </div>
+      <div style={{fontSize:11,color:C.textFaint,textAlign:"center",marginTop:4}}>Built for real people who want financial clarity 🚀</div>
+    </div>},
+    {icon:"👋",title:"First, what's your name?",body:<div>
+      <div style={{fontSize:14,color:C.textMid,marginBottom:14,lineHeight:1.6}}>This personalizes your greeting and reports.</div>
+      <FI label="Your name" placeholder="Victor B" value={d.name||""} onChange={e=>setD(p=>({...p,name:e.target.value}))} autoFocus/>
+      {d.name&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:14,color:C.accent,fontWeight:600}}>👋 Nice to meet you, {d.name.split(" ")[0]}!</div>}
+    </div>},
+    {icon:"💼",title:firstName?"What do you do, "+firstName+"?":"What do you do?",body:<div>
+      <div style={{fontSize:13,color:C.textLight,marginBottom:12}}>This tailors shift tracking, income labels, and insights to your work.</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflowY:"auto"}}>{PROFESSIONS.map(p=><button key={p.id} onClick={()=>setD(x=>({...x,profCategory:p.id}))} style={{background:d.profCategory===p.id?C.accentBg:C.surfaceAlt,border:`2px solid ${d.profCategory===p.id?C.accent:C.border}`,borderRadius:14,padding:"12px 16px",cursor:"pointer",color:C.text,textAlign:"left",display:"flex",alignItems:"center",gap:10,transition:"all .15s"}}><span style={{fontSize:22}}>{p.icon}</span><div><div style={{fontWeight:700,fontSize:13,color:d.profCategory===p.id?C.accent:C.text}}>{p.label}</div><div style={{fontSize:11,color:C.textLight}}>{p.subs?.[0]?.label||""}</div></div></button>)}</div>
+    </div>},
+    {icon:"💰",title:firstName?"What do you bring home, "+firstName+"?":"Your monthly income",body:<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:13,color:C.textLight,marginBottom:4}}>Enter your take-home pay (after taxes). Used for budgets, safe-to-spend, and savings rate.</div>
+      <FI label="Primary income / month" type="number" placeholder="4500" value={d.income?.primary||""} onChange={e=>setD(p=>({...p,income:{...(p.income||{}),primary:e.target.value}}))}/>
+      <FI label="Side income (freelance, rental...)" type="number" placeholder="0" value={d.income?.other||""} onChange={e=>setD(p=>({...p,income:{...(p.income||{}),other:e.target.value}}))}/>
+      {parseFloat(d.income?.primary||0)>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.green,fontWeight:600}}>
+        Annual estimate: ${(parseFloat(d.income?.primary||0)*12+parseFloat(d.income?.other||0)*12).toLocaleString()}
+      </div>}
+    </div>},
+    {icon:"🏦",title:"Where does your money live?",body:<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:13,color:C.textLight,marginBottom:4}}>Enter current balances. This powers your net worth, safe-to-spend, and balance trend — skip anything that doesn't apply.</div>
+      <FI label="Checking account" type="number" placeholder="2500" value={d.accounts?.checking||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),checking:e.target.value}}))}/>
+      <FI label="Savings account" type="number" placeholder="5000" value={d.accounts?.savings||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),savings:e.target.value}}))}/>
+      <FI label="Investments (401k, brokerage...)" type="number" placeholder="0" value={d.accounts?.investments||""} onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),investments:e.target.value}}))}/>
+      {(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0))>0&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,fontWeight:600}}>
+        Liquid savings: ${(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0)).toLocaleString()}
+      </div>}
+    </div>},
+    {icon:"📅",title:"Any recurring bills?",body:<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:13,color:C.textLight,marginBottom:4}}>Add your biggest monthly bills to see upcoming due dates and safe-to-spend. Skip for now and add later.</div>
+      {(d.bills||[]).map((b,i)=><div key={i} style={{display:"flex",gap:8,alignItems:"center"}}>
+        <input placeholder="Bill name (e.g. Rent)" value={b.name||""} onChange={e=>setD(p=>({...p,bills:(p.bills||[]).map((x,j)=>j===i?{...x,name:e.target.value}:x)}))} style={{flex:2,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none"}}/>
+        <input type="number" placeholder="$" value={b.amount||""} onChange={e=>setD(p=>({...p,bills:(p.bills||[]).map((x,j)=>j===i?{...x,amount:e.target.value}:x)}))} style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none"}}/>
+        <button onClick={()=>setD(p=>({...p,bills:(p.bills||[]).filter((_,j)=>j!==i)}))} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:6,display:"flex"}}><X size={16}/></button>
+      </div>)}
+      <button onClick={()=>setD(p=>({...p,bills:[...(p.bills||[]),{name:"",amount:""}]}))} style={{background:C.surfaceAlt,border:`1.5px dashed ${C.border}`,borderRadius:10,padding:"10px 0",color:C.textLight,fontWeight:600,fontSize:13,cursor:"pointer"}}>+ Add a bill</button>
+    </div>},
+    {icon:"🎯",title:firstName?"What are you saving for, "+firstName+"?":"Set a savings goal",body:<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:13,color:C.textLight,marginBottom:4}}>A goal gives you something to work toward. Emergency fund is the most important one to start.</div>
+      <FI label="Goal name" placeholder="Emergency Fund" value={d.goalName||""} onChange={e=>setD(p=>({...p,goalName:e.target.value}))}/>
+      <FI label="Target amount ($)" type="number" placeholder="5000" value={d.goalTarget||""} onChange={e=>setD(p=>({...p,goalTarget:e.target.value}))}/> 
+      {d.goalName&&d.goalTarget&&parseFloat(d.income?.primary||0)>0&&(()=>{const mo=Math.ceil(parseFloat(d.goalTarget)/(parseFloat(d.income?.primary||0)*0.2));return(<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.green,fontWeight:600}}>At 20% savings rate: ~{mo} months to reach {d.goalName} 🎯</div>);})()}
+    </div>},
   ];
   const cur=STEPS[step];
   return(
@@ -1276,9 +1322,39 @@ function SavingsGoalsView({goals,setGoals,income,showToast}){
       </div>
       {goals.length>0&&(()=>{const totalTarget=goals.reduce((s,g)=>s+(parseFloat(g.target||0)),0);const totalSaved=goals.reduce((s,g)=>s+(parseFloat(g.saved||0)),0);const overallPct=totalTarget>0?Math.min(100,(totalSaved/totalTarget)*100):0;const complete=goals.filter(g=>parseFloat(g.saved||0)>=parseFloat(g.target||1)).length;return(<div style={{background:C.surface,borderRadius:14,padding:"12px 16px",marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:13,fontWeight:600,color:C.text}}>Overall Progress</span><span style={{fontSize:13,fontWeight:700,color:C.green}}>{fmt(totalSaved)} / {fmt(totalTarget)}</span></div><div style={{height:8,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:5}}><div style={{height:"100%",width:overallPct.toFixed(1)+"%",background:`linear-gradient(90deg,${C.teal},${C.green})`,borderRadius:99,transition:"width .6s"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textLight}}><span>{overallPct.toFixed(0)}% of total goals</span><span>{complete}/{goals.length} complete</span></div></div>);})()}
       {goals.length===0&&<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:48,marginBottom:12}}>🎯</div><div style={{fontFamily:MF,fontSize:16,fontWeight:700,color:C.text,marginBottom:8}}>No savings goals yet</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Set a goal and watch your ring fill up</div><button onClick={()=>setShowAdd(true)} style={{padding:"12px 24px",borderRadius:14,background:C.accent,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add First Goal</button></div>}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+      {view==="rings"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
         {goals.map(g=><div key={g.id} style={{position:"relative"}}><GoalRingInner goal={{...g,saved:parseFloat(g.saved||0),target:parseFloat(g.target||0),monthly:parseFloat(g.monthly||0)}}/><button onClick={()=>{if(window.confirm("Delete goal: "+g.name+"?"))setGoals(p=>p.filter(x=>x.id!==g.id));}} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,.06)",border:"none",borderRadius:"50%",width:24,height:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={12} color={C.textLight}/></button></div>)}
-      </div>
+      </div>}
+      {view==="list"&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+        {goals.map(g=>{
+          const saved=parseFloat(g.saved||0),target=parseFloat(g.target||0),pct=target>0?Math.min(100,(saved/target)*100):0;
+          const mo=parseFloat(g.monthly||0),rem=Math.max(0,target-saved),months=mo>0?Math.ceil(rem/mo):0;
+          const targetDate=months>0?(()=>{const d=new Date();d.setMonth(d.getMonth()+months);return d.toLocaleDateString("en-US",{month:"short",year:"numeric"});})():null;
+          return(<div key={g.id} style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+              <div style={{width:44,height:44,borderRadius:12,background:(g.color||C.teal)+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{g.icon||"🎯"}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:15,fontWeight:700,color:C.text}}>{g.name}</div>
+                <div style={{fontSize:12,color:C.textLight}}>{fmt(saved)} of {fmt(target)}{months>0?" · "+months+" mo to go":pct>=100?" 🎉 Complete!":""}</div>
+              </div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:g.color||C.teal}}>{pct.toFixed(0)}%</div>
+                {targetDate&&<div style={{fontSize:11,color:C.textLight}}>{targetDate}</div>}
+              </div>
+            </div>
+            <div style={{height:8,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:12}}>
+              <div style={{height:"100%",width:pct.toFixed(1)+"%",background:pct>=100?C.green:g.color||C.teal,borderRadius:99,transition:"width .6s"}}/>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <input type="number" placeholder="Deposit $" id={"ldep-"+g.id} style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none",background:C.surfaceAlt}}
+                onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){const a=parseFloat(e.target.value);if(a>0){setGoals(p=>p.map(x=>{if(x.id!==g.id)return x;const ns=Math.min(x.target,(x.saved||0)+a);if(ns>=x.target)setTimeout(()=>showToast&&showToast("🎉 Goal complete: "+x.name),100);else showToast&&showToast("+"+fmt(a)+" → "+x.name);return{...x,saved:ns};}));e.target.value='';}};}}/>
+              <button onClick={()=>{const inp=document.getElementById("ldep-"+g.id);const a=parseFloat(inp?.value||0);if(a>0){setGoals(p=>p.map(x=>{if(x.id!==g.id)return x;const ns=Math.min(x.target,(x.saved||0)+a);if(ns>=x.target)setTimeout(()=>showToast&&showToast("🎉 Goal complete: "+x.name),100);else showToast&&showToast("+"+fmt(a)+" → "+x.name);return{...x,saved:ns};}));if(inp)inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
+              <button onClick={()=>{setEditGoal(g);setEditForm({name:g.name,target:String(g.target),monthly:String(g.monthly||0),saved:String(g.saved||0)});}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",fontSize:12,color:C.textMid,fontWeight:600}}>Edit</button>
+              <button onClick={()=>{if(window.confirm("Delete goal: "+g.name+"?"))setGoals(p=>p.filter(x=>x.id!==g.id));}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.textLight,display:"flex",alignItems:"center"}}><Trash2 size={14}/></button>
+            </div>
+          </div>);
+        })}
+      </div>}
       {editGoal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setEditGoal(null)}><div style={{background:"#fff",borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:16}}>Edit Goal</div><FI label="Goal Name" value={editForm.name||""} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}/><div style={{display:"flex",gap:10}}><FI half label="Target ($)" type="number" value={editForm.target||""} onChange={e=>setEditForm(p=>({...p,target:e.target.value}))}/><FI half label="Saved ($)" type="number" value={editForm.saved||""} onChange={e=>setEditForm(p=>({...p,saved:e.target.value}))}/></div><FI label="Monthly Contribution ($)" type="number" value={editForm.monthly||""} onChange={e=>setEditForm(p=>({...p,monthly:e.target.value}))}/><div style={{display:"flex",gap:10,marginTop:8}}><button onClick={()=>setEditGoal(null)} style={{flex:1,padding:"13px",borderRadius:14,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:700,fontSize:16,cursor:"pointer"}}>Cancel</button><button onClick={()=>{setGoals(p=>p.map(g=>g.id===editGoal.id?{...g,name:editForm.name||g.name,target:parseFloat(editForm.target)||g.target,saved:parseFloat(editForm.saved||0),monthly:parseFloat(editForm.monthly||0)}:g));showToast&&showToast("Goal updated!");setEditGoal(null);}} style={{flex:2,padding:"13px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Save Changes</button></div></div></div>}
             {showAdd&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setShowAdd(false)}>
@@ -1789,9 +1865,7 @@ function IncomeSpendingView({expenses,income,trades}){
       </div>
     </div>
   );
-}
-
-function DashSettingsView({config,setConfig,showTrading}){
+}function DashSettingsView({config,setConfig,showTrading}){
   const toggle=k=>setConfig(p=>({...p,[k]:!p[k]}));
   const items=[{k:"showIncomeChart",icon:"📊",label:"Income vs Spending Chart",desc:"3-month bar chart on home"},{k:"showMetrics",icon:"📐",label:"Key Metrics Grid",desc:"Net worth, health, emergency fund"},{k:"showAccounts",icon:"🏦",label:"Account Cards",desc:"Scrollable balance overview"},{k:"showForecast",icon:"🔮",label:"Month Forecast",desc:"Burn rate and projected spend"},{k:"showBills",icon:"📅",label:"Upcoming Bills",desc:"Next 3 bills with countdown"},{k:"showRecent",icon:"🕒",label:"Recent Transactions",desc:"Last 4 logged expenses"},...(showTrading?[{k:"showTradeCard",icon:"📈",label:"Trading Summary",desc:"P&L and record"}]:[])];
   return(
@@ -1809,7 +1883,9 @@ function DashSettingsView({config,setConfig,showTrading}){
       </div>
     </div>
   );
-}function Row({icon,title,sub,right,rightColor,rightSub,onDelete,badge,onClick}){
+}
+
+function Row({icon,title,sub,right,rightColor,rightSub,onDelete,badge,onClick}){
   return(
     <div className="rw" style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"13px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,cursor:onClick?"pointer":"default"}} onClick={onClick}>
       <div style={{width:38,height:38,borderRadius:10,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{icon}</div>
@@ -1965,10 +2041,12 @@ function AuthScreen({onAuth,onSkip}){
     try{
       if(mode==="login"){
         const r=await signIn(email.trim(),pass);
+        if(r.error==="network"||r.message?.includes("Failed to fetch")||r.message?.includes("NetworkError")){setErr("Can't reach server — tap 'Continue without account' to use offline mode.");setLoading(false);return;}
         if(r.error_description||r.msg||r.error){
           const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
           if(msg.includes("invalid")||msg.includes("credentials")||msg.includes("password")){setErr("Wrong password. Try again or reset below.");}
           else if(msg.includes("confirm")||msg.includes("email")){setErr("Please confirm your email first — check your inbox.");}
+          else if(msg.includes("not found")||msg.includes("user")){setErr("No account found. Sign up first or continue without account.");}
           else{setErr("Sign in failed. Check your email and password.");}
           setLoading(false);return;
         }
@@ -1977,6 +2055,7 @@ function AuthScreen({onAuth,onSkip}){
       }else{
         const r=await signUp(email.trim(),pass);
         if(r.access_token){onAuth(r);return;}
+        if(r.error==="network"||r.message?.includes("Failed to fetch")||r.message?.includes("NetworkError")){setErr("Can't reach server — tap 'Continue without account' to use offline mode.");setLoading(false);return;}
         if(r.error_description||r.msg||r.error){
           const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
           if(msg.includes("already")||msg.includes("registered")||msg.includes("exists")){
@@ -2035,9 +2114,9 @@ function AuthScreen({onAuth,onSkip}){
           {mode==="login"?"No account yet? ":"Already have an account? "}
           <button onClick={()=>{setMode(mode==="login"?"signup":"login");setErr("");setPass("");}} style={{background:"none",border:"none",color:C.accent,fontWeight:700,cursor:"pointer",fontSize:13}}>{mode==="login"?"Sign up free":"Sign in"}</button>
         </div>
-        {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}>
-          <button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer",display:"block",margin:"0 auto"}}>Continue without account →</button>
-          <div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data saved locally — sync anytime later</div>
+        {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}>
+          <button onClick={onSkip} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"12px 0",color:C.textMid,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:6}}>Use without account →</button>
+          <div style={{fontSize:11,color:C.textFaint,textAlign:"center"}}>All data saved locally on your device</div>
         </div>}
       </div>
     </div>
@@ -2391,8 +2470,9 @@ function AppInner(){
     if(d.name)setGreetName(d.name);
     setAppName("Trackfi");
     if(d.profCategory)setProfCategory(d.profCategory);if(d.profSub)setProfSub(d.profSub);
-    if(d.income)setIncome(d.income);if(d.accounts)setAccounts(d.accounts);
+    if(d.income)setIncome(d.income);if(d.accounts)setAccounts({...d.accounts});
     if(d.goalName&&d.goalTarget){setSGoals(p=>[...p,{id:Date.now().toString(),name:d.goalName,target:parseFloat(d.goalTarget),saved:0,monthly:0,icon:"🎯",color:C.accent}]);}
+    if(d.bills&&d.bills.length){const validBills=d.bills.filter(b=>b.name&&b.amount);if(validBills.length){setBills(p=>[...p,...validBills.map(b=>({id:Date.now()+Math.random(),name:b.name,amount:String(parseFloat(b.amount)||0),dueDate:"",recurring:"Monthly",paid:false,autoPay:false}))]);}}
     const hasTrading=parseFloat(d.income?.trading||0)>0;
     setSettings(p=>({...p,showTrading:hasTrading,showHealth:true,showSavings:true,showForecast:true}));
     try{localStorage.setItem("fv_onboarded","1");}catch{}
