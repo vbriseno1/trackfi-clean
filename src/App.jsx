@@ -2830,12 +2830,16 @@ function AppInner(){
             {(()=>{
               const now_c=new Date();
               const ms_c=now_c.getFullYear()+"-"+String(now_c.getMonth()+1).padStart(2,"0");
+              const lastMs_c=new Date(now_c.getFullYear(),now_c.getMonth()-1,1).getFullYear()+"-"+String(new Date(now_c.getFullYear(),now_c.getMonth()-1,1).getMonth()+1).padStart(2,"0");
               const mtdSpend_c=expenses.filter(e=>e.date?.startsWith(ms_c)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+              const lastSpend_c=expenses.filter(e=>e.date?.startsWith(lastMs_c)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+              const momDiff_c=lastSpend_c>0?((mtdSpend_c-lastSpend_c)/lastSpend_c*100):null;
               const dom_c=now_c.getDate(),dim_c=new Date(now_c.getFullYear(),now_c.getMonth()+1,0).getDate();
               const forecast_c=dom_c>0?mtdSpend_c+(mtdSpend_c/dom_c)*(dim_c-dom_c):0;
               const cats_c=Object.entries(expenses.filter(e=>e.date?.startsWith(ms_c)).reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{})).sort((a,b)=>b[1]-a[1]);
               const bars_c=Array.from({length:6},(_,i)=>{const d=new Date(now_c.getFullYear(),now_c.getMonth()-5+i,1);const ms2=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");return{m:MOS[d.getMonth()],v:expenses.filter(e=>e.date?.startsWith(ms2)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0),cur:i===5};});
               const maxB_c=Math.max(...bars_c.map(b=>b.v),1);
+              const overBudget_c=budgetGoals.filter(g=>{const sp=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(ms_c)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);return sp>parseFloat(g.limit||0);});
               const nw_c=totalAssets-totalDebt;
               const prevNW_c=balHist.length>1?(()=>{const p=balHist[balHist.length-2];return(p.checking||0)+(p.savings||0)+(p.cushion||0)+(p.investments||0)-totalDebt;})():null;
               const nwDelta_c=prevNW_c!==null?nw_c-prevNW_c:null;
@@ -2853,7 +2857,7 @@ function AppInner(){
                       <div>
                         <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>THIS MONTH</div>
                         <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontSize:38,fontWeight:900,color:"#fff",lineHeight:1,letterSpacing:-1}}>{fmt(mtdSpend_c)}</div>
-                        <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginTop:3}}>Day {dom_c} of {dim_c} · forecast {hidden?"***":fmt(forecast_c)}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4,flexWrap:"wrap"}}><span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>Day {dom_c}/{dim_c} · est {hidden?"***":fmt(forecast_c)}</span>{momDiff_c!==null&&<span style={{fontSize:11,fontWeight:700,color:momDiff_c<=0?C.greenMid:"#fca5a5",background:"rgba(255,255,255,.08)",borderRadius:99,padding:"1px 7px"}}>{momDiff_c>0?"+":""}{momDiff_c.toFixed(0)}% vs last mo</span>}{overBudget_c.length>0&&<span style={{fontSize:11,fontWeight:700,color:"#fca5a5",background:"rgba(239,68,68,.2)",borderRadius:99,padding:"1px 7px"}}>{overBudget_c.length} over budget</span>}</div>
                       </div>
                       <div style={{background:mtdSpend_c<totalIncome*(dom_c/dim_c)*1.05?C.green+"33":"rgba(239,68,68,.25)",borderRadius:99,padding:"4px 10px"}}>
                         <div style={{fontSize:11,fontWeight:700,color:mtdSpend_c<totalIncome*(dom_c/dim_c)*1.05?C.greenMid:"#fca5a5"}}>{mtdSpend_c<totalIncome*(dom_c/dim_c)*1.05?"✓ On track":"⚠ Over pace"}</div>
@@ -2870,13 +2874,16 @@ function AppInner(){
                         </div>
                       );})}
                     </div>}
-                    {cats_c.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                      {cats_c.slice(0,3).map(([cat,amt],i)=><div key={cat} style={{background:"rgba(255,255,255,.1)",borderRadius:8,padding:"4px 9px",display:"flex",gap:5,alignItems:"center"}}>
+                    <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                      {savingsRate>0&&<div style={{background:savingsRate>=20?"rgba(52,211,153,.2)":"rgba(255,255,255,.08)",borderRadius:8,padding:"4px 9px",display:"flex",gap:4,alignItems:"center"}}>
+                        <span style={{fontSize:11,color:savingsRate>=20?C.greenMid:"rgba(255,255,255,.5)"}}>💾 {savingsRate.toFixed(0)}% saved</span>
+                      </div>}
+                      {cats_c.slice(0,2).map(([cat,amt],i)=><div key={cat} style={{background:"rgba(255,255,255,.1)",borderRadius:8,padding:"4px 9px",display:"flex",gap:5,alignItems:"center"}}>
                         <div style={{width:6,height:6,borderRadius:"50%",background:PIE_COLORS[i]}}/>
                         <span style={{fontSize:11,color:"rgba(255,255,255,.7)"}}>{cat}</span>
                         <span className={hidden?"blurred":"unblurred"} style={{fontSize:11,fontFamily:MF,fontWeight:700,color:"#fff"}}>{fmt(amt)}</span>
                       </div>)}
-                    </div>}
+                    </div>
                   </div>
                 )},
                 // ── CARD 2: NET WORTH ────────────────────────────
@@ -2968,8 +2975,11 @@ function AppInner(){
                     <button onClick={e=>{e.stopPropagation();goPrev();}} style={{position:"absolute",left:-8,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#fff",zIndex:10}}>‹</button>
                     <button onClick={e=>{e.stopPropagation();goNext();}} style={{position:"absolute",right:-8,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,.15)",border:"none",borderRadius:"50%",width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#fff",zIndex:10}}>›</button>
                   </div>
-                  <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:10}}>
-                    {CARDS.map((_,i)=><div key={i} onClick={()=>setHeroIdx(i)} style={{width:i===heroIdx?24:7,height:7,borderRadius:99,background:i===heroIdx?C.accent:C.border,transition:"all .3s ease",cursor:"pointer"}}/>)}
+                  <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,marginTop:10}}>
+                    {CARDS.map((card,i)=><button key={i} onClick={()=>setHeroIdx(i)} style={{background:"none",border:"none",cursor:"pointer",padding:"2px 0",display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                      <div style={{width:i===heroIdx?20:6,height:6,borderRadius:99,background:i===heroIdx?C.accent:C.border,transition:"all .3s"}}/>
+                      {i===heroIdx&&<div style={{fontSize:9,color:C.accent,fontWeight:700,letterSpacing:.5,textTransform:"uppercase"}}>{card.id==="month"?"This Month":card.id==="networth"?"Net Worth":card.id==="flow"?"Cash Flow":"Goals"}</div>}
+                    </button>)}
                   </div>
                 </div>
               );
@@ -2985,7 +2995,7 @@ function AppInner(){
               const subCount=detectedSubs?.filter(s=>s.interval==="Monthly").length||0;
               const subTotal=detectedSubs?.filter(s=>s.interval==="Monthly").reduce((s,x)=>s+(parseFloat(x.amount)||0),0)||0;
               const pulseItems=[
-                {label:"Today",val:todayAmt>0?fmt(todayAmt):"—",color:todayAmt>0?C.red:C.textFaint,sub:todayAmt>0?expenses.filter(e=>e.date===now_p.toISOString().split("T")[0]).length+"  items":"nothing yet",tap:()=>navTo("spend")},
+                {label:"Today",val:todayAmt>0?fmt(todayAmt):"—",color:todayAmt>0?C.red:C.textFaint,sub:todayAmt>0?expenses.filter(e=>e.date===now_p.toISOString().split("T")[0]).length+" items":"nothing yet",tap:()=>navTo("calendar")},
                 {label:"Safe to Spend",val:fmt(sts),color:sts>500?C.green:sts>0?C.amber:C.red,sub:"after bills",tap:()=>navTo("paycheck")},
                 {label:"Next Bill",val:nextBill?fmt(nextBill.amount):"—",color:nextBill&&dueIn(nextBill.dueDate)<=3?C.red:C.amber,sub:nextBill?nextBill.name+" · "+dueIn(nextBill.dueDate)+"d":"all clear",tap:()=>navTo("bills")},
                 {label:"Subscriptions",val:subCount>0?fmt(subTotal)+"/mo":"—",color:C.textMid,sub:subCount>0?subCount+" detected":"none found",tap:()=>navTo("subscriptions")},
@@ -3041,8 +3051,9 @@ function AppInner(){
                 {id:"insights",l:"Insights",ic:"🔍",a:()=>navTo("insights"),bg:C.purpleBg,c:C.purple},
                 {id:"paycheck",l:"Paycheck",ic:"💰",a:()=>navTo("paycheck"),bg:C.greenBg,c:C.green},
                 {id:"bills_nav",l:"View Bills",ic:"📅",a:()=>navTo("bills"),bg:C.amberBg,c:C.amber},
+                {id:"recurring_nav",l:"Recurring",ic:"🔄",a:()=>navTo("recurring"),bg:C.accentBg,c:C.accent},
               ];
-              const activeIds=settings.quickActions||["expense","receipt","bill","debt","simulator","budget"];
+              const activeIds=settings.quickActions||["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"];
               const active=ALL_QA.filter(q=>activeIds.includes(q.id));
               return(
                 <div style={{marginBottom:14}}>
@@ -3071,8 +3082,9 @@ function AppInner(){
                   const br=d<0?C.redMid:d<=7?C.amberMid:C.border;
                   return(<div key={b.id} onClick={()=>navTo("bills")} style={{background:bg2,border:`1px solid ${br}`,borderRadius:12,padding:"10px 12px",flexShrink:0,cursor:"pointer",minWidth:100}}>
                     <div style={{fontSize:11,fontWeight:700,color:C.text,marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:90}}>{b.name}</div>
-                    <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontWeight:800,fontSize:14,color:col,marginBottom:1}}>{fmt(b.amount)}</div>
-                    <div style={{fontSize:10,color:col,fontWeight:600}}>{d<0?Math.abs(d)+"d late":d===0?"Today":d+"d left"}</div>
+                    <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontWeight:800,fontSize:14,color:col,marginBottom:2}}>{fmt(b.amount)}</div>
+                    <div style={{fontSize:10,color:col,fontWeight:600,marginBottom:3}}>{d<0?Math.abs(d)+"d late":d===0?"Today":d+"d left"}</div>
+                    {totalIncome>0&&<div style={{height:2,background:"rgba(0,0,0,.06)",borderRadius:99,width:"100%"}}><div style={{height:"100%",width:Math.min(100,(parseFloat(b.amount)/totalIncome)*100).toFixed(1)+"%",background:col,borderRadius:99,opacity:.6}}/></div>}
                   </div>);
                 })}
               </div>
