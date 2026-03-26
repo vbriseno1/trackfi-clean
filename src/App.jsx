@@ -362,7 +362,6 @@ function OnboardingWizard({onComplete}){
   const selSub=sel.subs.find(s=>s.id===d.profSub)||sel.subs[0];
   const isTrader=(parseFloat(d.income.trading||0)>0)||(d.profCategory==="trader");
   const firstName=(d.name||d.appName||"").split(" ")[0].replace(/[^a-zA-Z]/g,"")||"there";
-  const firstName=(d.name||"").split(" ")[0]||"";
   const STEPS=[
     {icon:"💰",title:"Welcome to Trackfi",body:<div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={{fontSize:15,color:C.textMid,lineHeight:1.7}}>Your personal finance command center. Track every dollar, plan every bill, and build real wealth — all in one place.</div>
