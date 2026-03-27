@@ -812,7 +812,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
       })()}
 
       {/* Spending by day of week */}
-      {expenses.length>=10&&(()=>{
+      {expenses.length>=3&&(()=>{
         const DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
         const DAYS_SHORT=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
         const dow=Array.from({length:7},(_,d)=>{
@@ -3171,7 +3171,7 @@ function AppInner(){
   const unread=unreadNotifs;
   const GROUPS=[
     {key:"money",label:"Money",desc:"Accounts, bills & goals",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"bills",icon:CalendarClock,label:"Bills"},{id:"debt",icon:CreditCard,label:"Debt Tracker"},{id:"savings",icon:Target,label:"Savings Goals"},{id:"recurring",icon:RefreshCw,label:"Recurring"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"}]},
-    {key:"analytics",label:"Analytics",desc:"Insights & trends",items:[{id:"insights",icon:Zap,label:"Spending Insights"},{id:"health",icon:Activity,label:"Health Score"},{id:"cashflow",icon:BarChart2,label:"Income vs Spending"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"}]},
+    {key:"analytics",label:"Analytics",desc:"Insights & trends",items:[{id:"insights",icon:BarChart2,label:"Spending Insights 📊"},{id:"health",icon:Activity,label:"Health Score"},{id:"cashflow",icon:BarChart2,label:"Income vs Spending"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"}]},
     {key:"work",label:"Work & Reports",desc:"Shifts, trading & docs",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
     {key:"tools",label:"Tools",desc:"Search & customize",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"categories",icon:Filter,label:"Categories"},{id:"dashsettings",icon:Settings,label:"Dashboard Layout"}]},
   ];
@@ -3474,7 +3474,7 @@ function AppInner(){
               ].filter(Boolean);
               if(!insights.length)return null;
               const insight=insights[now2.getDate()%insights.length];
-              return(<div onClick={()=>navTo("insights")} style={{background:`linear-gradient(135deg,${C.accentBg},${C.purpleBg})`,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:"12px 14px",marginBottom:14,cursor:"pointer",display:"flex",gap:10,alignItems:"center"}}><span style={{fontSize:18,flexShrink:0}}>💡</span><div style={{flex:1}}><div style={{fontSize:10,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Insight · {insights.length} available</div><div style={{fontSize:13,color:C.text,lineHeight:1.4,fontWeight:500}}>{insight}</div></div><ChevronRight size={13} color={C.accent}/></div>);
+              return(<div onClick={()=>navTo("insights")} style={{background:`linear-gradient(135deg,${C.accentBg},${C.purpleBg})`,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:"12px 14px",marginBottom:14,cursor:"pointer",display:"flex",gap:10,alignItems:"center"}}><span style={{fontSize:18,flexShrink:0}}>💡</span><div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}><div style={{fontSize:10,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:.5}}>Spending Insight</div><div style={{fontSize:10,fontWeight:700,color:C.accent,background:C.accent+"18",borderRadius:99,padding:"1px 7px"}}>View Charts →</div></div><div style={{fontSize:13,color:C.text,lineHeight:1.4,fontWeight:500}}>{insight}</div></div></div>);
             })()}
 
             {/* ── 5. QUICK ACTIONS ──────────────────────────────── */}
