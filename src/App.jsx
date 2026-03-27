@@ -635,7 +635,7 @@ Or ask: \"can I afford $200?\""}]);
       <div ref={botRef}/>
     </div>
     <div style={{display:"flex",gap:8,paddingTop:10,borderTop:"1px solid "+C.border,flexShrink:0}}>
-      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder='Try "lunch 12" or "can I afford $200?"' style={{flex:1,background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none"}}/>
+      <input className="fv-chat-input" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder='Try "lunch 12" or "can I afford $200?"' style={{flex:1,background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none"}}/>
       <button className="ba" onClick={send} disabled={!input.trim()} style={{background:input.trim()?C.accent:C.border,border:"none",borderRadius:12,padding:"0 16px",cursor:input.trim()?"pointer":"default",display:"flex",alignItems:"center",color:input.trim()?"#fff":C.textLight}}><Send size={17}/></button>
     </div>
   </div>);
@@ -2683,7 +2683,10 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
       })()}
     </div>
   );
-}function IncomeSpendingView({expenses,income,trades,bills=[]}){
+}
+
+
+function IncomeSpendingView({expenses,income,trades,bills=[]}){
   const[range,setRange]=useState("1M");
   const now=new Date();
   const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
@@ -2738,9 +2741,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
       </div>
     </div>
   );
-}
-
-function DashSettingsView({config,setConfig,showTrading}){
+}function DashSettingsView({config,setConfig,showTrading}){
   const toggle=k=>setConfig(p=>({...p,[k]:!p[k]}));
   const items=[{k:"showIncomeChart",icon:"📊",label:"Income vs Spending Chart",desc:"3-month bar chart on home"},{k:"showMetrics",icon:"📐",label:"Key Metrics Grid",desc:"Net worth, health, emergency fund"},{k:"showAccounts",icon:"🏦",label:"Account Cards",desc:"Scrollable balance overview"},{k:"showForecast",icon:"🔮",label:"Month Forecast",desc:"Burn rate and projected spend"},{k:"showBills",icon:"📅",label:"Upcoming Bills",desc:"Next 3 bills with countdown"},{k:"showRecent",icon:"🕒",label:"Recent Transactions",desc:"Last 4 logged expenses"},...(showTrading?[{k:"showTradeCard",icon:"📈",label:"Trading Summary",desc:"P&L and record"}]:[])];
   return(
@@ -3210,7 +3211,7 @@ function AppInner(){
   const[balHist,setBalHist]=useState([]);
   const[notifs,setNotifs]=useState([]);
   const[calColors,setCalColors]=useState({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
-  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"]});
+  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","receipt","bill","debt","simulator","budget","expense","bill","paycheck","debt","health","budget","savings","insights"]});
   const[monthlySummary,setMonthlySummary]=useState(null);
   const[dashConfig,setDashConfig]=useState({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
   const[appName,setAppName]=useState("Trackfi");
@@ -3462,18 +3463,22 @@ function AppInner(){
   const today=todayStr();
   const unread=unreadNotifs;
   const GROUPS=[
-    {key:"money",label:"Money",desc:"Accounts, bills & goals",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"bills",icon:CalendarClock,label:"Bills"},{id:"debt",icon:CreditCard,label:"Debt Tracker"},{id:"savings",icon:Target,label:"Savings Goals"},{id:"recurring",icon:RefreshCw,label:"Recurring"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"}]},
+    {key:"money",label:"Money",desc:"Accounts, bills & goals",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"debt",icon:CreditCard,label:"Debt Tracker"},{id:"savings",icon:Target,label:"Savings Goals"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"recurring",icon:RefreshCw,label:"Recurring"},{id:"calendar",icon:Calendar,label:"Bill Calendar"}]},
     {key:"analytics",label:"Analytics",desc:"Insights & trends",items:[{id:"insights",icon:BarChart2,label:"Spending Insights 📊"},{id:"health",icon:Activity,label:"Health Score"},{id:"cashflow",icon:BarChart2,label:"Income vs Spending"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"}]},
     {key:"work",label:"Work & Reports",desc:"Shifts, trading & docs",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
     {key:"tools",label:"Tools",desc:"Search & customize",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"categories",icon:Filter,label:"Categories"},{id:"dashsettings",icon:Settings,label:"Dashboard Layout"}]},
   ];
   const allTabIds=GROUPS.flatMap(g=>g.items.map(i=>i.id));
   const isMoreTab=allTabIds.includes(tab);
+  // Urgent bill badge — red dot if any overdue or due today
+  const billUrgent=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<=1&&dueIn(b.dueDate)>=-0).length;
+  const billOverdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0).length;
+  const billNavBadge=billOverdue>0?billOverdue:billUrgent>0?billUrgent:null;
   const NAV=[
     {id:"home",icon:LayoutDashboard,label:"Home"},
     {id:"spend",icon:Wallet,label:"Spending"},
+    {id:"bills",icon:CalendarClock,label:"Bills",badge:billNavBadge},
     {id:"chat",icon:MessageCircle,label:"Log"},
-    {id:"calendar",icon:Calendar,label:"Calendar"},
     {id:"more",icon:Menu,label:"More",badge:unread>0?unread:null},
   ];
 
@@ -3522,7 +3527,7 @@ function AppInner(){
     <div style={{minHeight:"100vh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",maxWidth:640,margin:"0 auto",minHeight:"100vh",position:"relative"}}>
       <style>{CSS}</style>
       <div id="fv-scroll" style={{flex:1,overflowY:"auto",padding:"16px 16px 110px"}}>
-        {["spend","home","chat"].includes(tab)&&<button className="ba" onClick={()=>om("expense")} style={{position:"fixed",right:16,bottom:90,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
+        {["spend","home","chat","bills"].includes(tab)&&<button className="ba" onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:16,bottom:90,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:16,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
         {tab==="home"&&(
@@ -3781,21 +3786,37 @@ function AppInner(){
                 {id:"shift",l:"Log Shift",ic:"🏥",a:()=>navTo("shifts"),bg:C.accentBg,c:C.accent},
                 {id:"trade",l:"Log Trade",ic:"📈",a:()=>navTo("trading"),bg:C.greenBg,c:C.green},
                 {id:"savings",l:"Add Goal",ic:"🎯",a:()=>navTo("savings"),bg:C.amberBg,c:C.amber},
-                {id:"insights",l:"Insights",ic:"🔍",a:()=>navTo("insights"),bg:C.purpleBg,c:C.purple},
+                {id:"insights",l:"Insights",ic:"📊",a:()=>navTo("insights"),bg:C.purpleBg,c:C.purple},
                 {id:"paycheck",l:"Paycheck",ic:"💰",a:()=>navTo("paycheck"),bg:C.greenBg,c:C.green},
+                {id:"health",l:"Health Score",ic:"❤️",a:()=>navTo("health"),bg:C.redBg,c:C.red},
                 {id:"bills_nav",l:"View Bills",ic:"📅",a:()=>navTo("bills"),bg:C.amberBg,c:C.amber},
                 {id:"recurring_nav",l:"Recurring",ic:"🔄",a:()=>navTo("recurring"),bg:C.accentBg,c:C.accent},
+                {id:"networth",l:"Net Worth",ic:"📈",a:()=>navTo("networthtrend"),bg:C.greenBg,c:C.green},
+                {id:"calendar_nav",l:"Calendar",ic:"📅",a:()=>navTo("calendar"),bg:C.amberBg,c:C.amber},
               ];
-              const activeIds=settings.quickActions||["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"];
+              const activeIds=settings.quickActions||["expense","receipt","bill","debt","simulator","budget","expense","bill","paycheck","debt","health","budget","savings","insights"];
               const active=ALL_QA.filter(q=>activeIds.includes(q.id));
+              const urgentBillsQA=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<=3&&dueIn(b.dueDate)>=-0);
+              const overdueQA=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
               return(
                 <div style={{marginBottom:14}}>
+                  {/* Urgency strip */}
+                  {(overdueQA.length>0||urgentBillsQA.length>0)&&(
+                    <div onClick={()=>navTo("bills")} style={{background:overdueQA.length>0?C.redBg:C.amberBg,border:`1px solid ${overdueQA.length>0?C.redMid:C.amberMid}`,borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+                      <div style={{fontSize:13,fontWeight:700,color:overdueQA.length>0?C.red:C.amber}}>
+                        {overdueQA.length>0?`⚠️ ${overdueQA.length} bill${overdueQA.length>1?"s":""} overdue — tap to pay`:`📅 ${urgentBillsQA.length} bill${urgentBillsQA.length>1?"s":""} due in 3 days`}
+                      </div>
+                      <div style={{fontSize:13,fontWeight:800,color:overdueQA.length>0?C.red:C.amber}}>
+                        {fmt(overdueQA.length>0?overdueQA.reduce((s,b)=>s+(parseFloat(b.amount)||0),0):urgentBillsQA.reduce((s,b)=>s+(parseFloat(b.amount)||0),0))} →
+                      </div>
+                    </div>
+                  )}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                     <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Quick Actions</div>
                     <button onClick={()=>setModal("quickactions")} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.textLight,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Settings size={12}/>Edit</button>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-                    {active.slice(0,8).map(q=>(<button key={q.id} onClick={q.a} style={{background:q.bg,borderRadius:12,padding:"12px 6px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:6,border:"none"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:10,fontWeight:700,color:q.c,lineHeight:1.2,textAlign:"center"}}>{q.l}</span></button>))}
+                    {active.slice(0,8).map(q=>(<button key={q.id} onClick={q.a} style={{background:q.bg,borderRadius:14,padding:"14px 6px 12px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:7,border:"none",boxShadow:"0 1px 3px rgba(10,22,40,.06)",transition:"transform .1s,box-shadow .1s"}}><span style={{fontSize:22}}>{q.ic}</span><span style={{fontSize:10,fontWeight:700,color:q.c,lineHeight:1.3,textAlign:"center"}}>{q.l}</span></button>))}
                   </div>
                 </div>
               );
@@ -3850,7 +3871,31 @@ function AppInner(){
           </div>
         )}
 
-        {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}><div style={{marginBottom:14}}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>AI Logger</div><div style={{fontSize:13,color:C.textLight,marginTop:1}}>Type naturally — "lunch 12", "rent 1200 due 28th", "checked 3200"</div></div><div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
+        {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}>
+          <div style={{marginBottom:10}}>
+            <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>AI Logger</div>
+            <div style={{fontSize:13,color:C.textLight,marginTop:1,marginBottom:10}}>Type naturally — "lunch 12", "rent 1200 due 28th", "moved 500 to savings"</div>
+            {/* Smart prompt chips */}
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
+              {(()=>{
+                const now_c=new Date();
+                const chips=[
+                  {l:"💸 Log expense",t:""},
+                  {l:"📅 Add bill",t:"rent 1200 due 28th"},
+                  {l:"🏦 Update checking",t:"checking "},
+                  {l:"💳 Log debt",t:""},
+                  ...(bills.filter(b=>!b.paid&&dueIn(b.dueDate)<=3&&dueIn(b.dueDate)>=0).slice(0,2).map(b=>({l:"✓ Pay "+b.name,t:"paid "+b.name}))),
+                ];
+                return chips.map((c,i)=>(
+                  <div key={i} style={{flexShrink:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:99,padding:"5px 11px",fontSize:11,fontWeight:600,color:C.textMid,cursor:"pointer",whiteSpace:"nowrap"}}
+                    onClick={()=>{if(c.t){const el=document.querySelector(".fv-chat-input");if(el){el.value=c.t;el.focus();el.dispatchEvent(new Event("input",{bubbles:true}));}}}}>
+                    {c.l}
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+          <div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
         {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats} showToast={showToast}/>}
         {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast}/>}
         {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast}/>}
@@ -3870,7 +3915,25 @@ function AppInner(){
               </div>
             )}
             <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:2}}>More</div>
-            <div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Everything in one place</div>
+            <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>All your financial tools</div>
+            {/* Featured shortcuts grid */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:20}}>
+              {[
+                {id:"health",ic:"❤️",l:"Health",c:C.red,bg:C.redBg},
+                {id:"paycheck",ic:"💰",l:"Paycheck",c:C.green,bg:C.greenBg},
+                {id:"networthtrend",ic:"📈",l:"Net Worth",c:C.accent,bg:C.accentBg},
+                {id:"insights",ic:"📊",l:"Insights",c:C.purple,bg:C.purpleBg},
+                {id:"debt",ic:"💳",l:"Debt",c:C.red,bg:C.redBg},
+                {id:"savings",ic:"🎯",l:"Goals",c:C.teal,bg:"rgba(13,148,136,.1)"},
+                {id:"calendar",ic:"📅",l:"Calendar",c:C.amber,bg:C.amberBg},
+                {id:"search",ic:"🔍",l:"Search",c:C.textMid,bg:C.surfaceAlt},
+              ].map(({id,ic,l,c,bg})=>(
+                <button key={id} onClick={()=>navTo(id)} className="ba" style={{background:bg,borderRadius:14,padding:"12px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,border:"none",cursor:"pointer"}}>
+                  <span style={{fontSize:20}}>{ic}</span>
+                  <span style={{fontSize:10,fontWeight:700,color:c,lineHeight:1.2,textAlign:"center"}}>{l}</span>
+                </button>
+              ))}
+            </div>
             {GROUPS.map(sec=>(
               <div key={sec.key} style={{marginBottom:22}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:10}}><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text}}>{sec.label}</div><div style={{fontSize:11,color:C.textLight}}>{sec.desc}</div></div>
@@ -3994,8 +4057,14 @@ function AppInner(){
       {toast&&<div style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 20px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:8,maxWidth:300,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1}}>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</div>}
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px 8px max(14px,env(safe-area-inset-bottom))",zIndex:100,boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)"}}>
         {NAV.map(n=>{const active=n.id==="more"?isMoreTab||tab==="more":tab===n.id;return(
-          <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"6px 4px",background:"none",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",background:active?"rgba(99,102,241,.08)":"transparent",transition:"all .18s"}}>
-            <div style={{position:"relative"}}><n.icon size={21} strokeWidth={active?2.4:1.6}/>{n.badge&&n.badge>0&&<div style={{position:"absolute",top:-4,right:-6,width:16,height:16,background:C.red,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff",border:"2px solid #fff"}}>{n.badge>9?"9+":n.badge}</div>}</div>
+          <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",background:active?"rgba(99,102,241,.08)":"transparent",transition:"all .18s"}}>
+            {n.id==="chat"?(
+              <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,display:"flex",alignItems:"center",justifyContent:"center",marginTop:-10,boxShadow:`0 4px 12px ${C.accent}55`,marginBottom:2}}>
+                <n.icon size={18} color="#fff" strokeWidth={2.2}/>
+              </div>
+            ):(
+              <div style={{position:"relative"}}><n.icon size={21} strokeWidth={active?2.4:1.6}/>{n.badge&&n.badge>0&&<div style={{position:"absolute",top:-4,right:-6,width:16,height:16,background:C.red,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff",border:"2px solid #fff"}}>{n.badge>9?"9+":n.badge}</div>}</div>
+            )}
             <span style={{fontSize:10,fontWeight:active?700:500}}>{n.label}</span>
           </button>
         );})}
@@ -4016,9 +4085,9 @@ function AppInner(){
       {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} onSave={u=>{setBills(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Bill updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setBills(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="debt"&&<EditModal item={editItem} categories={categories} onSave={u=>{setDebts(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setDebts(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {modal==="quickactions"&&(()=>{
-        const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Scan Receipt",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Envelopes",ic:"📦"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📊"},{id:"insights",l:"Insights",ic:"🔍"},{id:"paycheck",l:"Paycheck",ic:"💰"}];
-        const active=settings.quickActions||["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"];
-        const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"];const next=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];return{...p,quickActions:next};});
+        const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Scan Receipt",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Envelopes",ic:"📦"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📈"},{id:"insights",l:"Insights",ic:"📊"},{id:"paycheck",l:"Paycheck",ic:"💰"},{id:"health",l:"Health Score",ic:"❤️"},{id:"bills_nav",l:"View Bills",ic:"📅"},{id:"calendar_nav",l:"Calendar",ic:"📅"},{id:"recurring_nav",l:"Recurring",ic:"🔄"}];
+        const active=settings.quickActions||["expense","receipt","bill","debt","simulator","budget","expense","bill","paycheck","debt","health","budget","savings","insights"];
+        const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","receipt","bill","debt","simulator","budget","expense","bill","paycheck","debt","health","budget","savings","insights"];const next=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];return{...p,quickActions:next};});
         return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Customize Quick Actions</div><div style={{fontSize:13,color:C.textLight,marginBottom:18}}>Choose up to 6 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);return(<button key={q.id} onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"#fff",cursor:"pointer",textAlign:"left"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button onClick={()=>setModal(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button></div></div>);
       })()}
     </div>
