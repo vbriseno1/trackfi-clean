@@ -945,10 +945,19 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
   const beforeTotal=billsBeforePay.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const spentSoFar=expenses.filter(e=>e.date?.startsWith(thisMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-  const mSpent=spentSoFar;  const ti2=(parseFloat(income.primary||0))+(parseFloat(income.other||0));
+  const mSpent=spentSoFar;const _pvMult=income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17;const ti2=(parseFloat(income.primary||0)*_pvMult)+(parseFloat(income.other||0));
   const dailyBurn=spentSoFar/Math.max(1,today);
   const projectedSpend=dailyBurn*daysUntilPay;
-  const safeToSpend=Math.max(0,checking-beforeTotal-projectedSpend-200);
+  // Match AppInner sts formula: checking + other income - bills before pay - projected - envelopes - buffer
+  const _pvOtherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const _pvOtherProRated=_pvOtherMonthly*(daysUntilPay/30);
+  const _pvEnvMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  const _pvEnvReserve=budgetGoals.reduce((s,g)=>{
+    const lim=parseFloat(g.limit||0);if(!lim)return s;
+    const spentG=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(_pvEnvMs)).reduce((a,e)=>a+(parseFloat(e.amount)||0),0);
+    return s+(Math.max(0,lim-spentG)*Math.min(1,daysUntilPay/30));
+  },0);
+  const safeToSpend=Math.max(0,checking+_pvOtherProRated-beforeTotal-projectedSpend-_pvEnvReserve-200);
   return(
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
@@ -2566,7 +2575,10 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
   const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0));
   const liquid=(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));
-  const moExp=te/Math.max(1,12);
+  const _hsNow=new Date();const _hsMs=_hsNow.getFullYear()+"-"+String(_hsNow.getMonth()+1).padStart(2,"0");
+  const moExpActual=expenses.filter(e=>e.date?.startsWith(_hsMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const _uniqueMonths=new Set(expenses.map(e=>e.date?.slice(0,7)).filter(Boolean)).size;
+  const moExp=moExpActual>0?moExpActual:(te>0?te/Math.max(1,_uniqueMonths):1);
   const sr=ti>0?Math.max(0,(ti-moExp)/ti*100):0;
   const dti=ti>0?(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/ti*100):0;
   const ef=liquid/Math.max(1,moExp);
@@ -2671,7 +2683,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
       })()}
     </div>
   );
-}function IncomeSpendingView({expenses,income,trades}){
+}function IncomeSpendingView({expenses,income,trades,bills=[]}){
   const[range,setRange]=useState("1M");
   const now=new Date();
   const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
@@ -3238,7 +3250,7 @@ function AppInner(){
         try{if(tr&&tr.length)setTrades(tr);}catch{}
         try{if(ta)setTradingAccount(ta);}catch{}
         try{if(ac)setAccounts(a=>({...a,...ac}));}catch{}
-        try{if(inc)setIncome(a=>({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",...a,...inc}));}catch{}
+        try{if(inc)setIncome(a=>({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...a,...inc}));}catch{}
         try{if(sett)setSettings(a=>({...a,...sett}));}catch{}
         try{if(cc)setCalColors(a=>({...a,...cc}));}catch{}
         try{if(nts&&nts.length)setNotifs(nts);}catch{}
@@ -3353,12 +3365,15 @@ function AppInner(){
   const projectedUntilPay=burnRate*daysUntilNextPay;
   // Budget envelopes: reduce sts by the portion of variable budgets remaining until next pay
   // e.g. if haircut budget is $150/mo and next pay is 7 days away, reserve $35 (7/30 * $150)
+  const _envelopeMs=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
   const envelopeReserve=budgetGoals.reduce((s,g)=>{
     const limit=parseFloat(g.limit||0);if(!limit)return s;
-    const ms_e=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
-    const spent=0;// expenses already filtered into sts via projectedUntilPay
+    // Subtract what's already been spent in this category this month
+    const spentCat=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(_envelopeMs)).reduce((a,e)=>a+(parseFloat(e.amount)||0),0);
+    const remaining=Math.max(0,limit-spentCat);
+    // Reserve the proportion of remaining budget that covers days until next pay
     const dayFraction=Math.min(1,daysUntilNextPay/30);
-    return s+(limit*dayFraction);
+    return s+(remaining*dayFraction);
   },0);
   // Other income arriving before next pay (rental, dividends, freelance pro-rated to pay period)
   const otherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
@@ -3493,7 +3508,7 @@ function AppInner(){
     if(d.name)setGreetName(d.name);
     setAppName("Trackfi");
     if(d.profCategory)setProfCategory(d.profCategory);if(d.profSub)setProfSub(d.profSub);
-    if(d.income)setIncome(d.income);if(d.accounts)setAccounts({...d.accounts});
+    if(d.income)setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...d.income});if(d.accounts)setAccounts({...d.accounts});
     
 
     const hasTrading=parseFloat(d.income?.trading||0)>0;
@@ -3523,8 +3538,8 @@ function AppInner(){
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 {(()=>{
-                  const sr2=totalIncome>0?Math.max(0,(totalIncome-burnRate*30)/totalIncome*100):0;
-                  const sc=Math.round(Math.min(10,Math.max(1,((sr2>20?100:sr2>10?75:sr2>5?50:25)*.25+(parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0))>totalIncome?100:50)*.2+(totalDebt===0?100:60)*.2+100*.35)/10));
+                  const sr2=totalIncome>0?Math.max(0,(totalIncome-totalExp)/totalIncome*100):0;
+                  const sc=Math.round(Math.min(10,Math.max(1,((sr2>20?100:sr2>10?75:sr2>5?50:25)*.25+(parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0))>=(totalExp*3)?100:(parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0))>=(totalExp)?70:40)*.2+(totalDebt===0?100:Math.max(20,100-Math.round(totalDebt/Math.max(1,totalIncome)*100)))*.2+100*.35)/10));
                   const col=sc>=8?C.green:sc>=6?C.accent:sc>=4?C.amber:C.red;
                   return(<button onClick={()=>navTo("health")} style={{background:col+"18",border:`1px solid ${col}44`,borderRadius:99,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
                     <div style={{fontFamily:MF,fontWeight:800,fontSize:12,color:col}}>{sc}/10</div>
@@ -3934,7 +3949,7 @@ function AppInner(){
         {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} onNavigate={navTo}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
