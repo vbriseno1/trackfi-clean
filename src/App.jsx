@@ -7,7 +7,7 @@ import { LayoutDashboard, Wallet, CalendarClock, CreditCard, Target, PiggyBank,
   Zap, FileText, Download, Clock, Moon, Sun, Lock,
   Filter, Database, RefreshCw, ChevronDown } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, BarChart, Bar, Cell, PieChart, Pie } from "recharts";
+  LineChart, Line, BarChart, Bar, Cell, PieChart, Pie, ComposedChart } from "recharts";
 
 // 🔑 Replace with your Supabase project URL when ready
 const SUPA_URL = "https://lkxznfbcnvsbugffvobw.supabase.co";
@@ -134,7 +134,7 @@ const todayStr = () => new Date().toISOString().split("T")[0];
 const dueIn  = d => Math.ceil((new Date(d)-new Date(todayStr()))/86400000);
 const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); };
 const dayOfMonth  = () => new Date().getDate();
-const fmtDate = s => { if(!s)return""; const d=new Date(s+"T00:00:00"); return MOS[d.getMonth()]+" "+d.getDate(); };
+const fmtDate = s => { if(!s)return""; const d=new Date(s+"T00:00:00"); return FULL_MOS[d.getMonth()]+" "+d.getDate(); };
 const getScope=()=>{try{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(s?.user?.id)return"fv6_"+s.user.id.slice(0,8)+":";let d=localStorage.getItem("fv_device_id");if(!d){d="d_"+Math.random().toString(36).slice(2,10);localStorage.setItem("fv_device_id",d);}return"fv6_"+d+":";}catch{return"fv6_local:";}};
 const sg = async k => { try { const r=localStorage.getItem(getScope()+k.replace("fv6:","")); if(r!==null)return JSON.parse(r); const legacy=localStorage.getItem(k); return legacy?JSON.parse(legacy):null; } catch { return null; } };
 const ss = async (k,v) => { try { localStorage.setItem(getScope()+k.replace("fv6:",""),JSON.stringify(v)); } catch {} };
@@ -599,7 +599,9 @@ Or ask: \"can I afford $200?\""}]);
   const bs=bills.reduce((s,b)=>{if(b.paid)return s;const d=b.dueDate||"";return d&&d<=chatNextPayStr?s+(parseFloat(b.amount)||0):s;},0);
   const burn=dayOfMonth()>0?te/dayOfMonth():0;
   const chatProjected=burn*Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
-  const sts=Math.max(0,ck-bs-chatProjected-200);
+  const chatOtherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const chatOtherProRated=chatOtherMonthly*(Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000))/30);
+  const sts=Math.max(0,ck+chatOtherProRated-bs-chatProjected-200);
   function handleQ(t){
     if(t.includes("afford")||t.includes("safe")){const m=t.match(/[\d,]+/);const a=m?parseFloat(m[0].replace(/,/g,"")):null;if(a)return a<=sts?"Yes! "+fmt(a)+" fits in "+fmt(sts):"No — "+fmt(a)+" exceeds safe-to-spend "+fmt(sts);return "Safe-to-spend: "+fmt(sts);}
     if(t.includes("bill")||t.includes("due")){const up=bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=14);const ov=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);return(ov.length?"🚨 Overdue: "+ov.map(b=>b.name+" "+fmt(b.amount)).join(", ")+"\
@@ -708,8 +710,8 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
       <div style={{background:C.navy,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>This Month vs Last Month</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
-          <div><div style={{fontFamily:MF,fontSize:32,fontWeight:800,color:"#fff"}}>{fmt(thisTotal)}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>{MOS[now.getMonth()]} spending</div></div>
-          <div style={{textAlign:"right"}}><div style={{fontFamily:MF,fontSize:18,fontWeight:700,color:diff>0?C.redMid:C.greenMid}}>{diff>0?"+":""}{diff.toFixed(1)}%</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>vs {MOS[new Date(now.getFullYear(),now.getMonth()-1,1).getMonth()]}</div></div>
+          <div><div style={{fontFamily:MF,fontSize:32,fontWeight:800,color:"#fff"}}>{fmt(thisTotal)}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>{FULL_MOS[now.getMonth()]} spending</div></div>
+          <div style={{textAlign:"right"}}><div style={{fontFamily:MF,fontSize:18,fontWeight:700,color:diff>0?C.redMid:C.greenMid}}>{diff>0?"+":""}{diff.toFixed(1)}%</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>vs {FULL_MOS[new Date(now.getFullYear(),now.getMonth()-1,1).getMonth()]}</div></div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>{[["Daily avg",fmt(dailyAvg),C.accentMid],["Projected",fmt(projectedMonth),C.amberMid],["Last month",fmt(lastTotal),C.textFaint]].map(([l,v,c])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div><div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:c}}>{v}</div></div>)}</div>
       </div>
@@ -766,11 +768,141 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
         })}
       </div>}
       {catSorted.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><BarChart data={catSorted.slice(0,5)} layout="vertical" barSize={16} margin={{left:4,right:50}}><XAxis type="number" hide/><YAxis type="category" dataKey="name" tick={{fontSize:11,fill:C.textMid}} width={80} axisLine={false} tickLine={false}/><Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>}
+
+      {/* 6-month spending trend */}
+      {(()=>{
+        const months=Array.from({length:6},(_,i)=>{
+          const d=new Date(now.getFullYear(),now.getMonth()-5+i,1);
+          const ms=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+          const total=expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+          const cats=expenses.filter(e=>e.date?.startsWith(ms)).reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
+          return{month:FULL_MOS[d.getMonth()].slice(0,3),total,cats,isCurrent:i===5};
+        });
+        if(!months.some(m=>m.total>0))return null;
+        const maxVal=Math.max(...months.map(m=>m.total))||1;
+        const avgSpend=months.filter(m=>m.total>0).reduce((s,m)=>s+m.total,0)/Math.max(1,months.filter(m=>m.total>0).length);
+        return(
+          <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+              <div>
+                <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>6-Month Trend</div>
+                <div style={{fontSize:12,color:C.textLight,marginTop:2}}>Avg: {fmt(avgSpend)}/mo</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:11,color:thisTotal>avgSpend?C.red:C.green,fontWeight:700,background:thisTotal>avgSpend?C.redBg:C.greenBg,borderRadius:99,padding:"2px 8px"}}>
+                  {thisTotal>avgSpend?"↑ "+((thisTotal-avgSpend)/avgSpend*100).toFixed(0)+"% above avg":"↓ "+((avgSpend-thisTotal)/avgSpend*100).toFixed(0)+"% below avg"}
+                </div>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={months} margin={{left:-10,right:4,top:4,bottom:0}} barSize={28}>
+                <XAxis dataKey="month" tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
+                <Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/>
+                <Bar dataKey="total" radius={[5,5,0,0]}>{months.map((m,i)=><Cell key={i} fill={m.isCurrent?C.accent:m.total>avgSpend?C.red+"88":C.accent+"55"}/>)}</Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div style={{display:"flex",gap:12,marginTop:8,fontSize:11,color:C.textLight,justifyContent:"center"}}>
+              <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.accent}}/> Current</div>
+              <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.red+"88"}}/> Above average</div>
+              <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.accent+"55"}}/> Below average</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Spending by day of week */}
+      {expenses.length>=10&&(()=>{
+        const DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+        const DAYS_SHORT=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+        const dow=Array.from({length:7},(_,d)=>{
+          const exps=expenses.filter(e=>new Date((e.date||"")+"T00:00:00").getDay()===d);
+          const total=exps.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+          const count=exps.length;
+          return{day:DAYS_SHORT[d],total,count,avg:count>0?total/count:0};
+        });
+        const maxTotal=Math.max(...dow.map(d=>d.total))||1;
+        const topDay=dow.reduce((a,b)=>a.total>b.total?a:b);
+        return(
+          <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
+            <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Spending by Day of Week</div>
+            <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>{topDay.day} is your biggest spending day — {fmt(topDay.total)} total</div>
+            <div style={{display:"flex",gap:4,alignItems:"flex-end",height:80,marginBottom:10}}>
+              {dow.map(({day,total,count})=>{
+                const h=Math.max(6,Math.round((total/maxTotal)*72));
+                const isTop=total===Math.max(...dow.map(d=>d.total));
+                return(
+                  <div key={day} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                    <div style={{fontSize:9,color:C.textFaint,fontWeight:600}}>{count>0?fmt(total/count).replace("$","$").replace(".00",""):"—"}</div>
+                    <div style={{width:"100%",height:h,background:isTop?`linear-gradient(180deg,${C.accent},${C.purple})`:C.accentBg,borderRadius:"4px 4px 0 0",transition:"height .4s"}}/>
+                    <div style={{fontSize:10,color:isTop?C.accent:C.textLight,fontWeight:isTop?700:400}}>{day}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+              {dow.map(({day,count})=>(
+                <div key={day} style={{textAlign:"center",fontSize:9,color:C.textLight}}>{count} txn{count!==1?"s":""}</div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Spending velocity — how fast are you spending this month */}
+      {thisTotal>0&&(()=>{
+        const daysGone=now.getDate();
+        const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+        const daysLeft=daysInMonth-daysGone;
+        const dailyRate=thisTotal/daysGone;
+        const projected=dailyRate*daysInMonth;
+        const paceVsLast=lastTotal>0?projected/lastTotal:null;
+        const weeklyData=Array.from({length:Math.ceil(daysGone/7)},(_,w)=>{
+          const start=w*7+1,end=Math.min((w+1)*7,daysGone);
+          const wTotal=thisExp.filter(e=>{const d=parseInt((e.date||"").split("-")[2]||0);return d>=start&&d<=end;}).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+          return{week:"Wk "+(w+1),total:wTotal,days:end-start+1};
+        });
+        return(
+          <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
+            <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Spending Velocity</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16}}>
+              {[
+                ["Daily Rate",fmt(dailyRate)+"/day",dailyRate>thisTotal/daysInMonth*1.2?C.red:C.green],
+                ["Projected",fmt(projected),projected>ti?C.red:projected>ti*.8?C.amber:C.green],
+                ["Days Left",daysLeft+" days",C.textMid],
+              ].map(([l,v,c])=>(
+                <div key={l} style={{background:C.surfaceAlt,borderRadius:12,padding:"10px 12px",textAlign:"center"}}>
+                  <div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:3,textTransform:"uppercase"}}>{l}</div>
+                  <div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:c}}>{v}</div>
+                </div>
+              ))}
+            </div>
+            {weeklyData.length>1&&<><div style={{fontSize:11,color:C.textLight,marginBottom:8}}>Weekly breakdown</div>
+            <div style={{display:"flex",gap:6,alignItems:"flex-end",height:50}}>
+              {weeklyData.map(({week,total,days},i)=>{
+                const maxW=Math.max(...weeklyData.map(w=>w.total))||1;
+                const h=Math.max(4,Math.round((total/maxW)*44));
+                const dailyW=total/days;
+                return(
+                  <div key={week} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+                    <div style={{fontSize:9,color:C.textFaint}}>{fmt(dailyW).replace("$","$").replace(".00","")}/d</div>
+                    <div style={{width:"100%",height:h,background:i===weeklyData.length-1?C.accent:C.accentBg,borderRadius:"3px 3px 0 0"}}/>
+                    <div style={{fontSize:9,color:C.textLight}}>{week}</div>
+                  </div>
+                );
+              })}
+            </div></>}
+            {paceVsLast&&<div style={{marginTop:12,padding:"10px 14px",borderRadius:10,background:paceVsLast>1.1?C.redBg:paceVsLast<0.9?C.greenBg:C.accentBg,border:`1px solid ${paceVsLast>1.1?C.redMid:paceVsLast<0.9?C.greenMid:C.accentMid}`,fontSize:12,color:paceVsLast>1.1?C.red:paceVsLast<0.9?C.green:C.accent,fontWeight:500}}>
+              {paceVsLast>1.1?"⚠️ Spending "+((paceVsLast-1)*100).toFixed(0)+"% faster than last month":paceVsLast<0.9?"✅ Spending "+((1-paceVsLast)*100).toFixed(0)+"% slower than last month":"📊 On pace with last month"}
+            </div>}
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
-function PaycheckView({bills,income,expenses,accounts,onAdd}){
+function PaycheckView({bills,income,expenses,accounts,budgetGoals=[],onAdd}){
   const now=new Date();
   const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const checking=parseFloat(accounts.checking||0);
@@ -821,8 +953,43 @@ function PaycheckView({bills,income,expenses,accounts,onAdd}){
       </div>
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Projected Spending</div>
-        {[["Daily burn rate",fmt(dailyBurn)+"/day",C.textMid],["Days left",String(daysUntilPay)+" days",C.textMid],["Projected spend",fmt(projectedSpend),projectedSpend>payPerPeriod?C.red:C.amber],["Balance",fmt(checking),C.green],["Bills due","-"+fmt(beforeTotal),C.red],["Safe to spend",fmt(safeToSpend),safeToSpend>500?C.green:safeToSpend>0?C.amber:C.red]].map(([l,v,c])=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>{l}</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:c}}>{v}</span></div>)}
+        {[["Daily burn rate",fmt(dailyBurn)+"/day",C.textMid],["Days until pay",String(daysUntilPay)+" days",C.textMid],["Projected spend",fmt(projectedSpend),projectedSpend>payPerPeriod?C.red:C.amber],["Checking balance",fmt(checking),C.green],["Bills due","-"+fmt(beforeTotal),C.red],["Safe to spend",fmt(safeToSpend),safeToSpend>500?C.green:safeToSpend>0?C.amber:C.red]].map(([l,v,c])=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>{l}</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:c}}>{v}</span></div>)}
       </div>
+      {budgetGoals.length>0&&(()=>{
+        const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+        const envelopes=budgetGoals.map(g=>{
+          const lim=parseFloat(g.limit||0);
+          const reserve=lim*(Math.min(1,daysUntilPay/30));
+          return{...g,lim,reserve};
+        }).filter(g=>g.lim>0);
+        if(!envelopes.length)return null;
+        const totalReserve=envelopes.reduce((s,g)=>s+g.reserve,0);
+        return(
+          <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+              <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Envelope Reserves</div>
+              <div style={{fontSize:12,color:C.purple,fontWeight:700,background:C.purpleBg,borderRadius:99,padding:"2px 8px"}}>{fmt(totalReserve)} reserved</div>
+            </div>
+            <div style={{fontSize:12,color:C.textLight,marginBottom:12}}>Variable budget portions reserved until payday</div>
+            {envelopes.map(g=>(
+              <div key={g.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.borderLight}`}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600,color:C.text}}>{g.category}</div>
+                  {g.note&&<div style={{fontSize:11,color:C.textLight}}>{g.note}</div>}
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.purple}}>{fmt(g.reserve)}</div>
+                  <div style={{fontSize:10,color:C.textFaint}}>{fmt(g.lim)}/mo budget</div>
+                </div>
+              </div>
+            ))}
+            <div style={{display:"flex",justifyContent:"space-between",paddingTop:10,marginTop:4,borderTop:`1px solid ${C.border}`}}>
+              <span style={{fontSize:13,fontWeight:600,color:C.text}}>Total reserved</span>
+              <span style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.purple}}>{fmt(totalReserve)}</span>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -842,7 +1009,7 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
   const chartData=balHist.map(h=>({date:h.date,assets:(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0),netWorth:((h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0))-totalDebt})).slice(-52);
   const firstNW=chartData[0]?.netWorth||currentNW;
   const change=currentNW-firstNW;
-  const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return MOS[d.getMonth()]+" "+d.getDate();};
+  const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return FULL_MOS[d.getMonth()]+" "+d.getDate();};
   const TT=({active,payload,label})=>{if(!active||!payload?.length)return null;return(<div style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"10px 14px",fontSize:12}}><div style={{fontWeight:700,marginBottom:6}}>{fD(label)}</div>{payload.map(p=><div key={p.dataKey} style={{display:"flex",justifyContent:"space-between",gap:16,marginBottom:2}}><span style={{color:C.textLight}}>{p.name}</span><span style={{fontWeight:700}}>{fmt(p.value)}</span></div>)}</div>);};
   return(
     <div className="fu">
@@ -895,13 +1062,53 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
           </div>
         );
       })()}
-      <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18}}>
+      <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Asset Breakdown</div>
         {[{l:"Checking",v:accounts.checking,ic:"🏦"},{l:"Savings",v:accounts.savings,ic:"💰"},{l:"Cushion",v:accounts.cushion,ic:"🛡️"},{l:"Investments",v:accounts.investments,ic:"📈"},{l:"Property",v:accounts.property,ic:"🏠"},{l:"Vehicles",v:accounts.vehicles,ic:"🚗"}].filter(a=>parseFloat(a.v||0)>0).map(a=>{
           const val=parseFloat(a.v||0);const pct=totalAssets>0?(val/totalAssets*100):0;
           return(<div key={a.l} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><div style={{display:"flex",alignItems:"center",gap:6}}><span>{a.ic}</span><span style={{fontSize:13,fontWeight:600,color:C.text}}>{a.l}</span></div><div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:12,color:C.textLight}}>{pct.toFixed(0)}%</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.green}}>{fmt(val)}</span></div></div><BarProg pct={pct} color={C.green} h={5}/></div>);
         })}
+        {totalAssets===0&&<div style={{fontSize:13,color:C.textLight,textAlign:"center",padding:"12px 0"}}>Add account balances in Settings to see your asset breakdown</div>}
       </div>
+      {totalDebt>0&&(
+        <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+          <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Liability Breakdown</div>
+          <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>What you owe — {debts.length} debt{debts.length!==1?"s":""}</div>
+          {debts.map((d,i)=>{
+            const bal=parseFloat(d.balance||0);
+            const pct=totalDebt>0?(bal/totalDebt*100):0;
+            const minPay=parseFloat(d.minPayment||0);
+            const rate=parseFloat(d.rate||0);
+            const monthlyInt=bal*(rate/100/12);
+            return(
+              <div key={d.id} style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:PIE_COLORS[i%PIE_COLORS.length]}}/>
+                    <span style={{fontSize:13,fontWeight:600,color:C.text}}>{d.name}</span>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(bal)}</span>
+                    {rate>0&&<span style={{fontSize:11,color:C.textLight,marginLeft:6}}>{rate}% APR</span>}
+                  </div>
+                </div>
+                <BarProg pct={pct} color={PIE_COLORS[i%PIE_COLORS.length]} h={5}/>
+                {(minPay>0||monthlyInt>0)&&<div style={{display:"flex",gap:12,marginTop:4,fontSize:11,color:C.textLight}}>
+                  {minPay>0&&<span>Min: {fmt(minPay)}/mo</span>}
+                  {monthlyInt>0&&<span style={{color:C.red}}>Interest: {fmt(monthlyInt)}/mo</span>}
+                </div>}
+              </div>
+            );
+          })}
+          <div style={{display:"flex",justifyContent:"space-between",paddingTop:10,marginTop:4,borderTop:`1px solid ${C.border}`}}>
+            <span style={{fontSize:13,fontWeight:600,color:C.text}}>Total debt</span>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.red}}>{fmt(totalDebt)}</div>
+              <div style={{fontSize:11,color:C.textLight}}>= {totalAssets>0?((totalDebt/totalAssets)*100).toFixed(0):100}% of assets</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -933,8 +1140,7 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
       </div>
     </div>
   );
-}
-function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast}){
+}function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast}){
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
   const[showChart,setShowChart]=useState(true);
@@ -1002,7 +1208,10 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
           <div style={{marginBottom:16}}>
             {/* Budget summary header */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Spending Envelopes — {MOS[now.getMonth()]}</div>
+              <div>
+                  <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Spending Envelopes — {FULL_MOS[now.getMonth()]}</div>
+                  <div style={{fontSize:11,color:C.textLight,marginTop:2}}>Variable expenses: gas, haircuts, groceries...</div>
+                </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 {overCount>0&&<div style={{fontSize:11,fontWeight:700,color:C.red,background:C.redBg,borderRadius:99,padding:"2px 8px"}}>{overCount} over</div>}
                 {warnCount>0&&<div style={{fontSize:11,fontWeight:700,color:C.amber,background:C.amberBg,borderRadius:99,padding:"2px 8px"}}>{warnCount} near limit</div>}
@@ -1019,7 +1228,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
               <div style={{height:8,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:6}}>
                 <div style={{height:"100%",width:totalBudgeted>0?Math.min(100,(totalSpentB/totalBudgeted)*100).toFixed(1)+"%":"0%",background:totalSpentB>totalBudgeted?C.red:totalSpentB/totalBudgeted>0.8?C.amber:C.green,borderRadius:99,transition:"width .4s"}}/>
               </div>
-              <div style={{fontSize:11,color:C.textLight}}>{daysLeft_b} days left in {MOS[now.getMonth()]}</div>
+              <div style={{fontSize:11,color:C.textLight}}>{daysLeft_b} days left in {FULL_MOS[now.getMonth()]}</div>
             </div>}
             {/* Per-category budget cards */}
             {budgets.map(g=>(
@@ -1039,7 +1248,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
                   <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
                     <div style={{fontSize:13,fontWeight:800,fontFamily:MF,color:g.over?C.red:g.warn?C.amber:C.green}}>{g.over?"Over by "+fmt(g.sp-g.lim):fmt(g.rem)+" left"}</div>
                     {!g.over&&g.dailyAllow>0&&<div style={{fontSize:10,color:C.textLight}}>{fmt(g.dailyAllow)}/day to stay on track</div>}
-                    <button onClick={()=>{if(window.confirm("Remove budget for "+g.category+"?"))setBGoals(p=>p.filter(x=>x.id!==g.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textFaint,padding:0}}><X size={11}/></button>
+                    <button onClick={()=>{setBGoals(p=>p.filter(x=>x.id!==g.id));showToast&&showToast("Envelope removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textFaint,padding:0}}><X size={11}/></button>
                   </div>
                 </div>
                 <div style={{height:7,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:g.over?4:0}}>
@@ -1049,7 +1258,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
                 {g.warn&&!g.over&&<div style={{fontSize:11,color:C.amber,marginTop:4,fontWeight:500}}>Getting close — {fmt(g.rem)} remaining</div>}
               </div>
             ))}
-            {budgets.length===0&&<button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:10,padding:"10px 14px",color:C.purple,fontSize:13,cursor:"pointer",width:"100%",justifyContent:"center",marginBottom:8}}><Target size={13}/>Set your first budget goal</button>}
+            {budgets.length===0&&<button className="ba" onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:10,padding:"10px 14px",color:C.purple,fontSize:13,cursor:"pointer",width:"100%",justifyContent:"center",marginBottom:8}}><Target size={13}/>+ Add Spending Envelope</button>}
           </div>
         );
       })()}
@@ -1093,10 +1302,13 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         const cat=categories.find(c=>c.name===e.category);
         if(selectMode){const isSel=selected.has(e.id);return(<div key={e.id} onClick={()=>setSelected(p=>{const n=new Set(p);if(n.has(e.id))n.delete(e.id);else n.add(e.id);return n;})} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:isSel?C.accentBg:C.surface,border:`1.5px solid ${isSel?C.accent:C.border}`,borderRadius:16,marginBottom:8,cursor:"pointer"}}><div style={{width:22,height:22,borderRadius:"50%",background:isSel?C.accent:C.bg,border:`2px solid ${isSel?C.accent:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{isSel&&<Check size={12} color="#fff"/>}</div><div style={{width:34,height:34,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{cat?.icon||"💸"}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{e.name}</div><div style={{fontSize:11,color:C.textLight}}>{e.date} · {e.category}</div></div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red,flexShrink:0}}>-{fmt(e.amount)}</div></div>);}
         return(
-          <ExpenseRow key={e.id} e={e} cat={cat} onEdit={()=>setEditItem({type:"expense",data:e})} onDelete={()=>{if(window.confirm("Delete "+e.name+"?")){setExpenses(p=>p.filter(x=>x.id!==e.id));showToast&&showToast("Deleted — "+e.name,"error");}}}/>
+          <ExpenseRow key={e.id} e={e} cat={cat} onEdit={()=>setEditItem({type:"expense",data:e})} onDelete={()=>{setExpenses(p=>p.filter(x=>x.id!==e.id));showToast&&showToast("Deleted — "+e.name,"error");}}/>
         );
       })}
-      {showAdd&&<Modal title="Spending Envelope" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Add Envelope" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Monthly Budget ($)" type="number" placeholder="e.g. 150 for haircuts, 300 for gas" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
+      {showAdd&&<Modal title="Spending Envelope" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Add Envelope" accent={C.purple}><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.accent,lineHeight:1.5}}>
+        💡 Set a monthly budget for <strong>variable expenses</strong> like gas, haircuts, groceries, dining. These reserve money in your safe-to-spend before you even log them.
+      </div>
+      <FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Note (optional)" placeholder="e.g. haircuts ~2x/month, gas varies" value={bForm.note||""} onChange={e=>setBForm(p=>({...p,note:e.target.value}))}/><FI label="Monthly Budget ($)" type="number" placeholder="e.g. 150" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
     </div>
   );
 }function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
@@ -1147,14 +1359,14 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
               </div>
               <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:b.paid?C.textLight:C.text}}>{fmt(b.amount)}</div>
               <button className="ba" onClick={()=>setEditItem({type:"bill",data:b})} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,fontSize:11,fontWeight:600,padding:"4px 6px"}}>Edit</button>
-              <button className="ba" onClick={()=>{if(window.confirm("Delete "+b.name+"?"))setBills(p=>p.filter(x=>x.id!==b.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
+              <button className="ba" onClick={()=>{setBills(p=>p.filter(x=>x.id!==b.id));showToast&&showToast("Bill removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
             </div>
           </div>
         );
       })}
     {bills.length>3&&(()=>{
       const now3=new Date();
-      const last6=Array.from({length:6},(_,i)=>{const d=new Date(now3.getFullYear(),now3.getMonth()-5+i,1);const ms=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');const paid=bills.filter(b=>b.dueDate?.startsWith(ms)&&b.paid).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);const total=bills.filter(b=>b.dueDate?.startsWith(ms)).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);return{month:MOS[d.getMonth()],paid,total,isCurrent:i===5};});
+      const last6=Array.from({length:6},(_,i)=>{const d=new Date(now3.getFullYear(),now3.getMonth()-5+i,1);const ms=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');const paid=bills.filter(b=>b.dueDate?.startsWith(ms)&&b.paid).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);const total=bills.filter(b=>b.dueDate?.startsWith(ms)).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);return{month:FULL_MOS[d.getMonth()].slice(0,3),paid,total,isCurrent:i===5};});
       if(!last6.some(m=>m.total>0))return null;
       const maxB=Math.max(...last6.map(m=>m.total))||1;
       return(<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:14}}>
@@ -1175,7 +1387,9 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
     })()}
     </div>
   );
-}function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt}){
+}
+
+function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt}){
   const[selectedDebt,setSelectedDebt]=useState(null);
   const[strategy,setStrategy]=useState("avalanche");
   const[payModal,setPayModal]=useState(null);
@@ -1371,7 +1585,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
                   <span style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.red}}>{fmt(bal)}</span>
                   <button onClick={()=>setPayModal(d)} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:8,cursor:"pointer",color:C.green,fontSize:11,fontWeight:700,padding:"4px 8px"}}>💳 Pay</button>
                   <button onClick={()=>setEditItem({type:"debt",data:d})} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,fontSize:12,fontWeight:600,padding:"4px 6px"}}>Edit</button>
-                  <button onClick={()=>{if(window.confirm("Delete "+d.name+"?"))setDebts(p=>p.filter(x=>x.id!==d.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
+                  <button onClick={()=>{setDebts(p=>p.filter(x=>x.id!==d.id));showToast&&showToast("Debt removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
                 </div>
               </div>
               {d.original&&<><BarProg pct={pct} color={pct>60?C.green:pct>30?C.accent:C.red} h={6}/><div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:11,color:C.textLight}}><span>{pct.toFixed(0)}% paid off</span><span>of {fmt(orig)}</span></div></>}
@@ -1515,7 +1729,7 @@ function SavingsGoalsView({goals,setGoals,income,showToast}){
       })()}
       {goals.length===0&&<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:48,marginBottom:12}}>🎯</div><div style={{fontFamily:MF,fontSize:16,fontWeight:700,color:C.text,marginBottom:8}}>No savings goals yet</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Set a goal and watch your ring fill up</div><button onClick={()=>setShowAdd(true)} style={{padding:"12px 24px",borderRadius:14,background:C.accent,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add First Goal</button></div>}
       {view==="rings"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-        {goals.map(g=><div key={g.id} style={{position:"relative"}}><GoalRingInner goal={{...g,saved:parseFloat(g.saved||0),target:parseFloat(g.target||0),monthly:parseFloat(g.monthly||0)}}/><button onClick={()=>{if(window.confirm("Delete goal: "+g.name+"?"))setGoals(p=>p.filter(x=>x.id!==g.id));}} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,.06)",border:"none",borderRadius:"50%",width:24,height:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={12} color={C.textLight}/></button></div>)}
+        {goals.map(g=><div key={g.id} style={{position:"relative"}}><GoalRingInner goal={{...g,saved:parseFloat(g.saved||0),target:parseFloat(g.target||0),monthly:parseFloat(g.monthly||0)}}/><button onClick={()=>{setGoals(p=>p.filter(x=>x.id!==g.id));showToast&&showToast("Goal removed","error");}} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,.06)",border:"none",borderRadius:"50%",width:24,height:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={12} color={C.textLight}/></button></div>)}
       </div>}
       {view==="list"&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
         {goals.map(g=>{
@@ -1542,7 +1756,7 @@ function SavingsGoalsView({goals,setGoals,income,showToast}){
                 onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){const a=parseFloat(e.target.value);if(a>0){setGoals(p=>p.map(x=>{if(x.id!==g.id)return x;const ns=Math.min(x.target,(x.saved||0)+a);if(ns>=x.target)setTimeout(()=>showToast&&showToast("🎉 Goal complete: "+x.name),100);else showToast&&showToast("+"+fmt(a)+" → "+x.name);return{...x,saved:ns};}));e.target.value='';}};}}/>
               <button onClick={()=>{const inp=document.getElementById("ldep-"+g.id);const a=parseFloat(inp?.value||0);if(a>0){setGoals(p=>p.map(x=>{if(x.id!==g.id)return x;const ns=Math.min(x.target,(x.saved||0)+a);if(ns>=x.target)setTimeout(()=>showToast&&showToast("🎉 Goal complete: "+x.name),100);else showToast&&showToast("+"+fmt(a)+" → "+x.name);return{...x,saved:ns};}));if(inp)inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
               <button onClick={()=>{setEditGoal(g);setEditForm({name:g.name,target:String(g.target),monthly:String(g.monthly||0),saved:String(g.saved||0)});}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",fontSize:12,color:C.textMid,fontWeight:600}}>Edit</button>
-              <button onClick={()=>{if(window.confirm("Delete goal: "+g.name+"?"))setGoals(p=>p.filter(x=>x.id!==g.id));}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.textLight,display:"flex",alignItems:"center"}}><Trash2 size={14}/></button>
+              <button onClick={()=>{setGoals(p=>p.filter(x=>x.id!==g.id));showToast&&showToast("Goal removed","error");}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.textLight,display:"flex",alignItems:"center"}}><Trash2 size={14}/></button>
             </div>
           </div>);
         })}
@@ -1594,7 +1808,7 @@ function TradingView({trades,setTrades,account,setAccount,showToast}){
   const totalPnl=trades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);const wins=trades.filter(t=>parseFloat(t.pnl)>0);const losses=trades.filter(t=>parseFloat(t.pnl)<0);
   const winRate=trades.length>0?((wins.length/trades.length)*100).toFixed(0):0;const avgWin=wins.length>0?wins.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0)/wins.length:0;const avgLoss=losses.length>0?Math.abs(losses.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0)/losses.length):0;
   const bal=parseFloat(account.balance||0),dep=parseFloat(account.deposit||0),ret=dep>0?((bal-dep)/dep*100).toFixed(1):0;
-  const monthly=trades.reduce((a,t)=>{const m=t.date?MOS[new Date(t.date).getMonth()]:"?";a[m]=(a[m]||0)+(parseFloat(t.pnl)||0);return a},{});
+  const monthly=trades.reduce((a,t)=>{const m=t.date?FULL_MOS[new Date(t.date).getMonth()].slice(0,3):"?";a[m]=(a[m]||0)+(parseFloat(t.pnl)||0);return a},{});
   const chartData=Object.entries(monthly).map(([month,pnl])=>({month,pnl}));
   const equityData=useMemo(()=>{let run=parseFloat(account.deposit||0);return[...trades].sort((a,b)=>a.date?.localeCompare(b.date)).map((t,i)=>{run+=(parseFloat(t.pnl)||0);return{i:i+1,equity:parseFloat(run.toFixed(2)),pnl:parseFloat(t.pnl)||0};});},[trades,account.deposit]);
   return(<div className="fu">
@@ -1610,7 +1824,7 @@ function TradingView({trades,setTrades,account,setAccount,showToast}){
     {equityData.length>1&&<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Equity Curve</div><div style={{fontSize:12,color:C.textLight,marginBottom:14}}>Cumulative account value per trade</div><ResponsiveContainer width="100%" height={160}><AreaChart data={equityData} margin={{left:-20,right:4,top:4,bottom:0}}><defs><linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(account.deposit||0))?C.green:C.red} stopOpacity={.2}/><stop offset="95%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(account.deposit||0))?C.green:C.red} stopOpacity={0}/></linearGradient></defs><XAxis dataKey="i" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><Tooltip formatter={(v,n)=>n==="equity"?[fmt(v),"Account Value"]:[fmt(v),"Trade P&L"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Area type="monotone" dataKey="equity" name="equity" stroke={equityData[equityData.length-1]?.equity>=(parseFloat(account.deposit||0))?C.green:C.red} strokeWidth={2.5} fill="url(#eqGrad)" dot={false}/></AreaChart></ResponsiveContainer></div>}
     <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:10}}>Trade Log</div>
     {trades.length===0&&<Empty text="No trades yet. Tap 'Log Trade' to start." icon={BarChart2}/>}
-    {trades.map(t=>{const pnl=parseFloat(t.pnl)||0;return(<Row key={t.id} icon={pnl>=0?"📈":"📉"} title={t.symbol} sub={`${t.date} · ${t.side} · ${t.contracts} contract${t.contracts!=="1"?"s":""}${t.note?" · "+t.note:""}`} right={(pnl>=0?"+":"")+fmt(pnl)} rightColor={pnl>=0?C.green:C.red} rightSub={t.entry&&t.exit?t.entry+" - "+t.exit:""} onDelete={()=>{if(window.confirm("Delete this trade?"))setTrades(p=>p.filter(x=>x.id!==t.id));}} badge={pnl>=0?{label:"WIN",bg:C.greenBg,color:C.green}:{label:"LOSS",bg:C.redBg,color:C.red}}/>);})}
+    {trades.map(t=>{const pnl=parseFloat(t.pnl)||0;return(<Row key={t.id} icon={pnl>=0?"📈":"📉"} title={t.symbol} sub={`${t.date} · ${t.side} · ${t.contracts} contract${t.contracts!=="1"?"s":""}${t.note?" · "+t.note:""}`} right={(pnl>=0?"+":"")+fmt(pnl)} rightColor={pnl>=0?C.green:C.red} rightSub={t.entry&&t.exit?t.entry+" - "+t.exit:""} onDelete={()=>{setTrades(p=>p.filter(x=>x.id!==t.id));showToast&&showToast("Trade removed","error");}} badge={pnl>=0?{label:"WIN",bg:C.greenBg,color:C.green}:{label:"LOSS",bg:C.redBg,color:C.red}}/>);})}
     {showAdd&&<Modal title="Log Trade" icon={BarChart2} onClose={()=>setShowAdd(false)} onSubmit={add} submitLabel="Log Trade" wide><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><FI half label="Symbol" placeholder="ES, NQ, CL..." value={form.symbol||""} onChange={ff("symbol")}/><FI half label="Date" type="date" value={form.date||todayStr()} onChange={ff("date")}/></div><div style={{display:"flex",gap:10,marginBottom:14}}>{["Long","Short"].map(s=><button key={s} className="ba" onClick={()=>setForm(p=>({...p,side:s}))} style={{flex:1,padding:"10px",borderRadius:10,border:`1.5px solid ${form.side===s?C.accent:C.border}`,background:form.side===s?C.accentBg:C.surface,color:form.side===s?C.accent:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}>{s==="Long"?"📈 Long":"📉 Short"}</button>)}</div><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><FI half label="Contracts" type="number" placeholder="1" value={form.contracts||""} onChange={ff("contracts")}/><FI half label="P&L ($)" type="number" placeholder="+250 or -150" value={form.pnl||""} onChange={ff("pnl")}/></div><div style={{display:"flex",gap:12,flexWrap:"wrap"}}><FI half label="Entry Price" type="number" value={form.entry||""} onChange={ff("entry")}/><FI half label="Exit Price" type="number" value={form.exit||""} onChange={ff("exit")}/></div><FI label="Note" placeholder="Setup, lesson..." value={form.note||""} onChange={ff("note")}/></Modal>}
   </div>);
 }
@@ -1642,7 +1856,7 @@ function CalendarView({expenses,bills,calColors,setCalColors,setExpenses,onAdd})
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
         <button onClick={()=>setViewDate(new Date(yr,mo-1,1))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:'6px 12px',cursor:'pointer',fontWeight:700,color:C.text}}>‹</button>
         <div style={{textAlign:'center'}}>
-          <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.text}}>{MOS[mo]} {yr}</div>
+          <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.text}}>{FULL_MOS[mo]} {yr}</div>
           <div style={{fontSize:12,color:C.textLight}}>{fmt(monthTotal)} spent · {monthExp.length} transactions</div>
         </div>
         <button onClick={()=>setViewDate(new Date(yr,mo+1,1))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:'6px 12px',cursor:'pointer',fontWeight:700,color:C.text}}>›</button>
@@ -1692,7 +1906,7 @@ function CalendarView({expenses,bills,calColors,setCalColors,setExpenses,onAdd})
       {/* selected day detail */}
       {selected&&<div style={{background:C.surface,borderRadius:14,padding:'14px',marginBottom:12,boxShadow:'0 1px 4px rgba(10,22,40,.06)'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-          <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>{MOS[mo]} {selected}</div>
+          <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>{FULL_MOS[mo]} {selected}</div>
           {selAmt>0&&<div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red}}>{fmt(selAmt)}</div>}
         </div>
         {selExp.length===0&&(billMap[selected]||[]).length===0&&<div style={{fontSize:13,color:C.textLight}}>Nothing logged this day.</div>}
@@ -1704,7 +1918,7 @@ function CalendarView({expenses,bills,calColors,setCalColors,setExpenses,onAdd})
           <span style={{fontSize:13,color:C.text}}>📅 {b.name}<span style={{fontSize:11,color:b.paid?C.green:C.amber,marginLeft:6}}>{b.paid?'Paid':'Due'}</span></span>
           <span style={{fontSize:13,fontFamily:MF,fontWeight:700,color:b.paid?C.green:C.amber}}>{fmt(b.amount)}</span>
         </div>)}
-        <button onClick={onAdd} style={{marginTop:10,width:'100%',background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:'9px 0',color:C.accent,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Log expense for {MOS[mo]} {selected}</button>
+        <button onClick={onAdd} style={{marginTop:10,width:'100%',background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:'9px 0',color:C.accent,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Log expense for {FULL_MOS[mo]} {selected}</button>
       </div>}
     </div>
   );
@@ -1724,7 +1938,7 @@ function ShiftView({shifts,setShifts,income,profCategory,profSub,showToast}){
     <SH title={prof.icon+" "+prof.shiftLabel+" Tracker"} sub={subRole.label+" · Log hours & calculate pay"} onAdd={()=>setShowAdd(true)} addLabel={"Log "+prof.shiftLabel}/>
     <div style={{background:`linear-gradient(135deg,${C.navy} 0%,#1a3a6e 100%)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>This Month</div><div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:"#fff",marginBottom:14}}>{fmt(mg)}</div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>{[["Shifts",String(ms.length)],["Hours",mh.toFixed(1)],["OT Pay",fmtK(mot)],["YTD",fmtK(ytd)]].map(([l,v])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l}</div><div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:"#fff"}}>{v}</div></div>)}</div></div>
     {shifts.length===0&&<Empty text={`No ${prof.shiftLabel.toLowerCase()}s logged yet.`} icon={Clock}/>}
-    {shifts.slice(0,30).map(s=>{const mult=OT[s.type]||1;const col={Regular:C.accent,Overtime:C.amber,"Double Time":C.red,Night:C.purple,Weekend:C.green,Holiday:C.red}[s.type]||C.accent;return(<div key={s.id} className="rw" style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}><div style={{width:40,height:40,borderRadius:12,background:col+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Clock size={18} color={col}/></div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{s.type} {prof.shiftLabel}</div><div style={{fontSize:12,color:C.textLight,marginTop:2}}>{fmtDate(s.date)} · {s.hours}h @ ${s.rate}/hr{mult!==1&&<span style={{color:col,fontWeight:600}}> ×{mult}</span>}{s.note&&" · "+s.note}</div></div><div style={{textAlign:"right",flexShrink:0}}><div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.green}}>{fmt(s.gross)}</div><button className="db" onClick={()=>{if(window.confirm("Delete this shift?"))setShifts(p=>p.filter(x=>x.id!==s.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:2,display:"flex",marginLeft:"auto",marginTop:4}}><Trash2 size={13}/></button></div></div>);})}
+    {shifts.slice(0,30).map(s=>{const mult=OT[s.type]||1;const col={Regular:C.accent,Overtime:C.amber,"Double Time":C.red,Night:C.purple,Weekend:C.green,Holiday:C.red}[s.type]||C.accent;return(<div key={s.id} className="rw" style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}><div style={{width:40,height:40,borderRadius:12,background:col+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Clock size={18} color={col}/></div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{s.type} {prof.shiftLabel}</div><div style={{fontSize:12,color:C.textLight,marginTop:2}}>{fmtDate(s.date)} · {s.hours}h @ ${s.rate}/hr{mult!==1&&<span style={{color:col,fontWeight:600}}> ×{mult}</span>}{s.note&&" · "+s.note}</div></div><div style={{textAlign:"right",flexShrink:0}}><div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.green}}>{fmt(s.gross)}</div><button className="db" onClick={()=>{setShifts(p=>p.filter(x=>x.id!==s.id));showToast&&showToast("Shift removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:2,display:"flex",marginLeft:"auto",marginTop:4}}><Trash2 size={13}/></button></div></div>);})}
     {weeklyData.length>1&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 8px",marginBottom:14}}>
       <div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:10}}>Weekly Earnings</div>
       <ResponsiveContainer width="100%" height={100}><BarChart data={weeklyData} barSize={24}><XAxis dataKey="label" tick={{fontSize:10,fill:C.textLight}} axisLine={false} tickLine={false}/><Tooltip formatter={v=>[fmt(v),"Gross"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Bar dataKey="gross" fill={C.accent} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>
@@ -1758,7 +1972,7 @@ function TrendView({balHist,accounts,expenses,onNavigate}){
     expenses.filter(e=>e.date>=cutStr).forEach(e=>{bd[e.date]=(bd[e.date]||0)+(parseFloat(e.amount)||0);});
     return Object.entries(bd).sort((a,b)=>a[0].localeCompare(b[0])).map(([date,amount])=>({date,amount}));
   },[expenses,cutStr]);
-  const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return MOS[d.getMonth()]+" "+d.getDate();};
+  const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return FULL_MOS[d.getMonth()]+" "+d.getDate();};
   const hasData=chartData.length>1;
   return(
     <div className="fu">
@@ -1795,7 +2009,24 @@ function TrendView({balHist,accounts,expenses,onNavigate}){
         {hasData&&mode==="breakdown"&&<ResponsiveContainer width="100%" height={200}><AreaChart data={chartData} margin={{left:8,right:8,top:4,bottom:0}}><XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><Tooltip formatter={(v)=>fmt(v)}/><Area type="monotone" dataKey="checking" name="Checking" stroke={C.navy} strokeWidth={2} fill="transparent"/><Area type="monotone" dataKey="savings" name="Savings" stroke={C.green} strokeWidth={2} fill="transparent"/><Area type="monotone" dataKey="cushion" name="Cushion" stroke={C.accent} strokeWidth={2} fill="transparent"/></AreaChart></ResponsiveContainer>}
         {hasData&&mode==="spending"&&<ResponsiveContainer width="100%" height={200}><BarChart data={spendData} margin={{left:8,right:8,top:4,bottom:0}}><XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><Tooltip formatter={(v)=>fmt(v)}/><Bar dataKey="amount" name="Spent" fill={C.red} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>}
       </div>
-      <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"11px 14px",fontSize:12,color:C.accent}}>Tip: Update balances weekly for the best trend line.</div>
+      {hasData&&(()=>{
+        const avgBal=chartData.reduce((s,d)=>s+(d.total||0),0)/chartData.length;
+        const trend=chartData.length>3?chartData.slice(-3).reduce((s,d)=>s+(d.total||0),0)/3:null;
+        const isGrowing=trend&&trend>avgBal;
+        const dailyChange=chartData.length>1?((last-first)/(chartData.length-1)):0;
+        return(
+          <div style={{background:C.surface,borderRadius:16,padding:14,marginBottom:14}}>
+            <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text,marginBottom:10}}>Trend Insights</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13,color:C.textMid}}>Avg balance ({range})</span><span style={{fontFamily:MF,fontWeight:700,color:C.text}}>{fmt(avgBal)}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13,color:C.textMid}}>Daily change</span><span style={{fontFamily:MF,fontWeight:700,color:dailyChange>=0?C.green:C.red}}>{dailyChange>=0?"+":""}{fmt(dailyChange)}/day</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13,color:C.textMid}}>Trend (last 3 pts)</span><span style={{fontFamily:MF,fontWeight:700,color:isGrowing?C.green:C.red}}>{isGrowing?"↑ Growing":"↓ Declining"}</span></div>
+              {change!==0&&<div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13,color:C.textMid}}>Total change</span><span style={{fontFamily:MF,fontWeight:700,color:change>=0?C.green:C.red}}>{change>=0?"+":""}{fmt(change)}</span></div>}
+            </div>
+          </div>
+        );
+      })()}
+      <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"11px 14px",fontSize:12,color:C.accent}}>💡 Tip: Update balances weekly for the best trend line. The more data points you add, the sharper the picture.</div>
     </div>
   );
 }
@@ -1817,11 +2048,11 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
   const tradePnl=mTrades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
   const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const catMap=mExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
-  function exportHTML(){const rows=mExp.map(e=>"<tr><td>"+e.date+"</td><td>"+e.name+"</td><td>"+e.category+"</td><td>$"+parseFloat(e.amount).toFixed(2)+"</td></tr>").join("");const html="<html><head><title>"+MOS[mo]+" "+yr+" Statement</title></head><body><h1>"+(appName||"Finances")+" — "+MOS[mo]+" "+yr+"</h1><table border='1'><tr><th>Date</th><th>Name</th><th>Category</th><th>Amount</th></tr>"+rows+"<tr><td colspan='3'><b>Total</b></td><td><b>$"+totE.toFixed(2)+"</b></td></tr></table></body></html>";const b=new Blob([html],{type:"text/html"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"finances")+"-"+MOS[mo]+"-"+yr+".html";a.click();URL.revokeObjectURL(u);}
-  function exportCSV(){const hdr=["Date","Name","Category","Amount"];const rowData=mExp.map(e=>[e.date,e.name.replace(/,/g," "),e.category,parseFloat(e.amount).toFixed(2)]);const csv=[hdr,...rowData].map(r=>r.join(",")).join("\r\n");const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"trackfi")+"-"+MOS[mo]+"-"+yr+".csv";a.click();URL.revokeObjectURL(u);}
+  function exportHTML(){const rows=mExp.map(e=>"<tr><td>"+e.date+"</td><td>"+e.name+"</td><td>"+e.category+"</td><td>$"+parseFloat(e.amount).toFixed(2)+"</td></tr>").join("");const html="<html><head><title>"+FULL_MOS[mo]+" "+yr+" Statement</title></head><body><h1>"+(appName||"Finances")+" — "+FULL_MOS[mo]+" "+yr+"</h1><table border='1'><tr><th>Date</th><th>Name</th><th>Category</th><th>Amount</th></tr>"+rows+"<tr><td colspan='3'><b>Total</b></td><td><b>$"+totE.toFixed(2)+"</b></td></tr></table></body></html>";const b=new Blob([html],{type:"text/html"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"finances")+"-"+FULL_MOS[mo]+"-"+yr+".html";a.click();URL.revokeObjectURL(u);}
+  function exportCSV(){const hdr=["Date","Name","Category","Amount"];const rowData=mExp.map(e=>[e.date,e.name.replace(/,/g," "),e.category,parseFloat(e.amount).toFixed(2)]);const csv=[hdr,...rowData].map(r=>r.join(",")).join("\r\n");const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"trackfi")+"-"+FULL_MOS[mo]+"-"+yr+".csv";a.click();URL.revokeObjectURL(u);}
   return(<div className="fu">
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-      <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Monthly Statement</div><div style={{fontSize:13,color:C.textLight}}>{MOS[mo]} {yr}</div></div>
+      <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Monthly Statement</div><div style={{fontSize:13,color:C.textLight}}>{FULL_MOS[mo]} {yr}</div></div>
       <div style={{display:"flex",gap:8}}>
         <button className="ba" onClick={onAdd} style={{background:C.accent,border:"none",borderRadius:10,padding:"8px 12px",cursor:"pointer",color:"#fff",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",gap:4}}><Plus size={13}/>Add</button>
         <button className="ba" onClick={()=>setYtdMode(y=>!y)} style={{background:ytdMode?C.accentBg:C.bg,border:`1px solid ${ytdMode?C.accentMid:C.border}`,borderRadius:10,padding:"8px 12px",cursor:"pointer",color:ytdMode?C.accent:C.textMid,fontWeight:700,fontSize:12}}>YTD</button><button className="ba" onClick={()=>{setYtdMode(false);nav(-1);}} style={{background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:"8px 12px",cursor:"pointer",color:C.textMid,fontWeight:600}}>←</button>
@@ -1850,7 +2081,7 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
     <div style={{marginTop:12}}>
       <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Transactions ({mExp.length})</div>
       {mExp.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>{const cat=categories.find(c=>c.name===e.category);return(<div key={e.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:"1px solid "+C.border}}><div style={{width:32,height:32,borderRadius:8,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{cat?.icon||"💸"}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{e.name}</div><div style={{fontSize:11,color:C.textLight}}>{e.date} · {e.category}</div></div><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(e.amount)}</div></div>);})}
-      {mExp.length===0&&<Empty text={"No expenses in "+MOS[mo]+" "+yr} icon={FileText}/>}
+      {mExp.length===0&&<Empty text={"No expenses in "+FULL_MOS[mo]+" "+yr} icon={FileText}/>}
     </div>
   </div>);
 }
@@ -1882,9 +2113,24 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
       <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Financial Physical</div>
       <div style={{fontSize:12,color:C.textLight}}>Dave Ramsey framework</div>
     </div>
-    <div style={{background:C.navy,borderRadius:18,padding:20,marginBottom:16,color:"#fff"}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        {[["Net Worth",fmt(nw),nw>=0?C.greenMid:C.redMid],["Emergency",efMo.toFixed(1)+" mo",efMo>=6?C.greenMid:efMo>=3?C.amberMid:C.redMid],["Savings Rate",sr.toFixed(1)+"%",sr>=15?C.greenMid:sr>=5?C.amberMid:C.redMid],["DTI",dti.toFixed(1)+"%",dti<=28?C.greenMid:dti<=36?C.amberMid:C.redMid]].map(([l,v,c])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:3}}>{l}</div><div style={{fontFamily:MF,fontSize:16,fontWeight:800,color:c}}>{v}</div></div>)}
+    <div style={{background:`linear-gradient(135deg,${C.navy} 0%,${C.navyLight} 50%,${C.accent}22 100%)`,borderRadius:18,padding:20,marginBottom:16,color:"#fff"}}>
+      <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Financial Vitals</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+        {[["Net Worth",fmt(nw),nw>=0?C.greenMid:C.redMid,"Your assets minus all debts"],["Emergency Fund",efMo.toFixed(1)+" months",efMo>=6?C.greenMid:efMo>=3?C.amberMid:C.redMid,"Target: 3-6 months"],["Savings Rate",sr.toFixed(1)+"%",sr>=15?C.greenMid:sr>=5?C.amberMid:C.redMid,"Target: 15-20%"],["Debt-to-Income",dti.toFixed(1)+"%",dti<=28?C.greenMid:dti<=36?C.amberMid:C.redMid,"Target: under 28%"]].map(([l,v,c,tip])=>(
+          <div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:12,padding:"12px 12px"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:3,textTransform:"uppercase"}}>{l}</div>
+            <div style={{fontFamily:MF,fontSize:17,fontWeight:800,color:c,marginBottom:3}}>{v}</div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,.3)"}}>{tip}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+        {[["Monthly In",fmt(ti),C.greenMid],["Monthly Out",fmt(mAvg),C.redMid],["Net Cash",fmt(ti-mAvg),(ti-mAvg)>=0?C.greenMid:C.redMid]].map(([l,v,c])=>(
+          <div key={l} style={{background:"rgba(255,255,255,.06)",borderRadius:10,padding:"9px 8px",textAlign:"center"}}>
+            <div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2,textTransform:"uppercase"}}>{l}</div>
+            <div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:c}}>{v}</div>
+          </div>
+        ))}
       </div>
     </div>
     {priorities.length>0&&<div style={{marginBottom:16}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Top Priorities</div>{priorities.slice(0,3).map((p,i)=><div key={i} style={{background:C.surface,border:"1.5px solid "+p.c+"22",borderRadius:14,padding:14,marginBottom:8,borderLeft:"4px solid "+p.c}}><div style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{fontSize:20,flexShrink:0}}>{p.ic}</span><div><div style={{fontSize:13,fontWeight:700,color:C.text}}>{p.t}</div><div style={{fontSize:12,color:C.textMid,marginTop:3,lineHeight:1.5}}>{p.d}</div></div></div></div>)}</div>}
@@ -2183,12 +2429,49 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
           </div>
         );})}
       </div>
+
+      {/* Actionable next steps */}
+      {(()=>{
+        const nextSteps=pillars
+          .filter(p=>p.score<80)
+          .sort((a,b)=>a.score-b.score)
+          .slice(0,3)
+          .map(p=>({
+            pillar:p.label,
+            action:p.id==="savings"?"Set up auto-transfer on payday — even $50 helps":
+                   p.id==="emergency"?"Move "+fmt(Math.max(0,(ti/12*3)-(parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0))))+" to savings to reach 3-month goal":
+                   p.id==="debt"?"Add "+fmt(50)+" extra to highest-rate debt — saves hundreds in interest":
+                   p.id==="bills"?"Pay overdue bills immediately to stop late fees compounding":
+                   "Review and grow your asset accounts",
+            impact:p.id==="savings"?"+15-20 pts":p.id==="emergency"?"+20 pts":p.id==="debt"?"+10 pts":"+25 pts",
+            color:p.score<40?C.red:C.amber,
+          }));
+        if(!nextSteps.length)return(
+          <div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:16,padding:18,textAlign:"center"}}>
+            <div style={{fontSize:24,marginBottom:8}}>🏆</div>
+            <div style={{fontFamily:MF,fontWeight:700,fontSize:15,color:C.green}}>Excellent financial health!</div>
+            <div style={{fontSize:13,color:C.green,opacity:.8,marginTop:4}}>All pillars are strong. Keep it up.</div>
+          </div>
+        );
+        return(
+          <div style={{background:C.surface,borderRadius:18,padding:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
+            <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Your Next Steps</div>
+            {nextSteps.map((step,i)=>(
+              <div key={i} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:i<nextSteps.length-1?`1px solid ${C.border}`:"none"}}>
+                <div style={{width:32,height:32,borderRadius:8,background:step.color+"18",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MF,fontWeight:800,fontSize:13,color:step.color,flexShrink:0}}>{i+1}</div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,fontWeight:700,color:step.color,textTransform:"uppercase",letterSpacing:.4,marginBottom:3}}>{step.pillar}</div>
+                  <div style={{fontSize:13,color:C.text,lineHeight:1.5}}>{step.action}</div>
+                </div>
+                <div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:99,padding:"3px 8px",fontSize:11,fontWeight:700,color:C.green,flexShrink:0,alignSelf:"flex-start"}}>{step.impact}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
-}
-
-
-function IncomeSpendingView({expenses,income,trades}){
+}function IncomeSpendingView({expenses,income,trades}){
   const[range,setRange]=useState("1M");
   const now=new Date();
   const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
@@ -2199,7 +2482,7 @@ function IncomeSpendingView({expenses,income,trades}){
     const sp=expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
     const tp=trades.filter(t=>t.date?.startsWith(ms)).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
     const inc=ti+(tp>0?tp:0);
-    return{month:MOS[d.getMonth()],income:parseFloat(inc.toFixed(0)),spending:parseFloat(sp.toFixed(0)),saved:parseFloat(Math.max(0,inc-sp).toFixed(0))};
+    return{month:FULL_MOS[d.getMonth()].slice(0,3),income:parseFloat(inc.toFixed(0)),spending:parseFloat(sp.toFixed(0)),saved:parseFloat(Math.max(0,inc-sp).toFixed(0))};
   }),[expenses,income,trades,months]);
   const TT=({active,payload,label})=>{if(!active||!payload?.length)return null;return(<div style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"10px 14px",fontSize:12}}><div style={{fontWeight:700,marginBottom:6}}>{label}</div>{payload.map(p=><div key={p.dataKey} style={{display:"flex",justifyContent:"space-between",gap:12,marginBottom:2}}><span style={{color:C.textLight}}>{p.name}</span><span style={{fontWeight:700}}>{fmt(p.value)}</span></div>)}</div>);};
   return(
@@ -2224,8 +2507,19 @@ function IncomeSpendingView({expenses,income,trades}){
         {["1M","3M","6M","1Y"].map(r=><button key={r} className="ba" onClick={()=>setRange(r)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:range===r?"#fff":"transparent",color:range===r?C.accent:C.textLight,fontWeight:range===r?700:500,fontSize:13,cursor:"pointer"}}>{r}</button>)}
       </div>
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"20px 4px 12px",marginBottom:14}}>
-        <div style={{display:"flex",gap:16,paddingLeft:16,marginBottom:12}}>{[[C.green,"Income"],[C.red,"Spending"],[C.accent,"Saved"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:3,background:c}}/><span style={{fontSize:12,color:C.textLight}}>{l}</span></div>)}</div>
-        <ResponsiveContainer width="100%" height={200}><BarChart data={data} margin={{left:8,right:8,top:4,bottom:0}} barGap={3}><XAxis dataKey="month" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/><Tooltip content={<TT/>}/><Bar dataKey="income" name="Income" fill={C.green} radius={[4,4,0,0]}/><Bar dataKey="spending" name="Spending" fill={C.red} radius={[4,4,0,0]}/><Bar dataKey="saved" name="Saved" fill={C.accent} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>
+        <div style={{display:"flex",gap:16,paddingLeft:16,marginBottom:12,flexWrap:"wrap"}}>{[[C.green,"Income"],[C.red,"Spending"],[C.accent,"Saved"],[C.teal,"Savings %"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:3,background:c}}/><span style={{fontSize:12,color:C.textLight}}>{l}</span></div>)}</div>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={data.map(m=>({...m,savingsRate:m.income>0?Math.max(0,((m.income-m.spending)/m.income)*100):0}))} margin={{left:4,right:4,top:4,bottom:0}} barGap={3}>
+            <XAxis dataKey="month" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/>
+            <YAxis yAxisId="left" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
+            <YAxis yAxisId="right" orientation="right" tick={{fill:C.teal,fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v.toFixed(0)+"%"} width={32}/>
+            <Tooltip content={<TT/>}/>
+            <Bar yAxisId="left" dataKey="income" name="Income" fill={C.green} radius={[4,4,0,0]}/>
+            <Bar yAxisId="left" dataKey="spending" name="Spending" fill={C.red} radius={[4,4,0,0]}/>
+            <Bar yAxisId="left" dataKey="saved" name="Saved" fill={C.accent} radius={[4,4,0,0]}/>
+            <Line yAxisId="right" type="monotone" dataKey="savingsRate" name="Savings %" stroke={C.teal} strokeWidth={2.5} dot={{r:3,fill:C.teal}} activeDot={{r:5}}/>
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
         {data.map(m=>{const rate=m.income>0?Math.max(0,(m.income-m.spending)/m.income*100):0;return(<div key={m.month} style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,width:32}}>{m.month}</div><div style={{flex:1}}><BarProg pct={m.income>0?m.spending/m.income*100:0} color={m.spending>m.income?C.red:C.green} h={5}/></div><div style={{textAlign:"right",minWidth:80}}><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(m.spending)}</div><div style={{fontSize:11,color:C.textLight}}>{rate.toFixed(0)}% saved</div></div></div>);})}
@@ -2270,7 +2564,9 @@ function DashSettingsView({config,setConfig,showTrading}){
       {onDelete&&<button className="ba db" onClick={e=>{e.stopPropagation();onDelete();}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:4,display:"flex"}}><Trash2 size={14}/></button>}
     </div>
   );
-}function SwipeRow({children,onDelete}){
+}
+
+function SwipeRow({children,onDelete}){
   const[swiped,setSwiped]=useState(false);
   const startX=useRef(0);
   return(
@@ -2597,7 +2893,7 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady}){
             <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text}}>{fmt(r.amount)}</div>
             <button onClick={()=>setRecurrings(p=>p.map(x=>x.id===r.id?{...x,active:x.active===false?true:false}:x))} style={{fontSize:11,color:r.active===false?C.green:C.textLight,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>{r.active===false?"Resume":"Pause"}</button>
           </div>
-          <button onClick={()=>{if(window.confirm("Delete recurring expense?"))setRecurrings(p=>p.filter(x=>x.id!==r.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={14}/></button>
+          <button onClick={()=>{setRecurrings(p=>p.filter(x=>x.id!==r.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={14}/></button>
         </div>);
       })}
       {showAdd&&<Modal title="Add Recurring" icon={RefreshCw} onClose={()=>setShowAdd(false)} onSubmit={add} submitLabel="Add Recurring">
@@ -2787,8 +3083,11 @@ function AppInner(){
     const dayFraction=Math.min(1,daysUntilNextPay/30);
     return s+(limit*dayFraction);
   },0);
-  // Real safe to spend: checking minus bills, minus projected spend, minus envelope reserve, minus $200 buffer
-  const sts=Math.max(0,(parseFloat(accounts.checking||0))-billsBeforeNextPayAmt-projectedUntilPay-envelopeReserve-200);
+  // Other income arriving before next pay (rental, dividends, freelance pro-rated to pay period)
+  const otherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const otherBeforeNextPay=otherMonthly*(daysUntilNextPay/30);
+  // Real safe to spend: what's in checking + other income arriving soon, minus obligations
+  const sts=Math.max(0,(parseFloat(accounts.checking||0))+otherBeforeNextPay-billsBeforeNextPayAmt-projectedUntilPay-envelopeReserve-200);
   const liquid=(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));
   const savingsRate=totalIncome>0?Math.max(0,cashflow/totalIncome*100):0;
   const spendingStreak=useMemo(()=>{
@@ -2979,7 +3278,7 @@ function AppInner(){
               const dom_c=now_c.getDate(),dim_c=new Date(now_c.getFullYear(),now_c.getMonth()+1,0).getDate();
               const forecast_c=dom_c>0?mtdSpend_c+(mtdSpend_c/dom_c)*(dim_c-dom_c):0;
               const cats_c=Object.entries(expenses.filter(e=>e.date?.startsWith(ms_c)).reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{})).sort((a,b)=>b[1]-a[1]);
-              const bars_c=Array.from({length:6},(_,i)=>{const d=new Date(now_c.getFullYear(),now_c.getMonth()-5+i,1);const ms2=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");return{m:MOS[d.getMonth()],v:expenses.filter(e=>e.date?.startsWith(ms2)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0),cur:i===5};});
+              const bars_c=Array.from({length:6},(_,i)=>{const d=new Date(now_c.getFullYear(),now_c.getMonth()-5+i,1);const ms2=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");return{m:FULL_MOS[d.getMonth()].slice(0,3),v:expenses.filter(e=>e.date?.startsWith(ms2)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0),cur:i===5};});
               const maxB_c=Math.max(...bars_c.map(b=>b.v),1);
               const overBudget_c=budgetGoals.filter(g=>{const sp=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(ms_c)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);return sp>parseFloat(g.limit||0);});
               const nw_c=totalAssets-totalDebt;
@@ -3354,7 +3653,7 @@ function AppInner(){
         {tab==="search"&&<SearchView expenses={expenses} bills={bills} debts={debts} trades={trades} categories={categories} setEditItem={setEditItem} onNavigate={navTo}/>}
         {tab==="subscriptions"&&<SubsView detectedSubs={detectedSubs} expenses={expenses}/>}
         {tab==="insights"&&<InsightsView expenses={expenses} income={income} bills={bills} debts={debts} budgetGoals={budgetGoals} savingsGoals={savingsGoals}/>}
-        {tab==="paycheck"&&<PaycheckView bills={bills} income={income} expenses={expenses} accounts={accounts} onAdd={()=>om("expense")}/>}
+        {tab==="paycheck"&&<PaycheckView bills={bills} income={income} expenses={expenses} accounts={accounts} budgetGoals={budgetGoals} onAdd={()=>om("expense")}/>}
         {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} onNavigate={navTo}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
@@ -3364,7 +3663,7 @@ function AppInner(){
           <div className="fu">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Notifications</div><div style={{fontSize:13,color:C.textLight}}>{notifs.filter(n=>!n.read).length} unread</div></div>
-              <div style={{display:"flex",gap:8}}>{notifs.some(n=>!n.read)&&<button className="ba" onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.textMid,cursor:"pointer"}}>Mark all read</button>}{notifs.length>0&&<button className="ba" onClick={()=>{if(window.confirm("Clear all?"))setNotifs([]);}} style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.red,cursor:"pointer"}}>Clear</button>}</div>
+              <div style={{display:"flex",gap:8}}>{notifs.some(n=>!n.read)&&<button className="ba" onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.textMid,cursor:"pointer"}}>Mark all read</button>}{notifs.length>0&&<button className="ba" onClick={()=>{setNotifs([]);}} style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.red,cursor:"pointer"}}>Clear</button>}</div>
             </div>
             {notifs.length===0&&<Empty text="All clear — alerts will show here" icon={Bell}/>}
             {notifs.map(n=>{const S={danger:{bg:C.redBg,br:C.redMid,c:C.red,ic:"🚨"},warning:{bg:C.amberBg,br:C.amberMid,c:C.amber,ic:"⚠️"},success:{bg:C.greenBg,br:C.greenMid,c:C.green,ic:"✅"},info:{bg:C.accentBg,br:C.accentMid,c:C.accent,ic:"💡"}}[n.type]||{bg:C.bg,br:C.border,c:C.text,ic:"🔔"};const ago=Date.now()-n.time;const ta=ago<60000?"just now":ago<3600000?Math.floor(ago/60000)+"m ago":ago<86400000?Math.floor(ago/3600000)+"h ago":Math.floor(ago/86400000)+"d ago";return(<div key={n.id} style={{background:n.read?C.surface:S.bg,border:`1.5px solid ${n.read?C.border:S.br}`,borderRadius:14,padding:"13px 14px",marginBottom:8}}><div style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{fontSize:20,flexShrink:0}}>{S.ic}</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:n.read?C.textMid:S.c}}>{n.title}</div><div style={{fontSize:12,color:C.textLight,marginTop:3,lineHeight:1.4}}>{n.body}</div><div style={{fontSize:11,color:C.textLight,marginTop:4}}>{ta}</div></div>{!n.read&&<div style={{width:8,height:8,borderRadius:"50%",background:S.c,flexShrink:0,marginTop:4}}/>}</div><div style={{display:"flex",gap:7,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}><button className="ba" onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))} style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 0",color:C.textMid,fontWeight:600,fontSize:12,cursor:"pointer"}}>Dismiss</button><button className="ba" onClick={()=>setNotifs(p=>p.filter(x=>x.id!==n.id))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",color:C.textLight,cursor:"pointer",display:"flex",alignItems:"center"}}><X size={13}/></button></div></div>);})}
@@ -3385,7 +3684,10 @@ function AppInner(){
       {modal==="expense"&&<Modal title="Log Expense" icon={Wallet} onClose={cl} onSubmit={submit} submitLabel="Add Expense"><FI label="Name" placeholder="Coffee, groceries, gas..." value={form.name||""} onChange={e=>{ff("name",e.target.value);if(!form.category){const t=e.target.value.toLowerCase().trim();const mc=window._merchantCats||{};if(mc[t]){ff("category",mc[t]);}else{const catMap={Food:["lunch","dinner","coffee","food","eat","restaurant","pizza","burger","groceries","doordash","starbucks","chipotle"],Transport:["gas","uber","lyft","parking","toll"],Housing:["rent","mortgage","repair"],Subscriptions:["netflix","hulu","spotify","gym","membership"],Health:["doctor","pharmacy","medicine","dental"],Entertainment:["movie","game","bar","concert"],Personal:["haircut","barber","clothes","shopping","amazon","target"]};for(const[cat,kws]of Object.entries(catMap)){if(kws.some(k=>t.includes(k))){ff("category",cat);break;}}}}}}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)} autoFocus={!!form.name}/><FI half label="Date" type="date" value={form.date||todayStr()} onChange={e=>ff("date",e.target.value)}/></div><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Notes" placeholder="Optional" value={form.notes||""} onChange={e=>ff("notes",e.target.value)}/><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Recurring</div><div style={{fontSize:12,color:C.textLight}}>Auto-log this monthly</div></div><button onClick={()=>ff("recurring",!form.recurring)} style={{background:"none",border:"none",cursor:"pointer",color:form.recurring?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.recurring?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div></Modal>}
       {modal==="bill"&&<Modal title="Add Bill" icon={CalendarClock} onClose={cl} onSubmit={submit} submitLabel="Add Bill" accent={C.amber}><FI label="Bill Name" placeholder="Rent, Electric, Netflix..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Monthly","Bi-weekly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/></Modal>}
       {modal==="debt"&&<Modal title="Add Debt" icon={CreditCard} onClose={cl} onSubmit={submit} submitLabel="Track Debt" accent={C.red} wide><FI label="Name" placeholder="Car loan, student debt..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div style={{display:"flex",gap:12}}><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/></div></Modal>}
-      {modal==="bgoal_home"&&<Modal title="Spending Envelope" icon={Target} onClose={cl} onSubmit={()=>{if(!form.category||!form.limit)return;setBGoals(p=>[...p,{id:Date.now(),...form}]);cl();}} submitLabel="Add Envelope" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Monthly Budget ($)" type="number" placeholder="e.g. 150 for haircuts, 300 for gas" value={form.limit||""} onChange={e=>ff("limit",e.target.value)}/></Modal>}
+      {modal==="bgoal_home"&&<Modal title="Spending Envelope" icon={Target} onClose={cl} onSubmit={()=>{if(!form.category||!form.limit)return;setBGoals(p=>[...p,{id:Date.now(),...form}]);cl();}} submitLabel="Add Envelope" accent={C.purple}><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.accent,lineHeight:1.5}}>
+        💡 Variable expenses like gas, haircuts, groceries. These reserve money in your safe-to-spend before you log them.
+      </div>
+      <FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Note (optional)" placeholder="e.g. haircuts ~2x/month" value={form.note||""} onChange={e=>ff("note",e.target.value)}/><FI label="Monthly Budget ($)" type="number" placeholder="e.g. 150" value={form.limit||""} onChange={e=>ff("limit",e.target.value)}/></Modal>}
       {modal==="receipt"&&<Modal title="Scan Receipt" icon={Scan} onClose={cl} accent={C.purple}><div style={{textAlign:"center",padding:"10px 0 20px"}}><div style={{width:64,height:64,borderRadius:18,background:C.purpleBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><Scan size={30} color={C.purple}/></div><div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:8}}>Scan Receipt</div><label style={{display:"block",background:C.purple,borderRadius:12,padding:"13px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📷 Take Photo<input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><label style={{display:"block",background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:12,padding:"13px 0",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>🖼 Choose from Library<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><button className="ba" onClick={cl} style={{background:C.bg,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",width:"100%"}}>Cancel</button></div></Modal>}
       {modal==="simulator"&&debts.length>0&&(()=>{const dL=debts.map(d=>({...d,bal:parseFloat(d.balance||0),rate:parseFloat(d.rate||0)/100/12,min:parseFloat(d.minPayment||0)}));const tm=dL.reduce((s,d)=>s+d.min,0);const ex=parseFloat(form.extra||"0")||0;function sim(strat){let r=dL.map(d=>({...d}));let mo=0,ti=0;while(r.some(d=>d.bal>0)&&mo<600){mo++;let av=tm+ex;r=r.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;ti+=i;const p=Math.min(d.min,d.bal+i);av-=p;return{...d,bal:Math.max(0,d.bal+i-p)};});const ac=r.filter(d=>d.bal>0);if(ac.length&&av>0){const tgt=strat==="avalanche"?ac.reduce((a,b)=>a.rate>b.rate?a:b):ac.reduce((a,b)=>a.bal<b.bal?a:b);const idx=r.findIndex(d=>d.name===tgt.name);r[idx].bal=Math.max(0,r[idx].bal-av);}}return{months:mo,interest:ti};}const sn=sim("snowball"),av=sim("avalanche"),diff=sn.interest-av.interest;return(<Modal title="Payoff Simulator" icon={Calculator} onClose={cl} accent={C.green} wide><div style={{background:C.navy,borderRadius:14,padding:16,marginBottom:14,color:"#fff"}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",marginBottom:4}}>TOTAL DEBT</div><div style={{fontFamily:MF,fontSize:26,fontWeight:800,color:C.red}}>{fmt(debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0))}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>Min payments: {fmt(tm)}/mo</div></div><div style={{marginBottom:16}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Extra Monthly Payment</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.accent}}>{ex>0?"+"+fmt(ex):"$0"}</div></div><input type="range" min="0" max="1000" step="25" value={form.extra||0} onChange={e=>ff("extra",e.target.value)} style={{width:"100%",accentColor:C.accent,cursor:"pointer",marginBottom:6}}/><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textFaint}}><span>$0</span><span>$500</span><span>$1,000</span></div><div style={{marginTop:8,fontSize:12,color:C.textLight}}>Total: <span style={{fontWeight:700,color:C.text}}>{fmt(tm+ex)}/mo</span></div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>{[{label:"❄️ Snowball",sub:"Smallest first",m:sn.months,i:sn.interest,c:C.accent},{label:"🔥 Avalanche",sub:"Highest rate first",m:av.months,i:av.interest,c:C.green}].map(s=><div key={s.label} style={{background:C.surface,border:`1.5px solid ${s.c}44`,borderRadius:14,padding:14,borderTop:`3px solid ${s.c}`}}><div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:s.c,marginBottom:2}}>{s.label}</div><div style={{fontSize:11,color:C.textLight,marginBottom:10}}>{s.sub}</div><div style={{marginBottom:6}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>DEBT FREE</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.text}}>{s.m>=600?"∞":s.m<12?s.m+"mo":Math.floor(s.m/12)+"y "+(s.m%12)+"mo"}</div></div><div><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>INTEREST</div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red}}>{fmt(s.i)}</div></div></div>)}</div>{diff>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",fontSize:13,color:C.green,fontWeight:500}}>💡 Avalanche saves <strong>{fmt(diff)}</strong> vs Snowball</div>}</Modal>);})()} 
 
