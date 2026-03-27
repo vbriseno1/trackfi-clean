@@ -420,7 +420,18 @@ function OnboardingWizard({onComplete}){
     // ── STEP 3: Income ───────────────────────────────────────
     {title:firstName?"What do you bring home, "+firstName+"?":"Your monthly income",body:(
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:4}}>Used for safe-to-spend, savings rate, and paycheck planning. You can update this anytime in Accounts.</div>
+        <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:10}}>Enter your take-home <strong>per paycheck</strong> — we calculate the rest.</div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>How often do you get paid?</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {["Weekly","Biweekly","Twice Monthly","Monthly"].map(f=>(
+              <button key={f} onClick={()=>setD(p=>({...p,income:{...(p.income||{}),payFrequency:f}}))}
+                style={{padding:"7px 14px",borderRadius:99,border:`1.5px solid ${(d.income?.payFrequency||"Biweekly")===f?C.accent:C.border}`,background:(d.income?.payFrequency||"Biweekly")===f?C.accentBg:"#fff",fontSize:13,fontWeight:(d.income?.payFrequency||"Biweekly")===f?700:500,color:(d.income?.payFrequency||"Biweekly")===f?C.accent:C.textMid,cursor:"pointer"}}>
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
         <div>
           <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>{getProfession(d.profCategory).icon} Primary Take-Home / Month</div>
           <input type="number" placeholder="e.g. 4500" value={d.income?.primary||""}
@@ -579,9 +590,16 @@ Or ask: \"can I afford $200?\""}]);
   const ti=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
   const te=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const ck=parseFloat(accounts.checking||0);
-  const bs=bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=7).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
-  const sts=Math.max(0,ck-bs-200);
+  // Use real pay-frequency-aware safe-to-spend
+  const chatPayFreq=income.payFrequency||"Biweekly";
+  const chatPayDays=chatPayFreq==="Weekly"?7:chatPayFreq==="Biweekly"?14:chatPayFreq==="Twice Monthly"?15:30;
+  const chatNow=new Date();const chatTod=chatNow.getDate();
+  const chatNextPay=(()=>{if(chatPayFreq==="Twice Monthly"){return chatTod<15?new Date(chatNow.getFullYear(),chatNow.getMonth(),15):new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}if(chatPayFreq==="Monthly"){return new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}const d=new Date(chatNow);d.setDate(chatNow.getDate()+chatPayDays);return d;})();
+  const chatNextPayStr=chatNextPay.toISOString().split("T")[0];
+  const bs=bills.reduce((s,b)=>{if(b.paid)return s;const d=b.dueDate||"";return d&&d<=chatNextPayStr?s+(parseFloat(b.amount)||0):s;},0);
   const burn=dayOfMonth()>0?te/dayOfMonth():0;
+  const chatProjected=burn*Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
+  const sts=Math.max(0,ck-bs-chatProjected-200);
   function handleQ(t){
     if(t.includes("afford")||t.includes("safe")){const m=t.match(/[\d,]+/);const a=m?parseFloat(m[0].replace(/,/g,"")):null;if(a)return a<=sts?"Yes! "+fmt(a)+" fits in "+fmt(sts):"No — "+fmt(a)+" exceeds safe-to-spend "+fmt(sts);return "Safe-to-spend: "+fmt(sts);}
     if(t.includes("bill")||t.includes("due")){const up=bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=14);const ov=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);return(ov.length?"🚨 Overdue: "+ov.map(b=>b.name+" "+fmt(b.amount)).join(", ")+"\
@@ -756,10 +774,23 @@ function PaycheckView({bills,income,expenses,accounts,onAdd}){
   const now=new Date();
   const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const checking=parseFloat(accounts.checking||0);
-  const biweekly=ti/2;
+  const payFreq=income.payFrequency||"Biweekly";
+  // Pay per period based on frequency
+  const payPerPeriod=payFreq==="Weekly"?ti/4.33:payFreq==="Biweekly"?ti/2:payFreq==="Twice Monthly"?ti/2:ti;
+  const payPeriodLabel=payFreq==="Weekly"?"weekly":payFreq==="Biweekly"?"biweekly":payFreq==="Twice Monthly"?"semi-monthly":"monthly";
+  // Next payday
   const today=now.getDate();
   let nextPay,daysUntilPay;
-  if(today<15){nextPay=new Date(now.getFullYear(),now.getMonth(),15);daysUntilPay=15-today;}else if(today<new Date(now.getFullYear(),now.getMonth()+1,0).getDate()){nextPay=new Date(now.getFullYear(),now.getMonth()+1,0);daysUntilPay=new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-today;}else{nextPay=new Date(now.getFullYear(),now.getMonth()+1,15);daysUntilPay=15;}
+  if(payFreq==="Twice Monthly"){
+    if(today<15){nextPay=new Date(now.getFullYear(),now.getMonth(),15);daysUntilPay=15-today;}
+    else{nextPay=new Date(now.getFullYear(),now.getMonth()+1,1);daysUntilPay=new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-today+1;}
+  }else if(payFreq==="Monthly"){
+    nextPay=new Date(now.getFullYear(),now.getMonth()+1,1);daysUntilPay=new Date(now.getFullYear(),now.getMonth()+1,0).getDate()-today+1;
+  }else if(payFreq==="Weekly"){
+    nextPay=new Date(now);nextPay.setDate(now.getDate()+7);daysUntilPay=7;
+  }else{// Biweekly default
+    nextPay=new Date(now);nextPay.setDate(now.getDate()+14);daysUntilPay=14;
+  }
   const billsBeforePay=bills.filter(b=>{if(b.paid)return false;const d=new Date(b.dueDate+"T00:00:00");return d<=nextPay;});
   const beforeTotal=billsBeforePay.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
@@ -779,7 +810,7 @@ function PaycheckView({bills,income,expenses,accounts,onAdd}){
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Next Payday</div>
         <div style={{fontFamily:MF,fontSize:32,fontWeight:800,color:"#fff",marginBottom:4}}>{daysUntilPay===0?"Today!":daysUntilPay+" days"}</div>
         <div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginBottom:16}}>{nextPay.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>{[["Expected",fmt(biweekly),C.greenMid],["Bills due",fmt(beforeTotal),C.redMid],["Safe to spend",fmt(safeToSpend),safeToSpend>500?C.greenMid:safeToSpend>0?C.amberMid:C.redMid]].map(([l,v,c])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div><div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:c}}>{v}</div></div>)}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>{[["Expected "+payPeriodLabel,fmt(payPerPeriod),C.greenMid],["Bills due",fmt(beforeTotal),C.redMid],["Safe to spend",fmt(safeToSpend),safeToSpend>500?C.greenMid:safeToSpend>0?C.amberMid:C.redMid]].map(([l,v,c])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div><div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:c}}>{v}</div></div>)}</div>
       </div>
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Bills Before Payday</div>
@@ -790,7 +821,7 @@ function PaycheckView({bills,income,expenses,accounts,onAdd}){
       </div>
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Projected Spending</div>
-        {[["Daily burn rate",fmt(dailyBurn)+"/day",C.textMid],["Days left",String(daysUntilPay)+" days",C.textMid],["Projected spend",fmt(projectedSpend),projectedSpend>biweekly?C.red:C.amber],["Balance",fmt(checking),C.green],["Bills due","-"+fmt(beforeTotal),C.red],["Safe to spend",fmt(safeToSpend),safeToSpend>500?C.green:safeToSpend>0?C.amber:C.red]].map(([l,v,c])=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>{l}</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:c}}>{v}</span></div>)}
+        {[["Daily burn rate",fmt(dailyBurn)+"/day",C.textMid],["Days left",String(daysUntilPay)+" days",C.textMid],["Projected spend",fmt(projectedSpend),projectedSpend>payPerPeriod?C.red:C.amber],["Balance",fmt(checking),C.green],["Bills due","-"+fmt(beforeTotal),C.red],["Safe to spend",fmt(safeToSpend),safeToSpend>500?C.green:safeToSpend>0?C.amber:C.red]].map(([l,v,c])=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>{l}</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:c}}>{v}</span></div>)}
       </div>
     </div>
   );
@@ -1918,8 +1949,20 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Money Setup</div>
         <div style={{marginLeft:"auto",fontSize:11,color:C.green,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><div style={{width:6,height:6,borderRadius:"50%",background:C.green}}/>Auto-saved</div>
       </div>
-      <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Monthly Income</div>
-      {[{k:"primary",l:`${getProfession(profCategory).icon} Primary (take-home)`,ph:"4500"},{k:"other",l:"Other / Side Income",ph:"0"},{k:"trading",l:"Trading (avg/mo)",ph:"0"},{k:"rental",l:"Rental Income",ph:"0"},{k:"dividends",l:"Dividends",ph:"0"},{k:"freelance",l:"Freelance",ph:"0"}].map(i=>(
+      <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Pay Frequency</div>
+      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+        {["Weekly","Biweekly","Twice Monthly","Monthly"].map(f=>(
+          <button key={f} onClick={()=>{setIncome(p=>({...p,payFrequency:f}));showToast&&showToast("✓ Pay frequency updated");}}
+            style={{padding:"7px 14px",borderRadius:99,border:`1.5px solid ${(income.payFrequency||"Biweekly")===f?C.accent:C.border}`,background:(income.payFrequency||"Biweekly")===f?C.accentBg:C.surfaceAlt,fontSize:13,fontWeight:(income.payFrequency||"Biweekly")===f?700:500,color:(income.payFrequency||"Biweekly")===f?C.accent:C.textMid,cursor:"pointer",transition:"all .15s"}}>
+            {f}
+          </button>
+        ))}
+      </div>
+      <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"9px 12px",marginBottom:14,fontSize:12,color:C.accent}}>
+        📅 Enter your <strong>take-home per paycheck</strong> below — the app will calculate your true safe-to-spend based on bills due before your next pay date.
+      </div>
+      <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Income Per Paycheck</div>
+      {[{k:"primary",l:`${getProfession(profCategory).icon} Primary take-home / paycheck`,ph:"2250"},{k:"other",l:"Other / Side Income",ph:"0"},{k:"trading",l:"Trading (avg/mo)",ph:"0"},{k:"rental",l:"Rental Income",ph:"0"},{k:"dividends",l:"Dividends",ph:"0"},{k:"freelance",l:"Freelance",ph:"0"}].map(i=>(
         <div key={i.k} style={{marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:600,color:C.slate,letterSpacing:.3,marginBottom:4}}>{i.l}</div>
           <input type="number" placeholder={i.ph} value={income[i.k]||""} onChange={e=>setIncome(p=>({...p,[i.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast&&showToast("✓ Income saved");}} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${income[i.k]?C.accent:C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:14,outline:"none",transition:"border-color .15s"}}/>
@@ -2610,7 +2653,7 @@ function AppInner(){
   function handleSignOut(){if(authToken)supaFetch("/auth/v1/logout",{method:"POST"});setAuthSession(null);localStorage.removeItem("fv_session");localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}
   const[ready,setReady]=useState(false);
   const[accounts,setAccounts]=useState({checking:"",savings:"",cushion:"",investments:"",property:"",vehicles:""});
-  const[income,setIncome]=useState({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""});
+  const[income,setIncome]=useState({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly"});
   const[expenses,setExpenses]=useState([]);
   const[bills,setBills]=useState([]);
   const[debts,setDebts]=useState([]);
@@ -2623,7 +2666,7 @@ function AppInner(){
   const[balHist,setBalHist]=useState([]);
   const[notifs,setNotifs]=useState([]);
   const[calColors,setCalColors]=useState({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
-  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,quickActions:["expense","receipt","bill","debt","simulator","budget"]});
+  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,quickActions:["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"]});
   const[dashConfig,setDashConfig]=useState({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
   const[appName,setAppName]=useState("Trackfi");
   const[greetName,setGreetName]=useState("");
@@ -2712,7 +2755,25 @@ function AppInner(){
   const billsSoonAmt=useMemo(()=>dueSoon.reduce((s,b)=>s+(parseFloat(b.amount)||0),0),[dueSoon]);
   const burnRate=dayOfMonth()>0?totalExp/dayOfMonth():0;
   const projected=burnRate*daysInMonth();
-  const sts=Math.max(0,(parseFloat(accounts.checking||0))-billsSoonAmt-200);
+  // Pay frequency helpers — all plain computed values, no hooks needed
+  const payFreq=income.payFrequency||"Biweekly";
+  const payPeriodDays=payFreq==="Weekly"?7:payFreq==="Biweekly"?14:payFreq==="Twice Monthly"?15:30;
+  const payPerPeriod=payFreq==="Weekly"?totalIncome/4.33:payFreq==="Biweekly"?totalIncome/2:payFreq==="Twice Monthly"?totalIncome/2:totalIncome;
+  // Next payday — computed once, stable string for comparisons
+  const _now=new Date();const _tod=_now.getDate();
+  const nextPayDate=(()=>{
+    if(payFreq==="Twice Monthly"){return _tod<15?new Date(_now.getFullYear(),_now.getMonth(),15):new Date(_now.getFullYear(),_now.getMonth()+1,1);}
+    if(payFreq==="Monthly"){return new Date(_now.getFullYear(),_now.getMonth()+1,1);}
+    const d=new Date(_now);d.setDate(_now.getDate()+payPeriodDays);return d;
+  })();
+  const nextPayStr=nextPayDate.toISOString().split("T")[0];
+  const daysUntilNextPay=Math.max(1,Math.ceil((nextPayDate-_now)/86400000));
+  // Bills due before next paycheck — simple filter, no hook
+  const billsBeforeNextPayAmt=bills.reduce((s,b)=>{if(b.paid)return s;const d=(b.dueDate||"");return d&&d<=nextPayStr?s+(parseFloat(b.amount)||0):s;},0);
+  // Projected spend until next pay
+  const projectedUntilPay=burnRate*daysUntilNextPay;
+  // Real safe to spend: checking minus all bills before next pay, minus projected spend, minus $200 buffer
+  const sts=Math.max(0,(parseFloat(accounts.checking||0))-billsBeforeNextPayAmt-projectedUntilPay-200);
   const liquid=(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));
   const savingsRate=totalIncome>0?Math.max(0,cashflow/totalIncome*100):0;
   const spendingStreak=useMemo(()=>{
@@ -2977,8 +3038,8 @@ function AppInner(){
                   <div onClick={()=>navTo("paycheck")} style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:20,padding:"20px 18px",cursor:"pointer"}}>
                     <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>MONEY FLOW</div>
                     <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontSize:38,fontWeight:900,color:cashflow>=0?C.greenMid:"#fca5a5",lineHeight:1,letterSpacing:-1,marginBottom:4}}>{cashflow>=0?"+":""}{fmt(cashflow)}</div>
-                    <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginBottom:14}}>monthly cashflow · {savingsRate.toFixed(1)}% savings rate</div>
-                    {[["Income",fmt(totalIncome),C.greenMid,100],["Expenses",fmt(burnRate*30),C.redMid,totalIncome>0?Math.min(100,(burnRate*30/totalIncome)*100):0],["Bills",fmt(bills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0)),"rgba(255,255,255,.6)",totalIncome>0?Math.min(100,(bills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0)/totalIncome)*100):0],["Debt Min",fmt(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)),"rgba(255,255,255,.4)",totalIncome>0?Math.min(100,(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/totalIncome)*100):0]].map(([l,v,c,pct])=>(
+                    <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginBottom:14}}>{payFreq==="Biweekly"?"biweekly":"per "+payFreq.toLowerCase()} paycheck · {savingsRate.toFixed(1)}% saved</div>
+                    {[["Income/pay",fmt(payPerPeriod),C.greenMid,100],["Expenses",fmt(burnRate*30),C.redMid,totalIncome>0?Math.min(100,(burnRate*30/totalIncome)*100):0],["Bills",fmt(bills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0)),"rgba(255,255,255,.6)",totalIncome>0?Math.min(100,(bills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0)/totalIncome)*100):0],["Debt Min",fmt(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)),"rgba(255,255,255,.4)",totalIncome>0?Math.min(100,(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/totalIncome)*100):0]].map(([l,v,c,pct])=>(
                       <div key={l} style={{marginBottom:7}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
                           <span style={{fontSize:11,color:"rgba(255,255,255,.6)"}}>{l}</span>
@@ -3062,7 +3123,7 @@ function AppInner(){
               const subTotal=detectedSubs?.filter(s=>s.interval==="Monthly").reduce((s,x)=>s+(parseFloat(x.amount)||0),0)||0;
               const pulseItems=[
                 {label:"Today",val:todayAmt>0?fmt(todayAmt):"—",color:todayAmt>0?C.red:C.textFaint,sub:todayAmt>0?expenses.filter(e=>e.date===now_p.toISOString().split("T")[0]).length+" items":"nothing yet",tap:()=>navTo("calendar")},
-                {label:"Safe to Spend",val:fmt(sts),color:sts>500?C.green:sts>0?C.amber:C.red,sub:"after bills",tap:()=>navTo("paycheck")},
+                {label:"Safe to Spend",val:fmt(sts),color:sts>500?C.green:sts>0?C.amber:C.red,sub:"until next pay",tap:()=>navTo("paycheck")},
                 {label:"Next Bill",val:nextBill?fmt(nextBill.amount):"—",color:nextBill&&dueIn(nextBill.dueDate)<=3?C.red:C.amber,sub:nextBill?nextBill.name+" · "+dueIn(nextBill.dueDate)+"d":"all clear",tap:()=>navTo("bills")},
                 {label:"Subscriptions",val:subCount>0?fmt(subTotal)+"/mo":"—",color:C.textMid,sub:subCount>0?subCount+" detected":"none found",tap:()=>navTo("subscriptions")},
               ];
@@ -3239,8 +3300,18 @@ function AppInner(){
               ))}
             </div>
             <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18}}>
-              <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:14}}>Monthly Income</div>
-              {[{k:"primary",l:`${getProfession(profCategory).icon} Primary Income`},{k:"other",l:"Other Income"},{k:"trading",l:"Trading avg"},{k:"rental",l:"Rental Income"},{k:"dividends",l:"Dividends"},{k:"freelance",l:"Freelance"}].map(i=>(
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text}}>Income / Paycheck</div>
+              <div style={{display:"flex",gap:5}}>
+                {["Weekly","Biweekly","Twice Monthly","Monthly"].map(f=>(
+                  <button key={f} onClick={()=>setIncome(p=>({...p,payFrequency:f}))}
+                    style={{padding:"4px 8px",borderRadius:99,border:`1px solid ${(income.payFrequency||"Biweekly")===f?C.accent:C.border}`,background:(income.payFrequency||"Biweekly")===f?C.accentBg:"transparent",fontSize:10,fontWeight:700,color:(income.payFrequency||"Biweekly")===f?C.accent:C.textLight,cursor:"pointer"}}>
+                    {f==="Twice Monthly"?"2x/mo":f}
+                  </button>
+                ))}
+              </div>
+            </div>
+              {[{k:"primary",l:`${getProfession(profCategory).icon} Primary take-home / paycheck`},{k:"other",l:"Other Income"},{k:"trading",l:"Trading avg"},{k:"rental",l:"Rental Income"},{k:"dividends",l:"Dividends"},{k:"freelance",l:"Freelance"}].map(i=>(
                 <div key={i.k} style={{marginBottom:10}}><div style={{fontSize:11,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>{i.l}</div><input type="number" placeholder="0.00" value={income[i.k]||""} onChange={e=>setIncome(p=>({...p,[i.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ Income saved");}} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:14,outline:"none"}}/></div>
               ))}
               <div style={{display:"flex",justifyContent:"space-between",marginTop:10,paddingTop:12,borderTop:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>Total Monthly</span><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:11,color:C.green,fontWeight:600}}>✓ Auto-saved</span><span style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.green}}>{fmt(totalIncome)}</span></div></div>
@@ -3303,8 +3374,8 @@ function AppInner(){
       {editItem&&editItem.type==="debt"&&<EditModal item={editItem} categories={categories} onSave={u=>{setDebts(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setDebts(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {modal==="quickactions"&&(()=>{
         const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Scan Receipt",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Set Budget",ic:"🎯"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📊"},{id:"insights",l:"Insights",ic:"🔍"},{id:"paycheck",l:"Paycheck",ic:"💰"}];
-        const active=settings.quickActions||["expense","receipt","bill","debt","simulator","budget"];
-        const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","receipt","bill","debt","simulator","budget"];const next=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];return{...p,quickActions:next};});
+        const active=settings.quickActions||["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"];
+        const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"];const next=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];return{...p,quickActions:next};});
         return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Customize Quick Actions</div><div style={{fontSize:13,color:C.textLight,marginBottom:18}}>Choose up to 6 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);return(<button key={q.id} onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"#fff",cursor:"pointer",textAlign:"left"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button onClick={()=>setModal(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button></div></div>);
       })()}
     </div>
