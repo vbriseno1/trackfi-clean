@@ -725,7 +725,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
           const catTxns=thisExp.filter(e=>e.category===cat).sort((a,b)=>new Date(b.date)-new Date(a.date));
           return(<div key={cat} style={{marginBottom:8}}>
             <div onClick={()=>setDrillCat(isOpen?null:cat)} style={{display:"flex",justifyContent:"space-between",marginBottom:5,cursor:"pointer",padding:"6px 8px",borderRadius:10,background:isOpen?PIE_COLORS[i%PIE_COLORS.length]+"12":"transparent",border:isOpen?`1px solid ${PIE_COLORS[i%PIE_COLORS.length]}30`:"1px solid transparent",transition:"background .15s"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:PIE_COLORS[i%PIE_COLORS.length]}}/><span style={{fontSize:13,fontWeight:600,color:C.text}}>{cat}</span><span style={{fontSize:10,color:C.textLight,fontWeight:500}}>{catTxns.length} txn{catTxns.length!==1?"s":""}}</span></div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:PIE_COLORS[i%PIE_COLORS.length]}}/><span style={{fontSize:13,fontWeight:600,color:C.text}}>{cat}</span><span style={{fontSize:10,color:C.textLight,fontWeight:500}}>{catTxns.length} txn{catTxns.length!==1?"s":""}</span></div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 {lastAmt>0&&<span style={{fontSize:11,color:catDiff>10?C.red:catDiff<-10?C.green:C.textLight,fontWeight:600}}>{catDiff>0?"+":""}{catDiff.toFixed(0)}%</span>}
                 <span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text}}>{fmt(amt)}</span>
@@ -741,7 +741,8 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
               {catTxns.length>8&&<div style={{padding:"8px 12px",fontSize:12,color:C.textLight,textAlign:"center"}}>+{catTxns.length-8} more — see Spending tab</div>}
             </div>}
           </div>);
-        })      </div>}
+        })}
+      </div>}
       {topMerchants.length>0&&<div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Top Merchants</div>
         {topMerchants.map(([name,amt],i)=>(
