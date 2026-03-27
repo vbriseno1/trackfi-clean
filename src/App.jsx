@@ -635,7 +635,7 @@ Or ask: \"can I afford $200?\""}]);
       <div ref={botRef}/>
     </div>
     <div style={{display:"flex",gap:8,paddingTop:10,borderTop:"1px solid "+C.border,flexShrink:0}}>
-      <input className="fv-chat-input" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder='Try "lunch 12" or "can I afford $200?"' style={{flex:1,background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none"}}/>
+      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder='Try "lunch 12" or "can I afford $200?"' style={{flex:1,background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none"}}/>
       <button className="ba" onClick={send} disabled={!input.trim()} style={{background:input.trim()?C.accent:C.border,border:"none",borderRadius:12,padding:"0 16px",cursor:input.trim()?"pointer":"default",display:"flex",alignItems:"center",color:input.trim()?"#fff":C.textLight}}><Send size={17}/></button>
     </div>
   </div>);
@@ -3211,7 +3211,7 @@ function AppInner(){
   const[balHist,setBalHist]=useState([]);
   const[notifs,setNotifs]=useState([]);
   const[calColors,setCalColors]=useState({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
-  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","receipt","bill","debt","simulator","budget","expense","bill","paycheck","debt","health","budget","savings","insights"]});
+  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]});
   const[monthlySummary,setMonthlySummary]=useState(null);
   const[dashConfig,setDashConfig]=useState({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
   const[appName,setAppName]=useState("Trackfi");
@@ -3471,7 +3471,7 @@ function AppInner(){
   const allTabIds=GROUPS.flatMap(g=>g.items.map(i=>i.id));
   const isMoreTab=allTabIds.includes(tab);
   // Urgent bill badge — red dot if any overdue or due today
-  const billUrgent=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<=1&&dueIn(b.dueDate)>=-0).length;
+  const billUrgent=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<=1&&dueIn(b.dueDate)>=0).length;
   const billOverdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0).length;
   const billNavBadge=billOverdue>0?billOverdue:billUrgent>0?billUrgent:null;
   const NAV=[
@@ -3794,9 +3794,9 @@ function AppInner(){
                 {id:"networth",l:"Net Worth",ic:"📈",a:()=>navTo("networthtrend"),bg:C.greenBg,c:C.green},
                 {id:"calendar_nav",l:"Calendar",ic:"📅",a:()=>navTo("calendar"),bg:C.amberBg,c:C.amber},
               ];
-              const activeIds=settings.quickActions||["expense","receipt","bill","debt","simulator","budget","expense","bill","paycheck","debt","health","budget","savings","insights"];
+              const activeIds=settings.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];
               const active=ALL_QA.filter(q=>activeIds.includes(q.id));
-              const urgentBillsQA=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<=3&&dueIn(b.dueDate)>=-0);
+              const urgentBillsQA=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<=3&&dueIn(b.dueDate)>=0);
               const overdueQA=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
               return(
                 <div style={{marginBottom:14}}>
@@ -3879,16 +3879,17 @@ function AppInner(){
             <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
               {(()=>{
                 const now_c=new Date();
+                const urgentPayBills=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<=3&&dueIn(b.dueDate)>=0).slice(0,2);
                 const chips=[
-                  {l:"💸 Log expense",t:""},
-                  {l:"📅 Add bill",t:"rent 1200 due 28th"},
-                  {l:"🏦 Update checking",t:"checking "},
-                  {l:"💳 Log debt",t:""},
-                  ...(bills.filter(b=>!b.paid&&dueIn(b.dueDate)<=3&&dueIn(b.dueDate)>=0).slice(0,2).map(b=>({l:"✓ Pay "+b.name,t:"paid "+b.name}))),
+                  {l:"💸 Log Expense",a:()=>om("expense")},
+                  {l:"📅 Add Bill",a:()=>om("bill")},
+                  {l:"💳 Add Debt",a:()=>om("debt")},
+                  {l:"🎯 Add Goal",a:()=>navTo("savings")},
+                  {l:"💰 Paycheck Plan",a:()=>navTo("paycheck")},
+                  ...urgentPayBills.map(b=>({l:"✓ Pay "+b.name,a:()=>setBills(p=>p.map(x=>x.id===b.id?{...x,paid:true}:x))})),
                 ];
                 return chips.map((c,i)=>(
-                  <div key={i} style={{flexShrink:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:99,padding:"5px 11px",fontSize:11,fontWeight:600,color:C.textMid,cursor:"pointer",whiteSpace:"nowrap"}}
-                    onClick={()=>{if(c.t){const el=document.querySelector(".fv-chat-input");if(el){el.value=c.t;el.focus();el.dispatchEvent(new Event("input",{bubbles:true}));}}}}>
+                  <div key={i} onClick={c.a} style={{flexShrink:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:99,padding:"6px 12px",fontSize:11,fontWeight:600,color:C.textMid,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 1px 2px rgba(10,22,40,.06)"}}>
                     {c.l}
                   </div>
                 ));
@@ -4086,8 +4087,8 @@ function AppInner(){
       {editItem&&editItem.type==="debt"&&<EditModal item={editItem} categories={categories} onSave={u=>{setDebts(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setDebts(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {modal==="quickactions"&&(()=>{
         const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Scan Receipt",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Envelopes",ic:"📦"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📈"},{id:"insights",l:"Insights",ic:"📊"},{id:"paycheck",l:"Paycheck",ic:"💰"},{id:"health",l:"Health Score",ic:"❤️"},{id:"bills_nav",l:"View Bills",ic:"📅"},{id:"calendar_nav",l:"Calendar",ic:"📅"},{id:"recurring_nav",l:"Recurring",ic:"🔄"}];
-        const active=settings.quickActions||["expense","receipt","bill","debt","simulator","budget","expense","bill","paycheck","debt","health","budget","savings","insights"];
-        const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","receipt","bill","debt","simulator","budget","expense","bill","paycheck","debt","health","budget","savings","insights"];const next=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];return{...p,quickActions:next};});
+        const active=settings.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];
+        const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];const next=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];return{...p,quickActions:next};});
         return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Customize Quick Actions</div><div style={{fontSize:13,color:C.textLight,marginBottom:18}}>Choose up to 6 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);return(<button key={q.id} onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"#fff",cursor:"pointer",textAlign:"left"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button onClick={()=>setModal(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button></div></div>);
       })()}
     </div>
