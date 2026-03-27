@@ -418,7 +418,7 @@ function OnboardingWizard({onComplete}){
     ),btnLabel:"Continue →",canSkip:false},
 
     // ── STEP 3: Income ───────────────────────────────────────
-    {title:firstName?"What do you bring home, "+firstName+"?":"Your monthly income",body:(
+    {title:firstName?"What do you bring home, "+firstName+"?":"Your take-home income",body:(
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:10}}>Enter your take-home <strong>per paycheck</strong> — we calculate the rest.</div>
         <div style={{marginBottom:14}}>
@@ -433,8 +433,8 @@ function OnboardingWizard({onComplete}){
           </div>
         </div>
         <div>
-          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>{getProfession(d.profCategory).icon} Primary Take-Home / Month</div>
-          <input type="number" placeholder="e.g. 4500" value={d.income?.primary||""}
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>{getProfession(d.profCategory).icon} Take-Home Per Paycheck</div>
+          <input type="number" placeholder="e.g. 2,250" value={d.income?.primary||""}
             onChange={e=>setD(p=>({...p,income:{...(p.income||{}),primary:e.target.value}}))}
             style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${parseFloat(d.income?.primary||0)>0?C.accent:C.border}`,borderRadius:12,padding:"12px 14px",fontSize:22,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box"}}/>
         </div>
@@ -446,8 +446,8 @@ function OnboardingWizard({onComplete}){
         </div>
         {parseFloat(d.income?.primary||0)>0&&(
           <div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontSize:12,color:C.green,fontWeight:600,marginBottom:2}}>Annual estimate</div>
-            <div style={{fontFamily:MF,fontWeight:800,fontSize:20,color:C.green}}>${((parseFloat(d.income?.primary||0)+parseFloat(d.income?.other||0))*12).toLocaleString()}</div>
+            <div style={{fontSize:12,color:C.green,fontWeight:600,marginBottom:2}}>Estimated annual ({d.income?.payFrequency||"Biweekly"} pay)</div>
+            <div style={{fontFamily:MF,fontWeight:800,fontSize:20,color:C.green}}>${Math.round((parseFloat(d.income?.primary||0)*(d.income?.payFrequency==="Weekly"?52:d.income?.payFrequency==="Twice Monthly"?24:d.income?.payFrequency==="Monthly"?12:26))+(parseFloat(d.income?.other||0)*12)).toLocaleString()}</div>
           </div>
         )}
       </div>
@@ -460,7 +460,7 @@ function OnboardingWizard({onComplete}){
         <div style={{fontSize:13,fontWeight:600,color:C.accent,marginBottom:4}}>Welcome, {d.name.split(" ")[0]}! Here's what we've set up:</div>
         <div style={{display:"flex",flexDirection:"column",gap:3}}>
           <div style={{fontSize:12,color:C.textMid}}>✓ Profile — {getProfession(d.profCategory).icon} {getProfSub(d.profCategory,d.profSub).label}</div>
-          {parseFloat(d.income?.primary||0)>0&&<div style={{fontSize:12,color:C.textMid}}>✓ Income — {fmt(parseFloat(d.income.primary))} / month</div>}
+          {parseFloat(d.income?.primary||0)>0&&<div style={{fontSize:12,color:C.textMid}}>✓ Take-home — {fmt(parseFloat(d.income.primary))} / {(d.income?.payFrequency||"biweekly").toLowerCase()} paycheck</div>}
         </div>
       </div>}
       <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:12}}>Last step — add your account balances to unlock net worth tracking and safe-to-spend. Totally optional, you can skip and add later.</div>
@@ -587,7 +587,7 @@ Or ask: \"can I afford $200?\""}]);
   const[input,setInput]=useState("");const[pending,setPending]=useState(null);const[history,setHistory]=useState([]);
   const botRef=useRef();
   useEffect(()=>{botRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,pending]);
-  const ti=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
+  const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
   const te=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const ck=parseFloat(accounts.checking||0);
   // Use real pay-frequency-aware safe-to-spend
@@ -691,7 +691,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
   const thisTotal=thisExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const lastTotal=lastExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const diff=lastTotal>0?((thisTotal-lastTotal)/lastTotal*100):0;
-  const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const catMap=thisExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
   const catSorted=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   const lastCatMap=lastExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
@@ -772,7 +772,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
 
 function PaycheckView({bills,income,expenses,accounts,onAdd}){
   const now=new Date();
-  const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const checking=parseFloat(accounts.checking||0);
   const payFreq=income.payFrequency||"Biweekly";
   // Pay per period based on frequency
@@ -1002,7 +1002,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
           <div style={{marginBottom:16}}>
             {/* Budget summary header */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Budgets — {MOS[now.getMonth()]}</div>
+              <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Spending Envelopes — {MOS[now.getMonth()]}</div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 {overCount>0&&<div style={{fontSize:11,fontWeight:700,color:C.red,background:C.redBg,borderRadius:99,padding:"2px 8px"}}>{overCount} over</div>}
                 {warnCount>0&&<div style={{fontSize:11,fontWeight:700,color:C.amber,background:C.amberBg,borderRadius:99,padding:"2px 8px"}}>{warnCount} near limit</div>}
@@ -1096,7 +1096,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
           <ExpenseRow key={e.id} e={e} cat={cat} onEdit={()=>setEditItem({type:"expense",data:e})} onDelete={()=>{if(window.confirm("Delete "+e.name+"?")){setExpenses(p=>p.filter(x=>x.id!==e.id));showToast&&showToast("Deleted — "+e.name,"error");}}}/>
         );
       })}
-      {showAdd&&<Modal title="Budget Goal" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Set Goal" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Monthly Limit ($)" type="number" placeholder="400" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
+      {showAdd&&<Modal title="Spending Envelope" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Add Envelope" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Monthly Budget ($)" type="number" placeholder="e.g. 150 for haircuts, 300 for gas" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
     </div>
   );
 }function BillsView({bills,setBills,setEditItem,onAdd,showToast}){
@@ -1815,7 +1815,7 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
   const totE=mExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const totB=mBills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   const tradePnl=mTrades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
-  const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const catMap=mExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
   function exportHTML(){const rows=mExp.map(e=>"<tr><td>"+e.date+"</td><td>"+e.name+"</td><td>"+e.category+"</td><td>$"+parseFloat(e.amount).toFixed(2)+"</td></tr>").join("");const html="<html><head><title>"+MOS[mo]+" "+yr+" Statement</title></head><body><h1>"+(appName||"Finances")+" — "+MOS[mo]+" "+yr+"</h1><table border='1'><tr><th>Date</th><th>Name</th><th>Category</th><th>Amount</th></tr>"+rows+"<tr><td colspan='3'><b>Total</b></td><td><b>$"+totE.toFixed(2)+"</b></td></tr></table></body></html>";const b=new Blob([html],{type:"text/html"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"finances")+"-"+MOS[mo]+"-"+yr+".html";a.click();URL.revokeObjectURL(u);}
   function exportCSV(){const hdr=["Date","Name","Category","Amount"];const rowData=mExp.map(e=>[e.date,e.name.replace(/,/g," "),e.category,parseFloat(e.amount).toFixed(2)]);const csv=[hdr,...rowData].map(r=>r.join(",")).join("\r\n");const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"trackfi")+"-"+MOS[mo]+"-"+yr+".csv";a.click();URL.revokeObjectURL(u);}
@@ -1856,7 +1856,7 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
 }
 
 function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoals}){
-  const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const annualIncome=ti*12;
   const te=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
@@ -2115,7 +2115,7 @@ function generateDemoData(){
 }
 
 function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
-  const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const te=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
   const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0));
@@ -2191,7 +2191,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
 function IncomeSpendingView({expenses,income,trades}){
   const[range,setRange]=useState("1M");
   const now=new Date();
-  const ti=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
+  const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
   const months=range==="1M"?1:range==="3M"?3:range==="6M"?6:12;
   const data=useMemo(()=>Array.from({length:months},(_,i)=>{
     const d=new Date(now.getFullYear(),now.getMonth()-months+1+i,1);
@@ -2300,7 +2300,7 @@ function ConfirmDialog({title,message,onConfirm,onCancel,danger=false}){
 
 function TaxView({expenses,income,trades,shifts,appName}){
   const now=new Date();const yr=now.getFullYear();
-  const ti=(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const annualIncome=ti*12;
   const tradePnl=trades.filter(t=>t.date?.startsWith(String(yr))).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
   const shiftEarnings=shifts.filter(s=>s.date?.startsWith(String(yr))).reduce((s,x)=>s+(parseFloat(x.gross)||0),0);
@@ -2744,7 +2744,12 @@ function AppInner(){
   useEffect(()=>{if(ready)ss("fv6:taccount",tradingAccount);},[tradingAccount,ready]);
   useEffect(()=>{try{localStorage.setItem("fv_dark",darkMode?"1":"0");}catch{}},[darkMode]);
 
-  const totalIncome=useMemo(()=>(parseFloat(income.primary||0))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
+  // paycheckMultiplier converts per-paycheck primary income → monthly
+  const paycheckMultiplier=income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17;
+  // monthlyIncome = what actually comes in per month (all sources)
+  const monthlyIncome=useMemo(()=>(parseFloat(income.primary||0)*paycheckMultiplier)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income,paycheckMultiplier]);
+  // totalIncome = alias for monthlyIncome (keeps all existing references working)
+  const totalIncome=monthlyIncome;
   const totalAssets=useMemo(()=>(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0)),[accounts]);
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const totalDebt=useMemo(()=>debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0),[debts]);
@@ -2758,7 +2763,8 @@ function AppInner(){
   // Pay frequency helpers — all plain computed values, no hooks needed
   const payFreq=income.payFrequency||"Biweekly";
   const payPeriodDays=payFreq==="Weekly"?7:payFreq==="Biweekly"?14:payFreq==="Twice Monthly"?15:30;
-  const payPerPeriod=payFreq==="Weekly"?totalIncome/4.33:payFreq==="Biweekly"?totalIncome/2:payFreq==="Twice Monthly"?totalIncome/2:totalIncome;
+  // payPerPeriod = what lands in your account each paycheck (primary only)  
+  const payPerPeriod=parseFloat(income.primary||0);
   // Next payday — computed once, stable string for comparisons
   const _now=new Date();const _tod=_now.getDate();
   const nextPayDate=(()=>{
@@ -2772,8 +2778,17 @@ function AppInner(){
   const billsBeforeNextPayAmt=bills.reduce((s,b)=>{if(b.paid)return s;const d=(b.dueDate||"");return d&&d<=nextPayStr?s+(parseFloat(b.amount)||0):s;},0);
   // Projected spend until next pay
   const projectedUntilPay=burnRate*daysUntilNextPay;
-  // Real safe to spend: checking minus all bills before next pay, minus projected spend, minus $200 buffer
-  const sts=Math.max(0,(parseFloat(accounts.checking||0))-billsBeforeNextPayAmt-projectedUntilPay-200);
+  // Budget envelopes: reduce sts by the portion of variable budgets remaining until next pay
+  // e.g. if haircut budget is $150/mo and next pay is 7 days away, reserve $35 (7/30 * $150)
+  const envelopeReserve=budgetGoals.reduce((s,g)=>{
+    const limit=parseFloat(g.limit||0);if(!limit)return s;
+    const ms_e=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
+    const spent=0;// expenses already filtered into sts via projectedUntilPay
+    const dayFraction=Math.min(1,daysUntilNextPay/30);
+    return s+(limit*dayFraction);
+  },0);
+  // Real safe to spend: checking minus bills, minus projected spend, minus envelope reserve, minus $200 buffer
+  const sts=Math.max(0,(parseFloat(accounts.checking||0))-billsBeforeNextPayAmt-projectedUntilPay-envelopeReserve-200);
   const liquid=(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));
   const savingsRate=totalIncome>0?Math.max(0,cashflow/totalIncome*100):0;
   const spendingStreak=useMemo(()=>{
@@ -3171,7 +3186,7 @@ function AppInner(){
                 {id:"bill",l:"Add Bill",ic:"📅",a:()=>om("bill"),bg:C.amberBg,c:C.amber},
                 {id:"debt",l:"Add Debt",ic:"💳",a:()=>om("debt"),bg:C.redBg,c:C.red},
                 {id:"simulator",l:"Payoff Sim",ic:"🧮",a:()=>debts.length?setModal("simulator"):om("debt"),bg:C.greenBg,c:C.green},
-                {id:"budget",l:"Set Budget",ic:"🎯",a:()=>om("bgoal_home"),bg:C.purpleBg,c:C.purple},
+                {id:"budget",l:"Envelopes",ic:"📦",a:()=>om("bgoal_home"),bg:C.purpleBg,c:C.purple},
                 {id:"shift",l:"Log Shift",ic:"🏥",a:()=>navTo("shifts"),bg:C.accentBg,c:C.accent},
                 {id:"trade",l:"Log Trade",ic:"📈",a:()=>navTo("trading"),bg:C.greenBg,c:C.green},
                 {id:"savings",l:"Add Goal",ic:"🎯",a:()=>navTo("savings"),bg:C.amberBg,c:C.amber},
@@ -3314,7 +3329,13 @@ function AppInner(){
               {[{k:"primary",l:`${getProfession(profCategory).icon} Primary take-home / paycheck`},{k:"other",l:"Other Income"},{k:"trading",l:"Trading avg"},{k:"rental",l:"Rental Income"},{k:"dividends",l:"Dividends"},{k:"freelance",l:"Freelance"}].map(i=>(
                 <div key={i.k} style={{marginBottom:10}}><div style={{fontSize:11,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>{i.l}</div><input type="number" placeholder="0.00" value={income[i.k]||""} onChange={e=>setIncome(p=>({...p,[i.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ Income saved");}} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:14,outline:"none"}}/></div>
               ))}
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:10,paddingTop:12,borderTop:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>Total Monthly</span><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:11,color:C.green,fontWeight:600}}>✓ Auto-saved</span><span style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.green}}>{fmt(totalIncome)}</span></div></div>
+              <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginTop:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                <span style={{fontSize:12,color:C.accent,fontWeight:600}}>Monthly equivalent</span>
+                <span style={{fontFamily:MF,fontSize:16,fontWeight:800,color:C.accent}}>{fmt(totalIncome)}</span>
+              </div>
+              <div style={{fontSize:11,color:C.accent,opacity:.7}}>({income.payFrequency||"Biweekly"} × {income.payFrequency==="Weekly"?"4.33":income.payFrequency==="Twice Monthly"?"2":income.payFrequency==="Monthly"?"1":"2.17"} + other sources)</div>
+            </div>
             </div>
           </div>
         )}
@@ -3364,7 +3385,7 @@ function AppInner(){
       {modal==="expense"&&<Modal title="Log Expense" icon={Wallet} onClose={cl} onSubmit={submit} submitLabel="Add Expense"><FI label="Name" placeholder="Coffee, groceries, gas..." value={form.name||""} onChange={e=>{ff("name",e.target.value);if(!form.category){const t=e.target.value.toLowerCase().trim();const mc=window._merchantCats||{};if(mc[t]){ff("category",mc[t]);}else{const catMap={Food:["lunch","dinner","coffee","food","eat","restaurant","pizza","burger","groceries","doordash","starbucks","chipotle"],Transport:["gas","uber","lyft","parking","toll"],Housing:["rent","mortgage","repair"],Subscriptions:["netflix","hulu","spotify","gym","membership"],Health:["doctor","pharmacy","medicine","dental"],Entertainment:["movie","game","bar","concert"],Personal:["haircut","barber","clothes","shopping","amazon","target"]};for(const[cat,kws]of Object.entries(catMap)){if(kws.some(k=>t.includes(k))){ff("category",cat);break;}}}}}}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)} autoFocus={!!form.name}/><FI half label="Date" type="date" value={form.date||todayStr()} onChange={e=>ff("date",e.target.value)}/></div><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Notes" placeholder="Optional" value={form.notes||""} onChange={e=>ff("notes",e.target.value)}/><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Recurring</div><div style={{fontSize:12,color:C.textLight}}>Auto-log this monthly</div></div><button onClick={()=>ff("recurring",!form.recurring)} style={{background:"none",border:"none",cursor:"pointer",color:form.recurring?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.recurring?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div></Modal>}
       {modal==="bill"&&<Modal title="Add Bill" icon={CalendarClock} onClose={cl} onSubmit={submit} submitLabel="Add Bill" accent={C.amber}><FI label="Bill Name" placeholder="Rent, Electric, Netflix..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Monthly","Bi-weekly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/></Modal>}
       {modal==="debt"&&<Modal title="Add Debt" icon={CreditCard} onClose={cl} onSubmit={submit} submitLabel="Track Debt" accent={C.red} wide><FI label="Name" placeholder="Car loan, student debt..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div style={{display:"flex",gap:12}}><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/></div></Modal>}
-      {modal==="bgoal_home"&&<Modal title="Budget Goal" icon={Target} onClose={cl} onSubmit={()=>{if(!form.category||!form.limit)return;setBGoals(p=>[...p,{id:Date.now(),...form}]);cl();}} submitLabel="Set Goal" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Monthly Limit ($)" type="number" placeholder="400" value={form.limit||""} onChange={e=>ff("limit",e.target.value)}/></Modal>}
+      {modal==="bgoal_home"&&<Modal title="Spending Envelope" icon={Target} onClose={cl} onSubmit={()=>{if(!form.category||!form.limit)return;setBGoals(p=>[...p,{id:Date.now(),...form}]);cl();}} submitLabel="Add Envelope" accent={C.purple}><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Monthly Budget ($)" type="number" placeholder="e.g. 150 for haircuts, 300 for gas" value={form.limit||""} onChange={e=>ff("limit",e.target.value)}/></Modal>}
       {modal==="receipt"&&<Modal title="Scan Receipt" icon={Scan} onClose={cl} accent={C.purple}><div style={{textAlign:"center",padding:"10px 0 20px"}}><div style={{width:64,height:64,borderRadius:18,background:C.purpleBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><Scan size={30} color={C.purple}/></div><div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:8}}>Scan Receipt</div><label style={{display:"block",background:C.purple,borderRadius:12,padding:"13px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📷 Take Photo<input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><label style={{display:"block",background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:12,padding:"13px 0",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>🖼 Choose from Library<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><button className="ba" onClick={cl} style={{background:C.bg,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",width:"100%"}}>Cancel</button></div></Modal>}
       {modal==="simulator"&&debts.length>0&&(()=>{const dL=debts.map(d=>({...d,bal:parseFloat(d.balance||0),rate:parseFloat(d.rate||0)/100/12,min:parseFloat(d.minPayment||0)}));const tm=dL.reduce((s,d)=>s+d.min,0);const ex=parseFloat(form.extra||"0")||0;function sim(strat){let r=dL.map(d=>({...d}));let mo=0,ti=0;while(r.some(d=>d.bal>0)&&mo<600){mo++;let av=tm+ex;r=r.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;ti+=i;const p=Math.min(d.min,d.bal+i);av-=p;return{...d,bal:Math.max(0,d.bal+i-p)};});const ac=r.filter(d=>d.bal>0);if(ac.length&&av>0){const tgt=strat==="avalanche"?ac.reduce((a,b)=>a.rate>b.rate?a:b):ac.reduce((a,b)=>a.bal<b.bal?a:b);const idx=r.findIndex(d=>d.name===tgt.name);r[idx].bal=Math.max(0,r[idx].bal-av);}}return{months:mo,interest:ti};}const sn=sim("snowball"),av=sim("avalanche"),diff=sn.interest-av.interest;return(<Modal title="Payoff Simulator" icon={Calculator} onClose={cl} accent={C.green} wide><div style={{background:C.navy,borderRadius:14,padding:16,marginBottom:14,color:"#fff"}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",marginBottom:4}}>TOTAL DEBT</div><div style={{fontFamily:MF,fontSize:26,fontWeight:800,color:C.red}}>{fmt(debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0))}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>Min payments: {fmt(tm)}/mo</div></div><div style={{marginBottom:16}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Extra Monthly Payment</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.accent}}>{ex>0?"+"+fmt(ex):"$0"}</div></div><input type="range" min="0" max="1000" step="25" value={form.extra||0} onChange={e=>ff("extra",e.target.value)} style={{width:"100%",accentColor:C.accent,cursor:"pointer",marginBottom:6}}/><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textFaint}}><span>$0</span><span>$500</span><span>$1,000</span></div><div style={{marginTop:8,fontSize:12,color:C.textLight}}>Total: <span style={{fontWeight:700,color:C.text}}>{fmt(tm+ex)}/mo</span></div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>{[{label:"❄️ Snowball",sub:"Smallest first",m:sn.months,i:sn.interest,c:C.accent},{label:"🔥 Avalanche",sub:"Highest rate first",m:av.months,i:av.interest,c:C.green}].map(s=><div key={s.label} style={{background:C.surface,border:`1.5px solid ${s.c}44`,borderRadius:14,padding:14,borderTop:`3px solid ${s.c}`}}><div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:s.c,marginBottom:2}}>{s.label}</div><div style={{fontSize:11,color:C.textLight,marginBottom:10}}>{s.sub}</div><div style={{marginBottom:6}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>DEBT FREE</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.text}}>{s.m>=600?"∞":s.m<12?s.m+"mo":Math.floor(s.m/12)+"y "+(s.m%12)+"mo"}</div></div><div><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>INTEREST</div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red}}>{fmt(s.i)}</div></div></div>)}</div>{diff>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",fontSize:13,color:C.green,fontWeight:500}}>💡 Avalanche saves <strong>{fmt(diff)}</strong> vs Snowball</div>}</Modal>);})()} 
 
@@ -3373,7 +3394,7 @@ function AppInner(){
       {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} onSave={u=>{setBills(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Bill updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setBills(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="debt"&&<EditModal item={editItem} categories={categories} onSave={u=>{setDebts(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setDebts(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {modal==="quickactions"&&(()=>{
-        const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Scan Receipt",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Set Budget",ic:"🎯"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📊"},{id:"insights",l:"Insights",ic:"🔍"},{id:"paycheck",l:"Paycheck",ic:"💰"}];
+        const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Scan Receipt",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Envelopes",ic:"📦"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📊"},{id:"insights",l:"Insights",ic:"🔍"},{id:"paycheck",l:"Paycheck",ic:"💰"}];
         const active=settings.quickActions||["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"];
         const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"];const next=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];return{...p,quickActions:next};});
         return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Customize Quick Actions</div><div style={{fontSize:13,color:C.textLight,marginBottom:18}}>Choose up to 6 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);return(<button key={q.id} onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"#fff",cursor:"pointer",textAlign:"left"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button onClick={()=>setModal(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button></div></div>);
