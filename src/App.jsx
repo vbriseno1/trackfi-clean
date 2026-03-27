@@ -685,6 +685,7 @@ function SearchView({expenses,bills,debts,trades,categories,setEditItem,onNaviga
 }
 
 function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
+  const[drillCat,setDrillCat]=useState(null);
   const now=new Date();
   const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const lastMs=new Date(now.getFullYear(),now.getMonth()-1,1).getFullYear()+"-"+String(new Date(now.getFullYear(),now.getMonth()-1,1).getMonth()+1).padStart(2,"0");
@@ -720,18 +721,27 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
         {catSorted.map(([cat,amt],i)=>{
           const lastAmt=lastCatMap[cat]||0;
           const catDiff=lastAmt>0?((amt-lastAmt)/lastAmt*100):0;
-          return(<div key={cat} style={{marginBottom:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:PIE_COLORS[i%PIE_COLORS.length]}}/><span style={{fontSize:13,fontWeight:600,color:C.text}}>{cat}</span></div>
+          const isOpen=drillCat===cat;
+          const catTxns=thisExp.filter(e=>e.category===cat).sort((a,b)=>new Date(b.date)-new Date(a.date));
+          return(<div key={cat} style={{marginBottom:8}}>
+            <div onClick={()=>setDrillCat(isOpen?null:cat)} style={{display:"flex",justifyContent:"space-between",marginBottom:5,cursor:"pointer",padding:"6px 8px",borderRadius:10,background:isOpen?PIE_COLORS[i%PIE_COLORS.length]+"12":"transparent",border:isOpen?`1px solid ${PIE_COLORS[i%PIE_COLORS.length]}30`:"1px solid transparent",transition:"background .15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:PIE_COLORS[i%PIE_COLORS.length]}}/><span style={{fontSize:13,fontWeight:600,color:C.text}}>{cat}</span><span style={{fontSize:10,color:C.textLight,fontWeight:500}}>{catTxns.length} txn{catTxns.length!==1?"s":""}}</span></div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 {lastAmt>0&&<span style={{fontSize:11,color:catDiff>10?C.red:catDiff<-10?C.green:C.textLight,fontWeight:600}}>{catDiff>0?"+":""}{catDiff.toFixed(0)}%</span>}
                 <span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text}}>{fmt(amt)}</span>
+                <span style={{fontSize:10,color:PIE_COLORS[i%PIE_COLORS.length],fontWeight:700}}>{isOpen?"▲":"▼"}</span>
               </div>
             </div>
             <BarProg pct={thisTotal>0?amt/thisTotal*100:0} color={PIE_COLORS[i%PIE_COLORS.length]} h={6}/>
+            {isOpen&&<div style={{marginTop:8,background:C.surfaceAlt,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+              {catTxns.slice(0,8).map((e,ei)=>(<div key={e.id||ei} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",borderBottom:ei<Math.min(catTxns.length,8)-1?`1px solid ${C.border}`:"none"}}>
+                <div><div style={{fontSize:13,fontWeight:600,color:C.text}}>{e.name}</div><div style={{fontSize:11,color:C.textLight}}>{e.date}</div></div>
+                <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(e.amount)}</div>
+              </div>))}
+              {catTxns.length>8&&<div style={{padding:"8px 12px",fontSize:12,color:C.textLight,textAlign:"center"}}>+{catTxns.length-8} more — see Spending tab</div>}
+            </div>}
           </div>);
-        })}
-      </div>}
+        })      </div>}
       {topMerchants.length>0&&<div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Top Merchants</div>
         {topMerchants.map(([name,amt],i)=>(
@@ -827,24 +837,20 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
           <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
             <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Spending by Day of Week</div>
             <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>{topDay.day} is your biggest spending day — {fmt(topDay.total)} total</div>
-            <div style={{display:"flex",gap:4,alignItems:"flex-end",height:80,marginBottom:10}}>
-              {dow.map(({day,total,count})=>{
-                const h=Math.max(6,Math.round((total/maxTotal)*72));
+            <div style={{display:"flex",gap:4,alignItems:"flex-end",height:90,marginBottom:8}}>
+              {dow.map(({day,total,count,avg})=>{
+                const h=Math.max(6,Math.round((total/maxTotal)*80));
                 const isTop=total===Math.max(...dow.map(d=>d.total));
                 return(
-                  <div key={day} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                    <div style={{fontSize:9,color:C.textFaint,fontWeight:600}}>{count>0?fmt(total/count).replace("$","$").replace(".00",""):"—"}</div>
+                  <div key={day} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
                     <div style={{width:"100%",height:h,background:isTop?`linear-gradient(180deg,${C.accent},${C.purple})`:C.accentBg,borderRadius:"4px 4px 0 0",transition:"height .4s"}}/>
-                    <div style={{fontSize:10,color:isTop?C.accent:C.textLight,fontWeight:isTop?700:400}}>{day}</div>
+                    <div style={{fontSize:9,color:isTop?C.accent:C.textLight,fontWeight:isTop?700:400,lineHeight:1.2,textAlign:"center"}}>{day}</div>
+                    <div style={{fontSize:8,color:C.textFaint,fontWeight:500}}>{count>0?fmt(avg).replace(".00",""):"—"}</div>
                   </div>
                 );
               })}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-              {dow.map(({day,count})=>(
-                <div key={day} style={{textAlign:"center",fontSize:9,color:C.textLight}}>{count} txn{count!==1?"s":""}</div>
-              ))}
-            </div>
+            <div style={{fontSize:10,color:C.textLight,textAlign:"center",marginTop:2}}>avg per visit shown below each bar</div>
           </div>
         );
       })()}
@@ -1140,7 +1146,8 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
       </div>
     </div>
   );
-}function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast}){
+}
+function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast}){
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
   const[showChart,setShowChart]=useState(true);
@@ -1387,9 +1394,7 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
     })()}
     </div>
   );
-}
-
-function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt}){
+}function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt}){
   const[selectedDebt,setSelectedDebt]=useState(null);
   const[strategy,setStrategy]=useState("avalanche");
   const[payModal,setPayModal]=useState(null);
@@ -1514,6 +1519,52 @@ function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,
                   </div>
                 ))}
               </div>
+              {base.months>0&&base.months<500&&(()=>{
+                // Build balance-over-time data for chart
+                const chartData=[];
+                let rem2=prioritized.map(d=>{const b=parseFloat(d.balance)||0;const r=(parseFloat(d.rate)||0)/100/12;return{bal:b,rate:r,min:parseFloat(d.minPayment)||Math.max(25,b*0.02+r*b)};});
+                let rem3=withExtra?prioritized.map(d=>{const b=parseFloat(d.balance)||0;const r=(parseFloat(d.rate)||0)/100/12;return{bal:b,rate:r,min:parseFloat(d.minPayment)||Math.max(25,b*0.02+r*b)};}) : null;
+                const step=Math.max(1,Math.floor(base.months/12));
+                for(let mo=0;mo<=Math.min(base.months,600);mo+=step){
+                  const bal2=rem2.reduce((s,d)=>s+Math.max(0,d.bal),0);
+                  const bal3=rem3?rem3.reduce((s,d)=>s+Math.max(0,d.bal),0):null;
+                  chartData.push({mo,base:parseFloat(bal2.toFixed(0)),extra:bal3!==null?parseFloat(bal3.toFixed(0)):undefined});
+                  // Advance simulation
+                  let freed2=0;
+                  rem2=rem2.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;const pay=Math.min(d.min,d.bal+i);freed2+=Math.max(0,d.min-pay);return{...d,bal:Math.max(0,d.bal+i-pay)};});
+                  const f2=rem2.find(d=>d.bal>0.01);if(f2){const fi=rem2.indexOf(f2);for(let s=0;s<step;s++)rem2[fi].bal=Math.max(0,rem2[fi].bal-(freed2));}
+                  if(rem3){let freed3=0;rem3=rem3.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;const pay=Math.min(d.min,d.bal+i);freed3+=Math.max(0,d.min-pay);return{...d,bal:Math.max(0,d.bal+i-pay)};});const f3=rem3.find(d=>d.bal>0.01);if(f3){const fi3=rem3.indexOf(f3);for(let s=0;s<step;s++)rem3[fi3].bal=Math.max(0,rem3[fi3].bal-(freed3+extraPayDebt));}}
+                }
+                if(chartData[chartData.length-1]?.base>0)chartData.push({mo:base.months,base:0,extra:withExtra?0:undefined});
+                return(
+                  <div style={{marginBottom:16}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.6)",marginBottom:8}}>Payoff Timeline</div>
+                    <ResponsiveContainer width="100%" height={120}>
+                      <AreaChart data={chartData} margin={{left:-20,right:4,top:4,bottom:0}}>
+                        <defs>
+                          <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#fca5a5" stopOpacity={.3}/>
+                            <stop offset="95%" stopColor="#fca5a5" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="debtGradX" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={C.green} stopOpacity={.3}/>
+                            <stop offset="95%" stopColor={C.green} stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="mo" tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v+"mo"}/>
+                        <YAxis tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
+                        <Tooltip formatter={(v,n)=>[fmt(v),n==="base"?"Min payments":"With extra"]} contentStyle={{background:C.navy,border:"1px solid rgba(255,255,255,.15)",borderRadius:10,fontSize:11}} labelFormatter={v=>v+"mo"}/>
+                        <Area type="monotone" dataKey="base" stroke="#fca5a5" strokeWidth={2} fill="url(#debtGrad)" dot={false} name="base"/>
+                        {withExtra&&<Area type="monotone" dataKey="extra" stroke={C.greenMid} strokeWidth={2} fill="url(#debtGradX)" dot={false} name="extra"/>}
+                      </AreaChart>
+                    </ResponsiveContainer>
+                    {withExtra&&<div style={{display:"flex",gap:12,justifyContent:"center",marginTop:4}}>
+                      <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"rgba(255,255,255,.5)"}}><div style={{width:12,height:2,background:"#fca5a5",borderRadius:1}}/> Min payments</div>
+                      <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"rgba(255,255,255,.5)"}}><div style={{width:12,height:2,background:C.greenMid,borderRadius:1}}/> With extra</div>
+                    </div>}
+                  </div>
+                );
+              })()}
               <div style={{background:"rgba(255,255,255,.06)",borderRadius:12,padding:"12px 14px"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                   <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.7)"}}>What if you paid extra?</div>
@@ -1726,6 +1777,48 @@ function SavingsGoalsView({goals,setGoals,income,showToast}){
           </div>
           {nearComplete.length>0&&<div style={{fontSize:12,color:C.amberMid}}>⚡ {nearComplete.map(g=>g.name).join(', ')} almost done!</div>}
         </div>);
+      })()}
+      {goals.length>0&&goals.some(g=>parseFloat(g.monthly||0)>0)&&(()=>{
+        // Build projected savings chart — next 12 months
+        const now2=new Date();
+        const chartData=Array.from({length:13},(_,mo)=>{
+          const point={month:mo===0?"Now":FULL_MOS[new Date(now2.getFullYear(),now2.getMonth()+mo,1).getMonth()].slice(0,3)};
+          goals.forEach(g=>{
+            const monthly2=parseFloat(g.monthly||0);
+            const projected=Math.min(parseFloat(g.target||0),(parseFloat(g.saved||0))+(monthly2*mo));
+            point[g.name]=parseFloat(projected.toFixed(0));
+          });
+          return point;
+        });
+        const GOAL_COLORS=[C.teal,C.accent,C.green,C.purple,C.amber];
+        return(
+          <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
+            <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>12-Month Projection</div>
+            <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>Where each goal lands if you contribute monthly</div>
+            <ResponsiveContainer width="100%" height={160}>
+              <LineChart data={chartData} margin={{left:-10,right:4,top:4,bottom:0}}>
+                <XAxis dataKey="month" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fill:C.textLight,fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={38}/>
+                <Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/>
+                {goals.filter(g=>parseFloat(g.monthly||0)>0).map((g,i)=>(
+                  <Line key={g.id} type="monotone" dataKey={g.name} stroke={g.color||GOAL_COLORS[i%GOAL_COLORS.length]} strokeWidth={2.5} dot={false} strokeDasharray={i>0?"4 2":"none"}/>
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>
+              {goals.filter(g=>parseFloat(g.monthly||0)>0).map((g,i)=>{
+                const rem=Math.max(0,parseFloat(g.target||0)-parseFloat(g.saved||0));
+                const mo=parseFloat(g.monthly||0);
+                const months2=mo>0?Math.ceil(rem/mo):0;
+                return(<div key={g.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:11}}>
+                  <div style={{width:10,height:2,background:g.color||GOAL_COLORS[i%GOAL_COLORS.length],borderRadius:1}}/>
+                  <span style={{color:C.textMid,fontWeight:500}}>{g.name}</span>
+                  {months2>0&&<span style={{color:C.textLight}}>·{months2}mo</span>}
+                </div>);
+              })}
+            </div>
+          </div>
+        );
       })()}
       {goals.length===0&&<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:48,marginBottom:12}}>🎯</div><div style={{fontFamily:MF,fontSize:16,fontWeight:700,color:C.text,marginBottom:8}}>No savings goals yet</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Set a goal and watch your ring fill up</div><button onClick={()=>setShowAdd(true)} style={{padding:"12px 24px",borderRadius:14,background:C.accent,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add First Goal</button></div>}
       {view==="rings"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
@@ -2739,10 +2832,11 @@ function ExtraPayModal({debt,onConfirm,onClose}){
 
 function AuthScreen({onAuth,onSkip}){
   const[mode,setMode]=useState("login");
-  const[email,setEmail]=useState("");const[pass,setPass]=useState("");
+  const[email,setEmail]=useState("");const[pass,setPass]=useState("");const[name,setName]=useState("");
   const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
-  const[confirmed,setConfirmed]=useState(false);
-  const[showPass,setShowPass]=useState(false);
+  const[confirmed,setConfirmed]=useState(false);const[showPass,setShowPass]=useState(false);
+  const passStrength=pass.length===0?0:pass.length<6?1:pass.length<10&&!/[^a-zA-Z0-9]/.test(pass)?2:3;
+  const strengthLabel=["","Weak","Fair","Strong"];const strengthColor=["",C.red,C.amber,C.green];
   async function submit(){
     if(!email.trim()||!pass.trim()){setErr("Please fill in all fields.");return;}
     if(mode==="signup"&&pass.length<6){setErr("Password must be at least 6 characters.");return;}
@@ -2750,12 +2844,12 @@ function AuthScreen({onAuth,onSkip}){
     try{
       if(mode==="login"){
         const r=await signIn(email.trim(),pass);
-        if(r.error==="network"||r.message?.includes("Failed to fetch")||r.message?.includes("NetworkError")){setErr("Can't reach server — tap 'Continue without account' to use offline mode.");setLoading(false);return;}
+        if(r.error==="network"||r.message?.includes("Failed to fetch")||r.message?.includes("NetworkError")){setErr("Can't reach server — tap 'Try without account' to use offline.");setLoading(false);return;}
         if(r.error_description||r.msg||r.error){
           const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
-          if(msg.includes("invalid")||msg.includes("credentials")||msg.includes("password")){setErr("Wrong password. Try again or reset below.");}
+          if(msg.includes("invalid")||msg.includes("credentials")||msg.includes("password")){setErr("Wrong password. Try again or use 'Forgot password' below.");}
           else if(msg.includes("confirm")||msg.includes("email")){setErr("Please confirm your email first — check your inbox.");}
-          else if(msg.includes("not found")||msg.includes("user")){setErr("No account found. Sign up first or continue without account.");}
+          else if(msg.includes("not found")||msg.includes("user")){setErr("No account found for that email. Sign up or continue without account.");}
           else{setErr("Sign in failed. Check your email and password.");}
           setLoading(false);return;
         }
@@ -2764,73 +2858,108 @@ function AuthScreen({onAuth,onSkip}){
       }else{
         const r=await signUp(email.trim(),pass);
         if(r.access_token){onAuth(r);return;}
-        if(r.error==="network"||r.message?.includes("Failed to fetch")||r.message?.includes("NetworkError")){setErr("Can't reach server — tap 'Continue without account' to use offline mode.");setLoading(false);return;}
+        if(r.error==="network"||r.message?.includes("Failed to fetch")){setErr("Can't reach server — tap 'Try without account' to use offline.");setLoading(false);return;}
         if(r.error_description||r.msg||r.error){
           const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
-          if(msg.includes("already")||msg.includes("registered")||msg.includes("exists")){
-            setErr("");
-            setMode("login");
-            setTimeout(()=>setErr("Account found for that email — enter your password to sign in."),100);
-          }else{setErr(r.error_description||r.msg||"Sign up failed. Try again.");}
+          if(msg.includes("already")||msg.includes("registered")||msg.includes("exists")){setErr("");setMode("login");setTimeout(()=>setErr("Account found — enter your password to sign in."),100);}
+          else{setErr(r.error_description||r.msg||"Sign up failed. Try again.");}
           setLoading(false);return;
         }
-        // No access_token and no error = email confirmation required
         setConfirmed(true);
       }
     }catch(e){setErr("Network error — check connection and try again.");}
     setLoading(false);
   }
   if(confirmed)return(
-    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.navyMid} 50%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 50%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <style>{CSS}</style>
-      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"36px 28px",textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
-        <div style={{width:72,height:72,borderRadius:"50%",background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><div style={{fontSize:36}}>📧</div></div>
-        <div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:C.navy,marginBottom:8}}>Check your inbox</div>
-        <div style={{fontSize:14,color:C.textLight,marginBottom:6,lineHeight:1.6}}>We sent a confirmation link to</div>
-        <div style={{fontWeight:700,color:C.accent,fontSize:15,marginBottom:20}}>{email}</div>
-        <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 16px",fontSize:13,color:C.accent,marginBottom:20,lineHeight:1.5}}>Click the link in the email, then come back here to sign in.</div>
-        <button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12}}>I confirmed — Sign In</button>
-        <button onClick={()=>setConfirmed(false)} style={{width:"100%",padding:"12px",borderRadius:14,border:`1px solid ${C.border}`,background:"transparent",color:C.textLight,fontWeight:600,fontSize:14,cursor:"pointer",marginBottom:12}}>← Back</button>
-        {onSkip&&<button onClick={onSkip} style={{background:"none",border:"none",color:C.textFaint,fontSize:12,cursor:"pointer"}}>Continue without account →</button>}
+      <div style={{background:"#fff",borderRadius:28,width:"100%",maxWidth:400,padding:"40px 32px",textAlign:"center",boxShadow:"0 32px 80px rgba(0,0,0,.35)"}}>
+        <div style={{width:80,height:80,borderRadius:"50%",background:`linear-gradient(135deg,${C.accentBg},${C.purpleBg})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",fontSize:36}}>📧</div>
+        <div style={{fontFamily:MF,fontSize:24,fontWeight:900,color:C.navy,marginBottom:8,letterSpacing:-.5}}>Check your inbox</div>
+        <div style={{fontSize:14,color:C.textLight,marginBottom:6,lineHeight:1.6}}>Confirmation link sent to</div>
+        <div style={{fontWeight:800,color:C.accent,fontSize:16,marginBottom:20,background:C.accentBg,padding:"8px 16px",borderRadius:10,display:"inline-block"}}>{email}</div>
+        <div style={{background:C.accentBg,border:`1.5px solid ${C.accentMid}`,borderRadius:14,padding:"14px 18px",fontSize:13,color:C.accent,marginBottom:24,lineHeight:1.6,textAlign:"left"}}>
+          <div style={{fontWeight:700,marginBottom:4}}>What to do:</div>
+          <div>1. Open the email from Trackfi</div>
+          <div>2. Click "Confirm your email"</div>
+          <div>3. Come back here and sign in</div>
+        </div>
+        <button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12,letterSpacing:.2}}>✓ I confirmed — Sign In</button>
+        <button onClick={()=>setConfirmed(false)} style={{width:"100%",padding:"12px",borderRadius:14,border:`1.5px solid ${C.border}`,background:"transparent",color:C.textLight,fontWeight:600,fontSize:14,cursor:"pointer",marginBottom:12}}>← Back</button>
+        {onSkip&&<button onClick={onSkip} style={{background:"none",border:"none",color:C.textFaint,fontSize:12,cursor:"pointer",fontWeight:500}}>Try without account →</button>}
       </div>
     </div>
   );
   return(
-    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 55%,${C.accent} 100%)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20,position:"relative",overflow:"hidden"}}>
       <style>{CSS}</style>
-      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:420,padding:"32px 28px",boxShadow:"0 20px 60px rgba(0,0,0,.25)"}}>
-        <div style={{textAlign:"center",marginBottom:28}}>
-          <div style={{fontFamily:MF,fontSize:32,fontWeight:900,color:C.navy,marginBottom:6,letterSpacing:-1}}>💰 Trackfi</div>
-          <div style={{fontSize:14,color:C.textLight,lineHeight:1.5}}>{mode==="login"?"Welcome back — your data is ready":"Create your free account to get started"}</div>
+      {/* Background decoration */}
+      <div style={{position:"absolute",top:-80,right:-80,width:300,height:300,borderRadius:"50%",background:"rgba(99,102,241,.12)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:-60,left:-60,width:240,height:240,borderRadius:"50%",background:"rgba(13,148,136,.1)",pointerEvents:"none"}}/>
+      {/* Logo + tagline */}
+      <div style={{textAlign:"center",marginBottom:28,zIndex:1}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:8}}>
+          <div style={{width:48,height:48,borderRadius:14,background:`linear-gradient(135deg,${C.accent},${C.teal})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:"0 8px 24px rgba(99,102,241,.4)"}}>💰</div>
+          <div style={{fontFamily:MF,fontSize:34,fontWeight:900,color:"#fff",letterSpacing:-1}}>Trackfi</div>
         </div>
+        <div style={{fontSize:15,color:"rgba(255,255,255,.6)",fontWeight:500,letterSpacing:.2}}>Your money, finally making sense</div>
+      </div>
+      {/* Feature pills — signup only */}
+      {mode==="signup"&&<div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap",justifyContent:"center",zIndex:1}}>
+        {["📊 Live spending insights","💸 Smart safe-to-spend","🎯 Goals & debt payoff"].map(f=>(
+          <div key={f} style={{background:"rgba(255,255,255,.1)",borderRadius:99,padding:"5px 12px",fontSize:11,color:"rgba(255,255,255,.8)",fontWeight:600,backdropFilter:"blur(8px)"}}>{f}</div>
+        ))}
+      </div>}
+      {/* Card */}
+      <div style={{background:"rgba(255,255,255,.97)",backdropFilter:"blur(20px)",borderRadius:24,width:"100%",maxWidth:400,padding:"28px 28px 24px",boxShadow:"0 32px 80px rgba(0,0,0,.3)",zIndex:1}}>
+        {/* Mode toggle tabs */}
+        <div style={{display:"flex",background:"#f0f2f8",borderRadius:12,padding:3,marginBottom:22}}>
+          {[["login","Sign In"],["signup","Create Account"]].map(([m,l])=>(
+            <button key={m} onClick={()=>{setMode(m);setErr("");setPass("");setName("");}} style={{flex:1,padding:"9px 0",borderRadius:10,border:"none",background:mode===m?"#fff":"transparent",color:mode===m?C.accent:C.textMid,fontWeight:mode===m?800:600,fontSize:13,cursor:"pointer",boxShadow:mode===m?"0 2px 8px rgba(0,0,0,.08)":"none",transition:"all .15s"}}>{l}</button>
+          ))}
+        </div>
+        {/* Name field — signup only */}
+        {mode==="signup"&&<div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>First Name</div>
+          <input type="text" value={name} onChange={e=>{setName(e.target.value);setErr("");}} placeholder="What should we call you?" style={{width:"100%",background:"#f8f9fc",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.text,outline:"none",boxSizing:"border-box"}} autoCapitalize="words" autoComplete="given-name"/>
+        </div>}
+        {/* Email */}
         <div style={{marginBottom:14}}>
           <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Email</div>
-          <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} placeholder="you@email.com" style={{...iS(false,!!err),fontSize:15}} autoCapitalize="none" autoComplete="email" onKeyDown={e=>e.key==="Enter"&&document.getElementById("pw-input")?.focus()}/>
+          <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} placeholder="you@email.com" style={{width:"100%",background:"#f8f9fc",border:`1.5px solid ${err&&err.toLowerCase().includes("email")?C.red:C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.text,outline:"none",boxSizing:"border-box"}} autoCapitalize="none" autoComplete="email" onKeyDown={e=>e.key==="Enter"&&document.getElementById("pw-inp")?.focus()}/>
         </div>
-        <div style={{marginBottom:err?8:18}}>
+        {/* Password */}
+        <div style={{marginBottom:err?8:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Password</div>
-            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}const r=await supaFetch("/auth/v1/recover",{method:"POST",body:JSON.stringify({email:email.trim()})});setErr("Reset link sent to "+email+" — check your inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot password?</button>}
+            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}await supaFetch("/auth/v1/recover",{method:"POST",body:JSON.stringify({email:email.trim()})});setErr("Reset link sent to "+email+" — check inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot?</button>}
           </div>
           <div style={{position:"relative"}}>
-            <input id="pw-input" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder={mode==="login"?"Your password":"At least 6 characters"} style={{...iS(false,!!err&&err.toLowerCase().includes("password")),fontSize:15,paddingRight:44}} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/>
-            <button onClick={()=>setShowPass(p=>!p)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.textLight,fontSize:13,fontWeight:600}}>{showPass?"Hide":"Show"}</button>
+            <input id="pw-inp" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder={mode==="login"?"Your password":"Min. 6 characters"} style={{width:"100%",background:"#f8f9fc",border:`1.5px solid ${err&&(err.toLowerCase().includes("password")||err.toLowerCase().includes("6 char"))?C.red:C.border}`,borderRadius:12,padding:"12px 44px 12px 14px",fontSize:15,color:C.text,outline:"none",boxSizing:"border-box"}} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/>
+            <button onClick={()=>setShowPass(p=>!p)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.textLight,fontSize:12,fontWeight:600,padding:4}}>{showPass?"Hide":"Show"}</button>
           </div>
+          {/* Password strength bar — signup only */}
+          {mode==="signup"&&pass.length>0&&<div style={{marginTop:6}}>
+            <div style={{display:"flex",gap:3,marginBottom:3}}>
+              {[1,2,3].map(n=><div key={n} style={{flex:1,height:3,borderRadius:99,background:n<=passStrength?strengthColor[passStrength]:C.borderLight,transition:"background .2s"}}/>)}
+            </div>
+            <div style={{fontSize:11,color:strengthColor[passStrength],fontWeight:600}}>{strengthLabel[passStrength]}</div>
+          </div>}
         </div>
+        {/* Error */}
         {err&&<div style={{background:err.includes("found")||err.includes("sent")?C.accentBg:C.redBg,border:`1px solid ${err.includes("found")||err.includes("sent")?C.accentMid:C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:err.includes("found")||err.includes("sent")?C.accent:C.red,marginBottom:14,lineHeight:1.5}}>{err}</div>}
-        <button onClick={submit} disabled={loading||!email.trim()||!pass.trim()} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:loading||!email.trim()||!pass.trim()?C.borderLight:`linear-gradient(135deg,${C.accent},${C.green})`,color:loading||!email.trim()||!pass.trim()?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading||!email.trim()||!pass.trim()?"default":"pointer",marginBottom:16,letterSpacing:.2,transition:"all .2s"}}>{loading?"Just a sec...":(mode==="login"?"Sign In →":"Create Account →")}</button>
-        <div style={{textAlign:"center",fontSize:13,color:C.textLight,marginBottom:16}}>
-          {mode==="login"?"No account yet? ":"Already have an account? "}
-          <button onClick={()=>{setMode(mode==="login"?"signup":"login");setErr("");setPass("");}} style={{background:"none",border:"none",color:C.accent,fontWeight:700,cursor:"pointer",fontSize:13}}>{mode==="login"?"Sign up free":"Sign in"}</button>
-        </div>
-        {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16}}>
-          <button onClick={onSkip} style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:12,padding:"12px 0",color:C.textMid,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:6}}>Use without account →</button>
-          <div style={{fontSize:11,color:C.textFaint,textAlign:"center"}}>All data saved locally on your device</div>
+        {/* Submit */}
+        <button onClick={submit} disabled={loading||!email.trim()||!pass.trim()} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:loading||!email.trim()||!pass.trim()?C.borderLight:`linear-gradient(135deg,${C.accent},${C.teal})`,color:loading||!email.trim()||!pass.trim()?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading||!email.trim()||!pass.trim()?"default":"pointer",marginBottom:14,letterSpacing:.2,transition:"all .2s",boxShadow:loading||!email.trim()||!pass.trim()?"none":`0 4px 16px ${C.accent}50`}}>{loading?"Just a sec...":(mode==="login"?"Sign In →":"Create Account →")}</button>
+        {/* Skip */}
+        {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}>
+          <button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,fontWeight:600,cursor:"pointer",padding:"6px 0"}}>Try without account →</button>
+          <div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data stays on your device</div>
         </div>}
       </div>
     </div>
   );
 }
+
 function RecurringView({expenses,setExpenses,categories,showToast,appReady}){
   const[showAdd,setShowAdd]=useState(false);
   const[form,setForm]=useState({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});
@@ -2962,7 +3091,7 @@ function AppInner(){
   const[balHist,setBalHist]=useState([]);
   const[notifs,setNotifs]=useState([]);
   const[calColors,setCalColors]=useState({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
-  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,quickActions:["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"]});
+  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","receipt","bill","debt","simulator","budget","savings","recurring_nav"]});
   const[dashConfig,setDashConfig]=useState({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
   const[appName,setAppName]=useState("Trackfi");
   const[greetName,setGreetName]=useState("");
