@@ -3638,24 +3638,6 @@ function AppInner(){
     if(notifPermission()==="granted")return"granted";
     try{const result=await window.Notification.requestPermission();return result;}catch{return"denied";}
   };
-  // Net Worth milestone checker — fire when assets cross thresholds
-  const NW_MILESTONES=[1000,5000,10000,25000,50000,100000,250000,500000,1000000];
-  const prevNWRef=React.useRef(null);
-  useEffect(()=>{
-    if(!ready)return;
-    const nw=totalAssets-totalDebt;
-    if(prevNWRef.current===null){prevNWRef.current=nw;return;}
-    const prev=prevNWRef.current;
-    prevNWRef.current=nw;
-    if(nw<=prev)return;// only celebrate growth
-    const crossed=NW_MILESTONES.filter(m=>prev<m&&nw>=m);
-    crossed.forEach(m=>{
-      const label=m>=1000000?"$1M 🦄":m>=500000?"$500K":"$"+m.toLocaleString();
-      pushNotif("nw_"+m,"🎉 Net Worth Milestone!","You crossed "+label+" net worth — incredible!","success");
-      showToast("🎉 "+label+" net worth milestone!","success");
-    });
-  },[totalAssets,totalDebt,ready]);
-
   // Monthly summary: show on first open of new month if last month had data
   useEffect(()=>{
     if(!ready)return;
@@ -3696,6 +3678,24 @@ function AppInner(){
   const totalDebt=useMemo(()=>debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0),[debts]);
   const cashflow=totalIncome-totalExp;
   const netWorth=totalAssets-totalDebt;
+  // Net Worth milestone checker — fire when assets cross thresholds
+  const NW_MILESTONES=[1000,5000,10000,25000,50000,100000,250000,500000,1000000];
+  const prevNWRef=React.useRef(null);
+  useEffect(()=>{
+    if(!ready)return;
+    const nw=totalAssets-totalDebt;
+    if(prevNWRef.current===null){prevNWRef.current=nw;return;}
+    const prev=prevNWRef.current;
+    prevNWRef.current=nw;
+    if(nw<=prev)return;// only celebrate growth
+    const crossed=NW_MILESTONES.filter(m=>prev<m&&nw>=m);
+    crossed.forEach(m=>{
+      const label=m>=1000000?"$1M 🦄":m>=500000?"$500K":"$"+m.toLocaleString();
+      pushNotif("nw_"+m,"🎉 Net Worth Milestone!","You crossed "+label+" net worth — incredible!","success");
+      showToast("🎉 "+label+" net worth milestone!","success");
+    });
+  },[totalAssets,totalDebt,ready]);
+
   const overdue=useMemo(()=>bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0),[bills]);
   const dueSoon=useMemo(()=>bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=7),[bills]);
   const billsSoonAmt=useMemo(()=>dueSoon.reduce((s,b)=>s+(parseFloat(b.amount)||0),0),[dueSoon]);
