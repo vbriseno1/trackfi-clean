@@ -2804,83 +2804,217 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
 }
 function generateDemoData(){
   const now=new Date(),yr=now.getFullYear();
-  const expenses=[],bills=[],debts=[],trades=[],shifts=[],savingsGoals=[],budgetGoals=[],balHist=[];
+  const expenses=[],bills=[],debts=[],trades=[],shifts=[],savingsGoals=[],budgetGoals=[],balHist=[],recurrings=[],notifsSeed=[];
+
+  // ── EXPENSES — uses all 21 real DEF_CATS category names ──────────────────
   const ET=[
-    ["Chipotle","Food",[11,15]],["Publix Groceries","Food",[80,160]],["Starbucks","Food",[6,9]],
-    ["McDonald's","Food",[8,14]],["DoorDash","Food",[22,45]],["Shell Gas","Transport",[50,85]],
-    ["Uber","Transport",[12,28]],["Netflix","Subscriptions",[15,16]],["Spotify","Subscriptions",[10,11]],
-    ["Apple iCloud","Subscriptions",[3,3]],["Gym Membership","Subscriptions",[45,45]],
-    ["Walgreens","Health",[15,60]],["Target","Personal",[35,120]],["Amazon","Personal",[25,95]],
-    ["Barber","Personal",[30,35]],["AMC Movies","Entertainment",[18,30]],
-    ["Cheesecake Factory","Food",[45,75]],["Home Depot","Housing",[35,180]],
-    ["Car Wash","Transport",[15,25]],["CVS Pharmacy","Health",[18,45]],
+    // Food & Dining
+    ["Publix",           "Groceries",       [62,175]],
+    ["Kroger",           "Groceries",       [45,130]],
+    ["Whole Foods",      "Groceries",       [55,120]],
+    ["Chipotle",         "Fast Food",       [11,16]],
+    ["McDonald's",       "Fast Food",       [8,14]],
+    ["Chick-fil-A",      "Fast Food",       [9,16]],
+    ["Taco Bell",        "Fast Food",       [7,13]],
+    ["Cheesecake Factory","Restaurants",    [48,85]],
+    ["Sushi Den",        "Restaurants",     [35,70]],
+    ["Local Bistro",     "Restaurants",     [28,65]],
+    ["DoorDash",         "Restaurants",     [22,55]],
+    ["Starbucks",        "Coffee",          [5,9]],
+    ["Dunkin",           "Coffee",          [4,7]],
+    ["Dutch Bros",       "Coffee",          [5,9]],
+    // Home & Transport
+    ["Shell",            "Gas",             [48,88]],
+    ["BP Gas",           "Gas",             [45,82]],
+    ["Uber",             "Rideshare",       [12,28]],
+    ["Lyft",             "Rideshare",       [10,22]],
+    // Personal Care
+    ["Great Clips",      "Grooming / Haircuts",[28,38]],
+    ["Barber Shop",      "Grooming / Haircuts",[30,40]],
+    ["Target",           "Clothing",        [35,120]],
+    ["Nike",             "Clothing",        [55,140]],
+    ["Walgreens",        "Health / Medical", [15,60]],
+    ["CVS Pharmacy",     "Health / Medical", [18,55]],
+    ["Planet Fitness",   "Gym / Fitness",   [10,10]],
+    // Bills & Subs (logged as expenses too sometimes)
+    ["Amazon",           "Shopping",        [25,95]],
+    ["Home Depot",       "Shopping",        [35,180]],
+    ["Best Buy",         "Shopping",        [40,200]],
+    ["Chewy",            "Pets",            [45,85]],
+    ["Banfield Vet",     "Pets",            [55,150]],
+    ["AMC Movies",       "Entertainment",   [14,28]],
+    ["Steam",            "Entertainment",   [8,30]],
+    ["Delta Airlines",   "Travel",          [180,420]],
+    ["Airbnb",           "Travel",          [120,380]],
+    ["Uber Eats",        "Dining Out",      [18,45]],
+    ["Grubhub",          "Dining Out",      [16,40]],
+    ["Car Wash",         "Misc",            [14,24]],
+    ["USPS",             "Misc",            [8,18]],
   ];
+
   for(let mo=0;mo<12;mo++){
-    const isFutureMo=mo>now.getMonth(),isCurMo=mo===now.getMonth();
+    const isFuture=mo>now.getMonth(),isCur=mo===now.getMonth();
     const dim=new Date(yr,mo+1,0).getDate();
-    const maxDay=isFutureMo?0:isCurMo?Math.max(1,now.getDate()-1):dim;
+    const maxDay=isFuture?0:isCur?Math.max(1,now.getDate()-1):dim;
     if(!maxDay)continue;
-    const count=20+Math.floor(Math.random()*16);
+    const count=22+Math.floor(Math.random()*14);
     for(let i=0;i<count;i++){
-      const[name,cat,range]=ET[Math.floor(Math.random()*ET.length)];
+      const[nm,cat,rng]=ET[Math.floor(Math.random()*ET.length)];
       const day=1+Math.floor(Math.random()*Math.max(1,maxDay-1));
-      const amt=(range[0]+Math.random()*(range[1]-range[0])).toFixed(2);
-      expenses.push({id:Date.now()+mo*10000+i,name,category:cat,amount:amt,date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),notes:""});
+      const amt=(rng[0]+Math.random()*(rng[1]-rng[0])).toFixed(2);
+      const ownerId=Math.random()>0.6?"shared":Math.random()>0.5?"partner":"me";
+      expenses.push({id:Date.now()+mo*10000+i,name:nm,category:cat,amount:amt,
+        date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),
+        notes:"",owner:ownerId});
     }
+    // Guaranteed subscriptions each month for SubsView detection
+    const subDate=yr+"-"+String(mo+1).padStart(2,"0")+"-01";
+    [["Netflix","Subscriptions","15.49"],["Spotify","Subscriptions","10.99"],
+     ["Apple iCloud","Subscriptions","2.99"],["YouTube Premium","Subscriptions","13.99"],
+     ["Disney+","Subscriptions","10.99"],["Gym Membership","Gym / Fitness","25.00"],
+    ].forEach(([nm,cat,amt],si)=>{
+      if(isFuture)return;
+      expenses.push({id:Date.now()+mo*5000+si+9000,name:nm,category:cat,amount:amt,
+        date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(1+si).padStart(2,"0"),
+        notes:"recurring",owner:"shared"});
+    });
   }
-  const BT=[["Rent","1450","01"],["Electric","87","15"],["Internet (Xfinity)","65","22"],["Phone (T-Mobile)","95","08"],["Renters Insurance","22","01"],["Car Insurance","148","10"],["Hulu","18","18"],["Student Loan","320","05"]];
+
+  // ── BILLS — covers all recurring bill types ───────────────────────────────
+  const BT=[
+    ["Rent",           "1450","01","Monthly",false],
+    ["Electric (FPL)", "94",  "15","Monthly",true],
+    ["Internet (Xfinity)","65","22","Monthly",true],
+    ["Phone (T-Mobile)","95", "08","Monthly",true],
+    ["Renters Insurance","22", "01","Monthly",false],
+    ["Car Insurance",  "148", "10","Monthly",false],
+    ["Car Payment",    "385", "05","Monthly",false],
+    ["Student Loan",   "320", "05","Monthly",false],
+    ["Hulu",           "17",  "18","Monthly",true],
+    ["Amazon Prime",   "15",  "23","Annual",  true],
+    ["Life Insurance", "38",  "01","Monthly",false],
+  ];
   const today2=new Date();
-  BT.forEach(([name,amount,day],idx)=>{
+  BT.forEach(([nm,amt,day,rec,auto],idx)=>{
     for(let mo2=0;mo2<12;mo2++){
       const due=yr+"-"+String(mo2+1).padStart(2,"0")+"-"+day;
-      bills.push({id:(idx+1)*100+mo2,name,amount,dueDate:due,paid:new Date(due+"T00:00:00")<today2,recurring:"Monthly",autoPay:false});
+      bills.push({id:(idx+1)*100+mo2,name:nm,amount:amt,dueDate:due,
+        paid:new Date(due+"T00:00:00")<today2,recurring:rec,autoPay:auto,notes:""});
     }
   });
+
+  // ── DEBTS ─────────────────────────────────────────────────────────────────
   debts.push(
     {id:2001,name:"Student Loans",balance:"18400",original:"24000",rate:"5.75",minPayment:"320",type:"Student Loan"},
-    {id:2002,name:"Car Loan",balance:"9200",original:"15000",rate:"6.9",minPayment:"285",type:"Car Loan"},
-    {id:2003,name:"Capital One Visa",balance:"2340",original:"3000",rate:"22.99",minPayment:"58",type:"Credit Card"}
+    {id:2002,name:"Car Loan (Honda)",balance:"9200",original:"15000",rate:"6.9",minPayment:"285",type:"Car Loan"},
+    {id:2003,name:"Capital One Visa",balance:"2340",original:"3500",rate:"22.99",minPayment:"58",type:"Credit Card"},
+    {id:2004,name:"Medical Bill",balance:"1200",original:"1200",rate:"0",minPayment:"100",type:"Medical"}
   );
-  const syms=["ES","NQ","CL","GC","MES","MNQ"];
+
+  // ── TRADES ────────────────────────────────────────────────────────────────
+  const syms=["ES","NQ","CL","GC","MES","MNQ","RTY"];
   for(let mo=0;mo<12;mo++){
-    const n=6+Math.floor(Math.random()*8);
+    const n=5+Math.floor(Math.random()*9);
     for(let i=0;i<n;i++){
-      const isWin=Math.random()>0.42;
-      const pnl=isWin?(80+Math.random()*620).toFixed(0):"-"+(60+Math.random()*340).toFixed(0);
+      const isWin=Math.random()>0.40;
+      const pnl=isWin?(75+Math.random()*680).toFixed(0):"-"+(55+Math.random()*360).toFixed(0);
       const day=2+Math.floor(Math.random()*25);
-      trades.push({id:Date.now()+50000+mo*200+i,date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),symbol:syms[Math.floor(Math.random()*syms.length)],side:Math.random()>0.5?"Long":"Short",contracts:"1",pnl,entry:"",exit:"",note:isWin?"Good setup":"Stopped out"});
+      const sym=syms[Math.floor(Math.random()*syms.length)];
+      const entry=(4500+Math.random()*200).toFixed(2);
+      const exit=(parseFloat(entry)+(isWin?8:-6)*(1+Math.random()*4)).toFixed(2);
+      trades.push({id:Date.now()+50000+mo*200+i,
+        date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),
+        symbol:sym,side:Math.random()>0.5?"Long":"Short",contracts:"1",
+        pnl,entry,exit,
+        note:isWin?["Clean breakout","Trend continuation","Support bounce","Gap fill"][Math.floor(Math.random()*4)]:["Stopped out","Fakeout","Bad entry","News hit"][Math.floor(Math.random()*4)]});
     }
   }
-  const ST=["Regular","Regular","Regular","Overtime","Night","Weekend"];
-  const mults={Regular:1,Overtime:1.5,Night:1.15,Weekend:1.25};
+
+  // ── SHIFTS — ICU/RN schedule with all shift types ─────────────────────────
+  const ST=["Regular","Regular","Regular","Regular","Overtime","Night","Weekend","Holiday"];
+  const mults={Regular:1,Overtime:1.5,Night:1.15,Weekend:1.25,Holiday:2};
+  const notes=["ICU Floor 3","PACU","Float pool","Charge nurse","ED overflow","Step-down unit"];
   for(let mo=0;mo<12;mo++){
     for(let wk=0;wk<4;wk++){
       const day=Math.min(wk*7+1+Math.floor(Math.random()*5),28);
       const type=ST[Math.floor(Math.random()*ST.length)];
-      const hours=(type==="Overtime"?12:(8+Math.random()*4)).toFixed(1);
-      const rate="36.50";
-      shifts.push({id:Date.now()+80000+mo*100+wk,date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),type,hours,rate,gross:(parseFloat(hours)*parseFloat(rate)*(mults[type]||1)).toFixed(2),note:"ICU"});
+      const hours=(type==="Overtime"?12:type==="Night"?12:(8+Math.random()*4)).toFixed(1);
+      const rate="42.50";
+      shifts.push({id:Date.now()+80000+mo*100+wk,
+        date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),
+        type,hours,rate,gross:(parseFloat(hours)*parseFloat(rate)*(mults[type]||1)).toFixed(2),
+        note:notes[Math.floor(Math.random()*notes.length)]});
     }
   }
+
+  // ── SAVINGS GOALS ─────────────────────────────────────────────────────────
   savingsGoals.push(
-    {id:3001,name:"Emergency Fund",icon:"🛡️",target:"18000",saved:"9400",monthly:"400"},
-    {id:3002,name:"New Car",icon:"🚗",target:"8000",saved:"2100",monthly:"250"},
-    {id:3003,name:"Vacation",icon:"✈️",target:"3500",saved:"850",monthly:"150"},
-    {id:3004,name:"Trading Account",icon:"📈",target:"10000",saved:"5200",monthly:"200"}
+    {id:3001,name:"Emergency Fund",  icon:"🛡️",color:"#6366F1",target:"18000",saved:"11400",monthly:"400"},
+    {id:3002,name:"New Car",         icon:"🚗",color:"#059669",target:"8000", saved:"3200", monthly:"300"},
+    {id:3003,name:"Vacation — Italy",icon:"✈️",color:"#D97706",target:"5500", saved:"1850", monthly:"250"},
+    {id:3004,name:"Trading Account", icon:"📈",color:"#7C3AED",target:"10000",saved:"5800", monthly:"200"},
+    {id:3005,name:"Wedding Fund",    icon:"💍",color:"#EC4899",target:"25000",saved:"8200", monthly:"500"}
   );
+
+  // ── BUDGET ENVELOPES — uses real DEF_CATS names ───────────────────────────
   budgetGoals.push(
-    {id:4001,category:"Food",limit:"600"},{id:4002,category:"Transport",limit:"200"},
-    {id:4003,category:"Entertainment",limit:"150"},{id:4004,category:"Personal",limit:"200"},{id:4005,category:"Subscriptions",limit:"100"}
+    {id:4001,category:"Groceries",         limit:"600",note:"Weekly runs"},
+    {id:4002,category:"Gas",               limit:"200",note:"Commute + errands"},
+    {id:4003,category:"Dining Out",        limit:"180",note:"Date nights"},
+    {id:4004,category:"Entertainment",     limit:"120",note:"Movies, games"},
+    {id:4005,category:"Clothing",          limit:"150",note:"Seasonal refresh"},
+    {id:4006,category:"Grooming / Haircuts",limit:"60",note:"Every 3 weeks"},
+    {id:4007,category:"Pets",              limit:"200",note:"Vet + food"},
+    {id:4008,category:"Subscriptions",     limit:"80", note:"Monthly subs cap"}
   );
-  let bal=3200;
+
+  // ── BALANCE HISTORY — includes all account types, growing trend ───────────
+  let checking=4280,savings=11400,cushion=1800,investments=14200,
+      k401=28500,roth=12000,brokerage=8400,crypto=1800;
   for(let mo=0;mo<12;mo++){
     for(let wk=0;wk<4;wk++){
       const day=wk*7+1;if(day>28)continue;
-      bal=Math.max(1800,bal+(Math.random()-.4)*400);
-      balHist.push({date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),checking:parseFloat((bal*.6).toFixed(0)),savings:parseFloat((bal*.3).toFixed(0)),cushion:parseFloat((bal*.1).toFixed(0)),investments:parseFloat((12000+mo*180+Math.random()*300).toFixed(0)),total:parseFloat(bal.toFixed(0))});
+      checking=Math.max(1800,checking+(Math.random()-.45)*600);
+      savings=Math.max(8000,savings+280+(Math.random()-.3)*150);
+      cushion=Math.max(1200,cushion+(Math.random()-.4)*80);
+      investments=Math.max(10000,investments+180+(Math.random()-.35)*400);
+      k401=Math.max(20000,k401+350+(Math.random()-.3)*200);
+      roth=Math.max(8000,roth+150+(Math.random()-.3)*120);
+      brokerage=Math.max(5000,brokerage+120+(Math.random()-.4)*300);
+      crypto=Math.max(500,crypto+(Math.random()-.5)*200);
+      balHist.push({
+        date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),
+        checking:Math.round(checking),savings:Math.round(savings),
+        cushion:Math.round(cushion),investments:Math.round(investments),
+        k401:Math.round(k401),roth_ira:Math.round(roth),
+        brokerage:Math.round(brokerage),crypto:Math.round(crypto),
+        total:Math.round(checking+savings+cushion+investments+k401+roth+brokerage+crypto)
+      });
     }
   }
-  return{expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,balHist};
+
+  // ── MERCHANT CATEGORY MAP — for AI auto-suggest ───────────────────────────
+  const merchantCats={
+    "publix":"Groceries","kroger":"Groceries","whole foods":"Groceries",
+    "chipotle":"Fast Food","mcdonald's":"Fast Food","chick-fil-a":"Fast Food","taco bell":"Fast Food",
+    "cheesecake factory":"Restaurants","doordash":"Restaurants","grubhub":"Dining Out","uber eats":"Dining Out",
+    "starbucks":"Coffee","dunkin":"Coffee","dutch bros":"Coffee",
+    "shell":"Gas","bp gas":"Gas",
+    "uber":"Rideshare","lyft":"Rideshare",
+    "great clips":"Grooming / Haircuts","barber shop":"Grooming / Haircuts",
+    "target":"Clothing","nike":"Clothing",
+    "walgreens":"Health / Medical","cvs pharmacy":"Health / Medical",
+    "planet fitness":"Gym / Fitness",
+    "amazon":"Shopping","home depot":"Shopping","best buy":"Shopping",
+    "chewy":"Pets","banfield vet":"Pets",
+    "amc movies":"Entertainment","steam":"Entertainment",
+    "delta airlines":"Travel","airbnb":"Travel",
+    "netflix":"Subscriptions","spotify":"Subscriptions","apple icloud":"Subscriptions",
+    "youtube premium":"Subscriptions","disney+":"Subscriptions",
+    "gym membership":"Gym / Fitness",
+  };
+
+  return{expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,balHist,merchantCats};
 }
 
 function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
@@ -4032,13 +4166,35 @@ function AppInner(){
 
   async function loadDemo(){
     const d=generateDemoData();
-    setAccounts({checking:"4280",savings:"9400",cushion:"1000",investments:"14200",property:"0",vehicles:"12000"});
-    setIncome({primary:"4200",other:"300",trading:"",rental:"",dividends:"",freelance:"500"});
+    // Full accounts including all investment + retirement fields
+    setAccounts({checking:"4280",savings:"11400",cushion:"1800",investments:"8400",
+      k401:"28500",roth_ira:"12000",brokerage:"8400",crypto:"1800",hsa:"3200",
+      property:"0",vehicles:"12000"});
+    // Income: biweekly RN paycheck + freelance side income
+    setIncome({primary:"4200",other:"300",trading:"",rental:"",dividends:"",freelance:"500",
+      payFrequency:"Biweekly",lastPayDate:""});
+    // Core data
     setExpenses(d.expenses);setBills(d.bills);setDebts(d.debts);setSGoals(d.savingsGoals);
     setBGoals(d.budgetGoals);setTrades(d.trades);setShifts(d.shifts);setBalHist(d.balHist);
-    setAppName("Victor");setProfCategory("healthcare");setProfSub("nurse_rn");
-    setTradingAccount({deposit:"5000",balance:"5200"});
-    setSettings(p=>({...p,showTrading:true,showHealth:true,showSavings:true}));
+    // Profile
+    setAppName("Trackfi");setGreetName("Victor");setProfCategory("healthcare");setProfSub("nurse_rn");
+    // Trading account
+    setTradingAccount({deposit:"5000",balance:"5600"});
+    // Merchant category map for AI auto-suggest
+    try{window._merchantCats=d.merchantCats;ss("fv6:merchantCats",d.merchantCats);}catch{}
+    // Household — demo shows a couple sharing expenses
+    setHousehold({enabled:true,name:"Victor & Sarah",members:[
+      {id:"me",name:"Victor",emoji:"🧑‍💼",color:"#6366F1"},
+      {id:"partner",name:"Sarah",emoji:"👩",color:"#10B981"}
+    ]});
+    // Calendar colors
+    setCalColors({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
+    // Dashboard config — show everything
+    setDashConfig({showIncomeChart:true,showMetrics:true,showAccounts:true,
+      showBills:true,showDebts:true,showGoals:true,showForecast:true,showRecent:true});
+    // Settings — enable all features
+    setSettings(p=>({...p,showTrading:true,showHealth:true,showSavings:true,showForecast:true,
+      quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]}));
     try{localStorage.setItem("fv_onboarded","1");localStorage.setItem("fv_demo","1");}catch{}
     setIsDemoMode(true);setOnboarded(true);
   }
