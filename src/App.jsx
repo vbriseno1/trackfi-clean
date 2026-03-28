@@ -1493,7 +1493,8 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
       </div>
     </div>
   );
-}function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast}){
+}
+function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast}){
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
   const[showChart,setShowChart]=useState(true);
@@ -1741,6 +1742,31 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
     </div>
   );
 }
+
+function ExtraPayModal({debt,onConfirm,onClose}){
+  const[amt,setAmt]=useState("");
+  const bal=parseFloat(debt?.balance||0);
+  const pay=parseFloat(amt)||0;
+  const newBal=Math.max(0,bal-pay);
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Extra Payment</div>
+        <div style={{fontSize:13,color:C.textLight,marginBottom:18}}>{debt?.name} — current balance {fmt(bal)}</div>
+        <div style={{position:"relative",marginBottom:16}}>
+          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:C.textMid,fontSize:16}}>$</span>
+          <input autoFocus type="number" value={amt} onChange={e=>setAmt(e.target.value)} placeholder="0.00" style={{width:"100%",border:`2px solid ${pay>0?C.green:C.border}`,borderRadius:14,padding:"14px 14px 14px 30px",fontSize:20,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box",background:C.surface}}/>
+        </div>
+        {pay>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",marginBottom:16,fontSize:13,color:C.green,fontWeight:500}}>New balance: <strong>{fmt(newBal)}</strong>{newBal===0?" — PAID OFF! 🎉":""}</div>}
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onClose} style={{flex:1,padding:"13px",borderRadius:14,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:700,fontSize:16,cursor:"pointer"}}>Cancel</button>
+          <button onClick={()=>{if(pay<=0)return;onConfirm(pay);}} disabled={pay<=0} style={{flex:2,padding:"13px",borderRadius:14,border:"none",background:pay>0?C.green:C.border,color:"#fff",fontWeight:800,fontSize:16,cursor:pay>0?"pointer":"default",fontFamily:MF}}>Confirm Payment</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt}){
   const[selectedDebt,setSelectedDebt]=useState(null);
@@ -3014,17 +3040,6 @@ function DashSettingsView({config,setConfig,showTrading}){
 }
 
 function SwipeRow({children,onDelete}){
-  const[swiped,setSwiped]=useState(false);
-  const startX=useRef(0);
-  return(
-    <div style={{position:"relative",overflow:"hidden",marginBottom:8}}
-      onTouchStart={e=>{startX.current=e.touches[0].clientX;}}
-      onTouchEnd={e=>{const dx=startX.current-e.changedTouches[0].clientX;if(dx>60)setSwiped(true);else if(dx<-20)setSwiped(false);}}>
-      <div style={{transform:swiped?"translateX(-72px)":"translateX(0)",transition:"transform .2s ease"}}>{children}</div>
-      {swiped&&<div style={{position:"absolute",right:0,top:0,bottom:0,width:68,display:"flex",alignItems:"center",justifyContent:"center",background:C.red,borderRadius:"0 14px 14px 0",cursor:"pointer"}} onClick={()=>{onDelete();setSwiped(false);}}><Trash2 size={18} color="#fff"/></div>}
-    </div>
-  );
-}function SwipeRow({children,onDelete}){
   const[swiped,setSwiped]=useState(false);
   const startX=useRef(0);
   return(
