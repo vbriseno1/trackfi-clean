@@ -3024,7 +3024,20 @@ function SwipeRow({children,onDelete}){
       {swiped&&<div style={{position:"absolute",right:0,top:0,bottom:0,width:68,display:"flex",alignItems:"center",justifyContent:"center",background:C.red,borderRadius:"0 14px 14px 0",cursor:"pointer"}} onClick={()=>{onDelete();setSwiped(false);}}><Trash2 size={18} color="#fff"/></div>}
     </div>
   );
-}function ConfirmDialog({title,message,onConfirm,onCancel,danger=false}){
+}function SwipeRow({children,onDelete}){
+  const[swiped,setSwiped]=useState(false);
+  const startX=useRef(0);
+  return(
+    <div style={{position:"relative",overflow:"hidden",marginBottom:8}}
+      onTouchStart={e=>{startX.current=e.touches[0].clientX;}}
+      onTouchEnd={e=>{const dx=startX.current-e.changedTouches[0].clientX;if(dx>60)setSwiped(true);else if(dx<-20)setSwiped(false);}}>
+      <div style={{transform:swiped?"translateX(-72px)":"translateX(0)",transition:"transform .2s ease"}}>{children}</div>
+      {swiped&&<div style={{position:"absolute",right:0,top:0,bottom:0,width:68,display:"flex",alignItems:"center",justifyContent:"center",background:C.red,borderRadius:"0 14px 14px 0",cursor:"pointer"}} onClick={()=>{onDelete();setSwiped(false);}}><Trash2 size={18} color="#fff"/></div>}
+    </div>
+  );
+}
+
+function ConfirmDialog({title,message,onConfirm,onCancel,danger=false}){
   return(
     <div style={{position:"fixed",inset:0,zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(10,22,40,.55)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",backdropFilter:"blur(4px)",padding:20,animation:"fadeIn .15s ease"}} onClick={e=>e.target===e.currentTarget&&onCancel()}>
       <div style={{background:C.surface,borderRadius:20,padding:24,width:"100%",maxWidth:340,boxShadow:"0 8px 40px rgba(0,0,0,.2)",animation:"slideUp .2s ease"}}>
@@ -3158,30 +3171,6 @@ function SubsView({detectedSubs,expenses}){
     </div>
   );
 }
-function ExtraPayModal({debt,onConfirm,onClose}){
-  const[amt,setAmt]=useState("");
-  const bal=parseFloat(debt?.balance||0);
-  const pay=parseFloat(amt)||0;
-  const newBal=Math.max(0,bal-pay);
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Extra Payment</div>
-        <div style={{fontSize:13,color:C.textLight,marginBottom:18}}>{debt?.name} — current balance {fmt(bal)}</div>
-        <div style={{position:"relative",marginBottom:16}}>
-          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:C.textMid,fontSize:16}}>$</span>
-          <input autoFocus type="number" value={amt} onChange={e=>setAmt(e.target.value)} placeholder="0.00" style={{width:"100%",border:`2px solid ${pay>0?C.green:C.border}`,borderRadius:14,padding:"14px 14px 14px 30px",fontSize:20,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box",background:C.surface}}/>
-        </div>
-        {pay>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",marginBottom:16,fontSize:13,color:C.green,fontWeight:500}}>New balance: <strong>{fmt(newBal)}</strong>{newBal===0?" — PAID OFF! 🎉":""}</div>}
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={onClose} style={{flex:1,padding:"13px",borderRadius:14,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:700,fontSize:16,cursor:"pointer"}}>Cancel</button>
-          <button onClick={()=>{if(pay<=0)return;onConfirm(pay);}} disabled={pay<=0} style={{flex:2,padding:"13px",borderRadius:14,border:"none",background:pay>0?C.green:C.border,color:"#fff",fontWeight:800,fontSize:16,cursor:pay>0?"pointer":"default",fontFamily:MF}}>Confirm Payment</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AuthScreen({onAuth,onSkip}){
   const[mode,setMode]=useState("login");
   const[email,setEmail]=useState("");const[pass,setPass]=useState("");const[name,setName]=useState("");
@@ -3388,6 +3377,24 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady}){
   );
 }
 
+function EmojiPicker({value,onChange,customVal,onCustomChange}){
+  return(
+  <div style={{marginBottom:14}}>
+    <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Pick an Icon</div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
+      {EMOJIS.map(e=><button key={e} onClick={()=>{onChange(e);onCustomChange("");}} style={{fontSize:20,background:value===e&&!customVal?C.accentBg:C.surfaceAlt,border:value===e&&!customVal?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"4px 5px",cursor:"pointer",lineHeight:1}}>{e}</button>)}
+    </div>
+    <div style={{display:"flex",alignItems:"center",gap:8,background:C.surfaceAlt,borderRadius:10,padding:"8px 12px"}}>
+      <span style={{fontSize:11,color:C.textLight,fontWeight:600,whiteSpace:"nowrap"}}>Or type any emoji:</span>
+      <input value={customVal} onChange={e=>{onCustomChange(e.target.value);if(e.target.value)onChange("");}}
+        placeholder="✂️ 🏊 🎪 ..." maxLength={4}
+        style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:22,color:C.text,minWidth:0}}/>
+      {customVal&&<span style={{fontSize:22,lineHeight:1}}>{customVal}</span>}
+    </div>
+  </div>
+  );
+}
+
 function CategoriesView({categories,setCategories,showToast}){
   const[showAdd,setShowAdd]=useState(false);
   const[customEmoji,setCustomEmoji]=useState("");
@@ -3418,21 +3425,6 @@ function CategoriesView({categories,setCategories,showToast}){
     {label:"Lifestyle",ids:["entertainment","travel","pets","shopping","misc"]},
   ];
   const customCats=categories.filter(c=>!DEFAULT_IDS.includes(c.id));
-  const EmojiPicker=({value,onChange,customVal,onCustomChange})=>(
-    <div style={{marginBottom:14}}>
-      <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Pick an Icon</div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
-        {EMOJIS.map(e=><button key={e} onClick={()=>{onChange(e);onCustomChange("");}} style={{fontSize:20,background:value===e&&!customVal?C.accentBg:C.surfaceAlt,border:value===e&&!customVal?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"4px 5px",cursor:"pointer",lineHeight:1}}>{e}</button>)}
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:8,background:C.surfaceAlt,borderRadius:10,padding:"8px 12px"}}>
-        <span style={{fontSize:11,color:C.textLight,fontWeight:600,whiteSpace:"nowrap"}}>Or type any emoji:</span>
-        <input value={customVal} onChange={e=>{onCustomChange(e.target.value);if(e.target.value)onChange("");}}
-          placeholder="✂️ 🏊 🎪 ..." maxLength={4}
-          style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:22,color:C.text,minWidth:0}}/>
-        {customVal&&<span style={{fontSize:22,lineHeight:1}}>{customVal}</span>}
-      </div>
-    </div>
-  );
   return(
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -3616,6 +3608,21 @@ function AppInner(){
   useEffect(()=>{if(ready)ss("fv6:appName",appName);},[appName,ready]);
   useEffect(()=>{if(ready)ss("fv6:greetName",greetName);},[greetName,ready]);
   useEffect(()=>{if(ready)ss("fv6:settings",settings);},[settings,ready]);
+  const pushNotif=(id,title,body,type)=>{
+    setNotifs(p=>{if(p.find(n=>n.id===id))return p;return[{id,title,body,type,time:Date.now(),read:false},...p.slice(0,49)];});
+    // Fire real OS notification if permission granted
+    try{
+      if(notifSupported()&&notifPermission()==="granted"){
+        const icons={"danger":"🚨","warning":"⚠️","success":"✅","info":"💡"};
+        new window.Notification(title,{body,icon:"/favicon.svg",badge:"/favicon.svg",tag:id,renotify:false});
+      }
+    }catch(e){}
+  };
+  const requestNotifPermission=async()=>{
+    if(!notifSupported())return"unsupported";
+    if(notifPermission()==="granted")return"granted";
+    try{const result=await window.Notification.requestPermission();return result;}catch{return"denied";}
+  };
   // Net Worth milestone checker — fire when assets cross thresholds
   const NW_MILESTONES=[1000,5000,10000,25000,50000,100000,250000,500000,1000000];
   const prevNWRef=React.useRef(null);
@@ -3746,21 +3753,7 @@ function AppInner(){
     return streak;
   },[expenses,burnRate]);
   const unreadNotifs=useMemo(()=>notifs.filter(n=>!n.read).length,[notifs]);
-  const pushNotif=(id,title,body,type)=>{
-    setNotifs(p=>{if(p.find(n=>n.id===id))return p;return[{id,title,body,type,time:Date.now(),read:false},...p.slice(0,49)];});
-    // Fire real OS notification if permission granted
-    try{
-      if(notifSupported()&&notifPermission()==="granted"){
-        const icons={"danger":"🚨","warning":"⚠️","success":"✅","info":"💡"};
-        new window.Notification(title,{body,icon:"/favicon.svg",badge:"/favicon.svg",tag:id,renotify:false});
-      }
-    }catch(e){}
-  };
-  const requestNotifPermission=async()=>{
-    if(!notifSupported())return"unsupported";
-    if(notifPermission()==="granted")return"granted";
-    try{const result=await window.Notification.requestPermission();return result;}catch{return"denied";}
-  };
+
   useEffect(()=>{
     if(!ready)return;
     bills.forEach(b=>{if(b.paid)return;const d=dueIn(b.dueDate);if(d<0)pushNotif('ov_'+b.id,'🚨 Overdue: '+b.name,fmt(b.amount)+' was due '+Math.abs(d)+'d ago','danger');else if(d<=3)pushNotif('due3_'+b.id,'⚠️ Due soon: '+b.name,fmt(b.amount)+' due in '+d+' day'+(d!==1?'s':''),'warning');});
