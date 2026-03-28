@@ -415,7 +415,7 @@ function PINSetup({onSave,onCancel,darkMode}){
 
 function OnboardingWizard({onComplete}){
   const[step,setStep]=useState(0);
-  const[d,setD]=useState({name:"",appName:"Trackfi",profCategory:"healthcare",profSub:"nurse_rn",income:{primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""},accounts:{checking:"",savings:"",cushion:"",investments:""}});
+  const[d,setD]=useState({name:"",appName:"Trackfi",profCategory:"healthcare",profSub:"nurse_rn",useCase:"personal",income:{primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""},accounts:{checking:"",savings:"",cushion:"",investments:""}});
   const sel=getProfession(d.profCategory);
   const firstName=(d.name||"").split(" ")[0].replace(/[^a-zA-Z]/g,"")||"";
 
@@ -472,6 +472,37 @@ function OnboardingWizard({onComplete}){
             </div>
           )}
         </div>
+      </div>
+    ),btnLabel:"Continue →",canSkip:false},
+
+    // ── STEP 2b: How will you use Trackfi? ─────────────────────
+    {title:"How will you use it?",body:(
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:4}}>This helps us personalize your experience and set up the right defaults.</div>
+        {[
+          {id:"personal",icon:"🧑",title:"Just me",desc:"Track my own spending, bills, and goals"},
+          {id:"couple",icon:"💑",title:"Couple / Partner",desc:"Share expenses with a partner — split bills, track together"},
+          {id:"roommates",icon:"🏠",title:"Roommates",desc:"Split household costs with one or more housemates"},
+          {id:"family",icon:"👨‍👩‍👧",title:"Family",desc:"Manage the whole household — kids, shared accounts"},
+        ].map(opt=>(
+          <button key={opt.id} onClick={()=>setD(p=>({...p,useCase:opt.id}))}
+            style={{display:"flex",alignItems:"center",gap:14,padding:"14px 16px",borderRadius:16,
+              border:`2px solid ${d.useCase===opt.id?C.accent:C.border}`,
+              background:d.useCase===opt.id?C.accentBg:"#fff",cursor:"pointer",textAlign:"left",
+              transition:"all .15s"}}>
+            <span style={{fontSize:28,flexShrink:0}}>{opt.icon}</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:15,fontWeight:700,color:d.useCase===opt.id?C.accent:C.text,marginBottom:2}}>{opt.title}</div>
+              <div style={{fontSize:12,color:C.textLight,lineHeight:1.4}}>{opt.desc}</div>
+            </div>
+            {d.useCase===opt.id&&<div style={{width:20,height:20,borderRadius:"50%",background:C.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:11,color:"#fff",fontWeight:800}}>✓</span></div>}
+          </button>
+        ))}
+        {(d.useCase==="couple"||d.useCase==="roommates"||d.useCase==="family")&&(
+          <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.5}}>
+            ✓ We'll enable <strong>Household Mode</strong> for you — you can add members and tag shared expenses after setup.
+          </div>
+        )}
       </div>
     ),btnLabel:"Continue →",canSkip:false},
 
@@ -1548,7 +1579,7 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
     </div>
   );
 }
-function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast}){
+function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast,household}){
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
   const[showChart,setShowChart]=useState(true);
@@ -1565,7 +1596,12 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
     else if(dateFilter==="week"){const ago=new Date(now);ago.setDate(ago.getDate()-7);base=base.filter(e=>new Date(e.date)>=ago);}
     if(searchQ){const q=searchQ.toLowerCase();base=base.filter(e=>(e.name||"").toLowerCase().includes(q)||(e.category||"").toLowerCase().includes(q)||(e.notes||"").toLowerCase().includes(q));}
     if(catFilter!=="all"){base=base.filter(e=>e.category===catFilter);}
-    if(tagFilter!=="all"){base=base.filter(e=>(e.tags||[]).includes(tagFilter));}
+    if(tagFilter!=="all"){
+      if(tagFilter.startsWith("owner_")){
+        const ownerId=tagFilter.replace("owner_","");
+        base=base.filter(e=>e.owner===ownerId||(ownerId==="shared"&&e.owner==="shared")||(ownerId==="me"&&!e.owner));
+      }else{base=base.filter(e=>(e.tags||[]).includes(tagFilter));}
+    }
     return base;
   },[expenses,dateFilter,searchQ,catFilter,tagFilter]);
   const totalExp=filteredExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
@@ -1586,6 +1622,18 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
           <button key={id} className="ba" onClick={()=>{setDateFilter(id);setCatFilter("all");}} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:dateFilter===id?"#fff":"transparent",color:dateFilter===id?C.accent:C.textLight,fontWeight:dateFilter===id?700:500,fontSize:12,cursor:"pointer",boxShadow:dateFilter===id?"0 1px 4px rgba(0,0,0,.08)":"none"}}>{label}</button>
         ))}
       </div>
+      {/* ── Household member filter — visible when household enabled ── */}
+      {household?.enabled&&household?.members?.length>1&&(
+        <div style={{display:"flex",gap:6,marginBottom:10,overflowX:"auto",paddingBottom:2}}>
+          <button onClick={()=>setTagFilter("all")} style={{flexShrink:0,padding:"6px 13px",borderRadius:99,border:"none",background:tagFilter==="all"?C.accent:C.surface,color:tagFilter==="all"?"#fff":C.textMid,fontWeight:tagFilter==="all"?700:500,fontSize:12,cursor:"pointer",boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>Everyone</button>
+          {household.members.map(m=>(
+            <button key={m.id} onClick={()=>setTagFilter("owner_"+m.id)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:99,border:"none",background:tagFilter==="owner_"+m.id?m.color:C.surface,color:tagFilter==="owner_"+m.id?"#fff":C.textMid,fontWeight:tagFilter==="owner_"+m.id?700:500,fontSize:12,cursor:"pointer",boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+              <span>{m.emoji}</span><span>{m.name}</span>
+            </button>
+          ))}
+          <button onClick={()=>setTagFilter("owner_shared")} style={{flexShrink:0,padding:"6px 12px",borderRadius:99,border:"none",background:tagFilter==="owner_shared"?C.navy:C.surface,color:tagFilter==="owner_shared"?"#fff":C.textMid,fontWeight:tagFilter==="owner_shared"?700:500,fontSize:12,cursor:"pointer",boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>🏠 Shared</button>
+        </div>
+      )}
       {(()=>{const allTags=[...new Set(expenses.flatMap(e=>e.tags||[]))].filter(Boolean);if(allTags.length>0)return(<div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4,marginBottom:8}}>{[{id:"all",label:"All tags"},...allTags.map(t=>({id:t,label:"#"+t}))].map(({id,label})=>(<button key={id} className="ba" onClick={()=>setTagFilter(id)} style={{flexShrink:0,padding:"5px 10px",borderRadius:99,border:"none",background:tagFilter===id?C.purple:C.surface,color:tagFilter===id?"#fff":C.textLight,fontWeight:tagFilter===id?700:500,fontSize:11,cursor:"pointer",boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>{label}</button>))}</div>);return null;})()}
       {(()=>{const allCats=[...new Set(expenses.map(e=>e.category).filter(Boolean))].sort();if(allCats.length<2)return null;return(<div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4,marginBottom:12}}>{[{id:"all",label:"All"},...allCats.map(c=>({id:c,label:c}))].map(({id,label})=>(<button key={id} className="ba" onClick={()=>setCatFilter(id)} style={{flexShrink:0,padding:"6px 12px",borderRadius:99,border:"none",background:catFilter===id?C.accent:C.surface,color:catFilter===id?"#fff":C.textMid,fontWeight:catFilter===id?700:500,fontSize:12,cursor:"pointer",boxShadow:catFilter===id?`0 2px 8px ${C.accent}40`:"0 1px 3px rgba(10,22,40,.06)",transition:"all .15s"}}>{label}</button>))} </div>);})()}
       {searchQ&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,padding:"8px 12px",background:filteredExp.length>0?C.accentBg:C.redBg,borderRadius:10,border:"1px solid "+(filteredExp.length>0?C.accent:C.red)}}><Search size={13} color={filteredExp.length>0?C.accent:C.red}/><span style={{fontSize:13,fontWeight:600,color:filteredExp.length>0?C.accent:C.red}}>{filteredExp.length>0?filteredExp.length+" result"+(filteredExp.length!==1?"s":"")+" — "+fmt(totalExp):"No results for "+searchQ}</span></div>}
@@ -3812,6 +3860,204 @@ function HouseholdView({household,setHousehold,expenses,showToast}){
   );
 }
 
+function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGoals,trades,shifts,categories,appName,onClose}){
+  const now=new Date();
+  const yr=now.getFullYear();
+  const ms=yr+"-"+String(now.getMonth()+1).padStart(2,"0");
+
+  function dlBlob(data,filename,type="text/csv"){
+    const b=new Blob([data],{type});
+    const u=URL.createObjectURL(b);
+    const a=document.createElement("a");
+    a.href=u;a.download=filename;a.click();
+    URL.revokeObjectURL(u);
+  }
+
+  // ── 1. Full expense CSV ────────────────────────────────────────────────────
+  function exportExpenseCSV(){
+    const hdr=["Date","Name","Category","Amount","Notes","Owner"];
+    const rows=expenses.sort((a,b)=>b.date?.localeCompare(a.date)).map(e=>[
+      e.date,
+      (e.name||"").replace(/,/g," "),
+      e.category||"",
+      parseFloat(e.amount||0).toFixed(2),
+      (e.notes||"").replace(/,/g," "),
+      e.owner||"me"
+    ]);
+    dlBlob([hdr,...rows].map(r=>r.join(",")).join("
+"),
+      (appName||"trackfi")+"-expenses-all.csv");
+  }
+
+  // ── 2. Monthly statement CSV ───────────────────────────────────────────────
+  function exportMonthCSV(){
+    const hdr=["Date","Name","Category","Amount","Notes"];
+    const rows=expenses.filter(e=>e.date?.startsWith(ms)).sort((a,b)=>b.date?.localeCompare(a.date)).map(e=>[
+      e.date,(e.name||"").replace(/,/g," "),e.category||"",parseFloat(e.amount||0).toFixed(2),(e.notes||"").replace(/,/g," ")
+    ]);
+    dlBlob([hdr,...rows].map(r=>r.join(",")).join("
+"),
+      (appName||"trackfi")+"-"+ms+"-statement.csv");
+  }
+
+  // ── 3. Net worth snapshot CSV ──────────────────────────────────────────────
+  function exportNetWorthCSV(){
+    const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
+    const td=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)),0);
+    const rows=[
+      ["Asset / Liability","Amount"],["",""],
+      ["ASSETS",""],
+      ["Checking",accounts.checking||"0"],
+      ["Savings",accounts.savings||"0"],
+      ["Emergency Fund",accounts.cushion||"0"],
+      ["Investments",accounts.investments||"0"],
+      ["401(k)",accounts.k401||"0"],
+      ["Roth IRA",accounts.roth_ira||"0"],
+      ["Brokerage",accounts.brokerage||"0"],
+      ["Crypto",accounts.crypto||"0"],
+      ["HSA",accounts.hsa||"0"],
+      ["Property",accounts.property||"0"],
+      ["Vehicles",accounts.vehicles||"0"],
+      ["Total Assets",ta.toFixed(2)],["",""],
+      ["LIABILITIES",""],
+      ...debts.map(d=>([d.name,parseFloat(d.balance||0).toFixed(2)])),
+      ["Total Debt",td.toFixed(2)],["",""],
+      ["NET WORTH",(ta-td).toFixed(2)],
+      ["",""],["Exported",new Date().toLocaleDateString()],
+    ];
+    dlBlob(rows.map(r=>r.join(",")).join("
+"),
+      (appName||"trackfi")+"-networth-"+now.toISOString().split("T")[0]+".csv");
+  }
+
+  // ── 4. Debt payoff CSV ────────────────────────────────────────────────────
+  function exportDebtCSV(){
+    const hdr=["Name","Balance","Original","Rate %","Min Payment","Type","Monthly Interest"];
+    const rows=debts.map(d=>[
+      d.name,d.balance,d.original||d.balance,d.rate||"0",d.minPayment||"0",d.type||"",
+      (parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)).toFixed(2)
+    ]);
+    const total=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)),0);
+    const int=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)),0);
+    dlBlob([hdr,...rows,["","","","","","",""],["TOTAL",total.toFixed(2),"","","","",int.toFixed(2)]].map(r=>r.join(",")).join("
+"),
+      (appName||"trackfi")+"-debts.csv");
+  }
+
+  // ── 5. Full HTML financial report ─────────────────────────────────────────
+  function exportHTMLReport(){
+    const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
+    const td=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)),0);
+    const nw=ta-td;
+    const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0));
+    const mExp=expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount||0)),0);
+    const sr=ti>0?Math.max(0,(ti-mExp)/ti*100):0;
+    const catMap=expenses.filter(e=>e.date?.startsWith(ms)).reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount||0));return a},{});
+    const catRows=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`<tr><td>${cat}</td><td style="text-align:right;font-weight:700">$${parseFloat(amt).toFixed(2)}</td><td style="text-align:right;color:#6b7280">${ti>0?(amt/ti*100).toFixed(0):0}%</td></tr>`).join("");
+    const debtRows=debts.map(d=>`<tr><td>${d.name}</td><td style="text-align:right">$${parseFloat(d.balance||0).toFixed(2)}</td><td style="text-align:right">${d.rate||0}%</td><td style="text-align:right">$${(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)).toFixed(2)}/mo</td></tr>`).join("");
+    const goalRows=savingsGoals.map(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;return`<tr><td>${g.icon||"🎯"} ${g.name}</td><td style="text-align:right">$${parseFloat(g.saved||0).toLocaleString()}</td><td style="text-align:right">$${parseFloat(g.target||0).toLocaleString()}</td><td style="text-align:right;font-weight:700;color:${pct>=100?"#059669":"#6366f1"}">${pct.toFixed(0)}%</td></tr>`;}).join("");
+    const html=`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>${appName||"Trackfi"} — Financial Report</title>
+<style>
+  body{font-family:'Inter',system-ui,sans-serif;max-width:800px;margin:0 auto;padding:40px 24px;color:#0a1628;background:#f8f9fc}
+  h1{font-size:28px;font-weight:900;letter-spacing:-0.5px;margin:0 0 4px}
+  h2{font-size:16px;font-weight:700;color:#0a1628;margin:32px 0 12px;padding-bottom:6px;border-bottom:2px solid #6366f1}
+  .subtitle{color:#6b7280;font-size:13px;margin-bottom:32px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+  .card{background:#fff;border-radius:12px;padding:16px;border:1px solid #e2e5ee}
+  .card .label{font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
+  .card .val{font-size:20px;font-weight:800;letter-spacing:-0.3px}
+  .green{color:#059669}.red{color:#dc2626}.indigo{color:#6366f1}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #e2e5ee}
+  td{padding:9px 10px;border-bottom:1px solid #f0f2f8}
+  tr:last-child td{border-bottom:none}
+  .footer{margin-top:40px;font-size:11px;color:#9ca3af;text-align:center}
+  @media print{body{padding:20px}.card{break-inside:avoid}}
+</style></head>
+<body>
+<h1>💰 ${appName||"Trackfi"}</h1>
+<div class="subtitle">Financial Report — ${new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div>
+
+<h2>Net Worth</h2>
+<div class="grid">
+  <div class="card"><div class="label">Net Worth</div><div class="val ${nw>=0?"green":"red"}">$${nw.toLocaleString()}</div></div>
+  <div class="card"><div class="label">Total Assets</div><div class="val green">$${ta.toLocaleString()}</div></div>
+  <div class="card"><div class="label">Total Debt</div><div class="val red">$${td.toLocaleString()}</div></div>
+  <div class="card"><div class="label">Savings Rate</div><div class="val ${sr>=20?"green":sr>=10?"indigo":"red"}">${sr.toFixed(0)}%</div></div>
+</div>
+
+<h2>This Month — ${new Date().toLocaleDateString("en-US",{month:"long",year:"numeric"})}</h2>
+<div class="grid">
+  <div class="card"><div class="label">Monthly Income</div><div class="val">$${ti.toLocaleString()}</div></div>
+  <div class="card"><div class="label">Spent</div><div class="val red">$${mExp.toFixed(0)}</div></div>
+  <div class="card"><div class="label">Remaining</div><div class="val green">$${Math.max(0,ti-mExp).toFixed(0)}</div></div>
+  <div class="card"><div class="label">Transactions</div><div class="val">${expenses.filter(e=>e.date?.startsWith(ms)).length}</div></div>
+</div>
+
+<h2>Spending by Category</h2>
+<table><thead><tr><th>Category</th><th style="text-align:right">Amount</th><th style="text-align:right">% of Income</th></tr></thead>
+<tbody>${catRows}</tbody>
+<tfoot><tr style="background:#f0f2f8"><td style="font-weight:700">Total</td><td style="text-align:right;font-weight:700">$${mExp.toFixed(2)}</td><td></td></tr></tfoot>
+</table>
+
+${debts.length>0?`
+<h2>Debts</h2>
+<table><thead><tr><th>Name</th><th style="text-align:right">Balance</th><th style="text-align:right">Rate</th><th style="text-align:right">Monthly Interest</th></tr></thead>
+<tbody>${debtRows}</tbody>
+<tfoot><tr style="background:#f0f2f8"><td style="font-weight:700">Total</td><td style="text-align:right;font-weight:700">$${td.toFixed(2)}</td><td></td><td style="text-align:right;color:#dc2626">$${debts.reduce((s,d)=>s+(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)),0).toFixed(2)}/mo</td></tr></tfoot>
+</table>`:""}
+
+${savingsGoals.length>0?`
+<h2>Savings Goals</h2>
+<table><thead><tr><th>Goal</th><th style="text-align:right">Saved</th><th style="text-align:right">Target</th><th style="text-align:right">Progress</th></tr></thead>
+<tbody>${goalRows}</tbody>
+</table>`:""}
+
+<div class="footer">Generated by ${appName||"Trackfi"} · ${new Date().toLocaleString()}</div>
+</body></html>`;
+    dlBlob(html,(appName||"trackfi")+"-report-"+now.toISOString().split("T")[0]+".html","text/html");
+  }
+
+  const EXPORTS=[
+    {icon:"📊",label:"All Expenses",desc:"Complete expense history as CSV",action:exportExpenseCSV,color:C.accent,bg:C.accentBg},
+    {icon:"📅",label:"This Month",desc:now.toLocaleDateString("en-US",{month:"long",year:"numeric"})+" statement CSV",action:exportMonthCSV,color:C.green,bg:C.greenBg},
+    {icon:"💎",label:"Net Worth",desc:"Full asset & liability snapshot CSV",action:exportNetWorthCSV,color:C.purple,bg:C.purpleBg},
+    {icon:"💳",label:"Debt Summary",desc:"All debts with interest costs CSV",action:exportDebtCSV,color:C.red,bg:C.redBg},
+    {icon:"📄",label:"Financial Report",desc:"Full HTML report — open in browser or print to PDF",action:exportHTMLReport,color:C.navy,bg:C.surfaceAlt},
+  ];
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(10,22,40,.5)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",padding:"0 0 40px",animation:"slideUp .26s cubic-bezier(.22,1,.36,1)",boxShadow:"0 -4px 60px rgba(10,22,40,.22)"}}>
+        <div style={{width:40,height:4,background:C.border,borderRadius:99,margin:"14px auto 4px"}}/>
+        <div style={{padding:"16px 24px 20px",borderBottom:`1px solid ${C.borderLight}`,marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{background:C.accentBg,borderRadius:12,padding:"9px 10px",display:"flex"}}><Download size={20} color={C.accent}/></div>
+            <span style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,letterSpacing:-.3}}>Export Data</span>
+          </div>
+          <button onClick={onClose} style={{background:C.surfaceAlt,border:"none",cursor:"pointer",color:C.textMid,padding:"7px 8px",borderRadius:10,display:"flex"}}><X size={15}/></button>
+        </div>
+        <div style={{padding:"0 24px"}}>
+          <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",marginBottom:18,fontSize:12,color:C.accent,lineHeight:1.5}}>
+            💡 All exports are generated entirely on your device — nothing is sent anywhere. Open CSVs in Excel, Google Sheets, or Numbers. Print the HTML report to PDF from your browser.
+          </div>
+          {EXPORTS.map((ex,i)=>(
+            <button key={i} onClick={ex.action} className="ba" style={{display:"flex",alignItems:"center",gap:14,width:"100%",background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:16,padding:"16px 16px",marginBottom:10,cursor:"pointer",textAlign:"left",transition:"all .15s"}}>
+              <div style={{width:44,height:44,borderRadius:12,background:ex.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{ex.icon}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:ex.color,marginBottom:2}}>{ex.label}</div>
+                <div style={{fontSize:12,color:C.textLight,lineHeight:1.4}}>{ex.desc}</div>
+              </div>
+              <Download size={16} color={C.textLight}/>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AppInner(){
   const[tab,setTabRaw]=useState("home");
   const[tabHistory,setTabHistory]=useState([]);
@@ -3864,6 +4110,7 @@ function AppInner(){
   const[locked,setLocked]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[onboarded,setOnboarded]=useState(()=>{try{return localStorage.getItem("fv_onboarded")==="1";}catch{return false;}});
   const[modal,setModal]=useState(null);
+  const[showExport,setShowExport]=useState(false);
   const[form,setForm]=useState({});
   const[editItem,setEditItem]=useState(null);
   const[extraPayDebt,setExtraPayDebt]=useState(0);
@@ -4148,7 +4395,7 @@ function AppInner(){
     {key:"money",label:"Money",desc:"Accounts, bills & goals",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"debt",icon:CreditCard,label:"Debt Tracker"},{id:"savings",icon:Target,label:"Savings Goals"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"household",icon:Wallet,label:"Household / Shared"},{id:"recurring",icon:RefreshCw,label:"Recurring"},{id:"calendar",icon:Calendar,label:"Bill Calendar"}]},
     {key:"analytics",label:"Analytics",desc:"Insights & trends",items:[{id:"insights",icon:BarChart2,label:"Spending Insights 📊"},{id:"health",icon:Activity,label:"Health Score"},{id:"cashflow",icon:BarChart2,label:"Income vs Spending"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"}]},
     {key:"work",label:"Work & Reports",desc:"Shifts, trading & docs",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
-    {key:"tools",label:"Tools",desc:"Search & customize",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"categories",icon:Filter,label:"Categories"},{id:"dashsettings",icon:Settings,label:"Dashboard Layout"}]},
+    {key:"tools",label:"Tools",desc:"Search & customize",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"categories",icon:Filter,label:"Categories"},{id:"dashsettings",icon:Settings,label:"Dashboard Layout"},{id:"export",icon:Download,label:"Export Data"}]},
   ];
   const allTabIds=GROUPS.flatMap(g=>g.items.map(i=>i.id));
   const isMoreTab=allTabIds.includes(tab);
@@ -4183,9 +4430,9 @@ function AppInner(){
     // Merchant category map for AI auto-suggest
     try{window._merchantCats=d.merchantCats;ss("fv6:merchantCats",d.merchantCats);}catch{}
     // Household — demo shows a couple sharing expenses
-    setHousehold({enabled:true,name:"Victor & Sarah",members:[
+    setHousehold({enabled:true,name:"Victor & Erin",members:[
       {id:"me",name:"Victor",emoji:"🧑‍💼",color:"#6366F1"},
-      {id:"partner",name:"Sarah",emoji:"👩",color:"#10B981"}
+      {id:"partner",name:"Erin",emoji:"👩",color:"#10B981"}
     ]});
     // Calendar colors
     setCalColors({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
@@ -4218,7 +4465,10 @@ function AppInner(){
     setAppName("Trackfi");
     if(d.profCategory)setProfCategory(d.profCategory);if(d.profSub)setProfSub(d.profSub);
     if(d.income)setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...d.income});if(d.accounts)setAccounts({...d.accounts});
-    
+    // Apply household mode based on use-case selection
+    if(d.useCase==="couple"){setHousehold(h=>({...h,enabled:true,name:(d.name?d.name.split(" ")[0]+"'s Household":"Our Household"),members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10B981"}]}));}
+    else if(d.useCase==="roommates"){setHousehold(h=>({...h,enabled:true,name:"Shared Household",members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"roommate",name:"Roommate",emoji:"🏠",color:"#D97706"}]}));}
+    else if(d.useCase==="family"){setHousehold(h=>({...h,enabled:true,name:(d.name?d.name.split(" ")[0]+"'s Family":"Our Family"),members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10B981"}]}));}
 
     const hasTrading=parseFloat(d.income?.trading||0)>0;
     setSettings(p=>({...p,showTrading:hasTrading,showHealth:true,showSavings:true,showForecast:true}));
@@ -4541,6 +4791,46 @@ function AppInner(){
             })()}
 
             {/* ── 6. UPCOMING BILLS ─────────────────────────────── */}
+            {/* ── HOUSEHOLD SPLIT CARD — visible when enabled ─── */}
+            {household?.enabled&&household?.members?.length>1&&(()=>{
+              const ms_hh=new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0");
+              const thisM=expenses.filter(e=>e.date?.startsWith(ms_hh));
+              const totalShared=thisM.filter(e=>e.owner==="shared").reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+              const splitEach=household.members.length>0?totalShared/household.members.length:0;
+              const memberSpend=household.members.map(m=>({
+                ...m,
+                paid:thisM.filter(e=>e.owner===m.id||(m.id==="me"&&!e.owner)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0)
+              }));
+              const totalAll=thisM.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+              return(
+                <div onClick={()=>navTo("household")} style={{background:C.surface,borderRadius:16,padding:"14px 16px",marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",cursor:"pointer"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>{household.name||"Household"}</div>
+                    <div style={{fontSize:11,color:C.accent,fontWeight:600}}>View split →</div>
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    {memberSpend.map(m=>{
+                      const owes=splitEach-m.paid;
+                      return(
+                        <div key={m.id} style={{flex:1,background:C.surfaceAlt,borderRadius:10,padding:"9px 10px",textAlign:"center"}}>
+                          <div style={{fontSize:16,marginBottom:3}}>{m.emoji}</div>
+                          <div style={{fontSize:11,fontWeight:700,color:C.text,marginBottom:1}}>{m.name}</div>
+                          <div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:C.red,marginBottom:2}}>{fmt(m.paid)}</div>
+                          {Math.abs(owes)>1&&<div style={{fontSize:10,fontWeight:700,color:owes>0?C.red:C.green,background:owes>0?C.redBg:C.greenBg,borderRadius:99,padding:"2px 6px",display:"inline-block"}}>{owes>0?"owes "+fmt(owes):"+ "+fmt(-owes)}</div>}
+                        </div>
+                      );
+                    })}
+                    <div style={{flex:1,background:C.accentBg,borderRadius:10,padding:"9px 10px",textAlign:"center"}}>
+                      <div style={{fontSize:16,marginBottom:3}}>📊</div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:1}}>Total</div>
+                      <div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:C.accent}}>{fmt(totalAll)}</div>
+                      {totalShared>0&&<div style={{fontSize:10,color:C.accent,opacity:.7}}>{fmt(splitEach)}/ea shared</div>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {bills.filter(b=>!b.paid).length>0&&<div style={{marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Upcoming Bills</div>
@@ -4616,7 +4906,7 @@ function AppInner(){
           </div>
           <div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
         {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats} showToast={showToast}/>}
-        {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast}/>}
+        {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast} household={household}/>}
         {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast}/>}
         {tab==="more"&&!isMoreTab&&(
           <div className="fu">
@@ -4770,6 +5060,7 @@ function AppInner(){
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} showToast={showToast}/>}
+        {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
@@ -4874,6 +5165,7 @@ function AppInner(){
       {modal==="receipt"&&<Modal title="Scan Receipt" icon={Scan} onClose={cl} accent={C.purple}><div style={{textAlign:"center",padding:"10px 0 20px"}}><div style={{width:64,height:64,borderRadius:18,background:C.purpleBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><Scan size={30} color={C.purple}/></div><div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:8}}>Scan Receipt</div><label style={{display:"block",background:C.purple,borderRadius:12,padding:"13px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📷 Take Photo<input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><label style={{display:"block",background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:12,padding:"13px 0",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>🖼 Choose from Library<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><button className="ba" onClick={cl} style={{background:C.bg,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",width:"100%"}}>Cancel</button></div></Modal>}
       {modal==="simulator"&&debts.length>0&&(()=>{const dL=debts.map(d=>({...d,bal:parseFloat(d.balance||0),rate:parseFloat(d.rate||0)/100/12,min:parseFloat(d.minPayment||0)}));const tm=dL.reduce((s,d)=>s+d.min,0);const ex=parseFloat(form.extra||"0")||0;function sim(strat){let r=dL.map(d=>({...d}));let mo=0,ti=0;while(r.some(d=>d.bal>0)&&mo<600){mo++;let av=tm+ex;r=r.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;ti+=i;const p=Math.min(d.min,d.bal+i);av-=p;return{...d,bal:Math.max(0,d.bal+i-p)};});const ac=r.filter(d=>d.bal>0);if(ac.length&&av>0){const tgt=strat==="avalanche"?ac.reduce((a,b)=>a.rate>b.rate?a:b):ac.reduce((a,b)=>a.bal<b.bal?a:b);const idx=r.findIndex(d=>d.name===tgt.name);r[idx].bal=Math.max(0,r[idx].bal-av);}}return{months:mo,interest:ti};}const sn=sim("snowball"),av=sim("avalanche"),diff=sn.interest-av.interest;return(<Modal title="Payoff Simulator" icon={Calculator} onClose={cl} accent={C.green} wide><div style={{background:C.navy,borderRadius:14,padding:16,marginBottom:14,color:"#fff"}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",marginBottom:4}}>TOTAL DEBT</div><div style={{fontFamily:MF,fontSize:26,fontWeight:800,color:C.red}}>{fmt(debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0))}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>Min payments: {fmt(tm)}/mo</div></div><div style={{marginBottom:16}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Extra Monthly Payment</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.accent}}>{ex>0?"+"+fmt(ex):"$0"}</div></div><input type="range" min="0" max="1000" step="25" value={form.extra||0} onChange={e=>ff("extra",e.target.value)} style={{width:"100%",accentColor:C.accent,cursor:"pointer",marginBottom:6}}/><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textFaint}}><span>$0</span><span>$500</span><span>$1,000</span></div><div style={{marginTop:8,fontSize:12,color:C.textLight}}>Total: <span style={{fontWeight:700,color:C.text}}>{fmt(tm+ex)}/mo</span></div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>{[{label:"❄️ Snowball",sub:"Smallest first",m:sn.months,i:sn.interest,c:C.accent},{label:"🔥 Avalanche",sub:"Highest rate first",m:av.months,i:av.interest,c:C.green}].map(s=><div key={s.label} style={{background:C.surface,border:`1.5px solid ${s.c}44`,borderRadius:14,padding:14,borderTop:`3px solid ${s.c}`}}><div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:s.c,marginBottom:2}}>{s.label}</div><div style={{fontSize:11,color:C.textLight,marginBottom:10}}>{s.sub}</div><div style={{marginBottom:6}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>DEBT FREE</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.text}}>{s.m>=600?"∞":s.m<12?s.m+"mo":Math.floor(s.m/12)+"y "+(s.m%12)+"mo"}</div></div><div><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>INTEREST</div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red}}>{fmt(s.i)}</div></div></div>)}</div>{diff>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",fontSize:13,color:C.green,fontWeight:500}}>💡 Avalanche saves <strong>{fmt(diff)}</strong> vs Snowball</div>}</Modal>);})()} 
 
+      {showExport&&<ExportModal expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} budgetGoals={budgetGoals} trades={trades} shifts={shifts} categories={categories} appName={appName} onClose={()=>setShowExport(false)}/>}
       {confirm&&<ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)} danger={confirm.danger}/>}
       {editItem&&editItem.type==="expense"&&<EditModal item={editItem} categories={categories} onSave={u=>{setExpenses(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Expense updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Expense",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setExpenses(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} onSave={u=>{setBills(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Bill updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setBills(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
