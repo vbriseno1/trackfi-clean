@@ -539,6 +539,10 @@ function OnboardingWizard({onComplete}){
           <span style={{fontSize:16}}>💡</span>
           <span>You can add 401k, Roth IRA, brokerage, and crypto in the <strong>Accounts & Income</strong> tab after setup.</span>
         </div>
+        <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",fontSize:12,color:C.accent,display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{fontSize:16}}>💡</span>
+          <span>You can add 401k, Roth IRA, brokerage, and crypto in the <strong>Accounts & Income</strong> tab after setup.</span>
+        </div>
         {(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0)+parseFloat(d.accounts?.cushion||0))>0&&(
           <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",fontSize:13,color:C.accent,fontWeight:600}}>
             💰 Liquid total: ${(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0)+parseFloat(d.accounts?.cushion||0)).toLocaleString()}
@@ -4295,6 +4299,20 @@ function AppInner(){
               </div>);
             })()}
 
+            {/* PWA Install Banner */}
+            {pwaPrompt&&!pwaInstalled&&(
+              <div style={{background:`linear-gradient(135deg,${C.accent},${C.purple})`,borderRadius:16,padding:"14px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:24,flexShrink:0}}>📲</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>Add to Home Screen</div>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,.7)"}}>Install Trackfi for offline access & faster loading</div>
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <button onClick={async()=>{pwaPrompt.prompt();const r=await pwaPrompt.userChoice;if(r.outcome==="accepted"){setPwaInstalled(true);localStorage.setItem("fv_pwa_dismissed","1");}setPwaPrompt(null);}} style={{background:"rgba(255,255,255,.25)",border:"none",borderRadius:8,padding:"6px 12px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Install</button>
+                  <button onClick={()=>{setPwaPrompt(null);localStorage.setItem("fv_pwa_dismissed","1");setPwaInstalled(true);}} style={{background:"transparent",border:"1px solid rgba(255,255,255,.3)",borderRadius:8,padding:"6px 8px",color:"rgba(255,255,255,.7)",cursor:"pointer",fontSize:11}}>✕</button>
+                </div>
+              </div>
+            )}
             {/* ── 4. INSIGHT TICKER ─────────────────────────────── */}
             {expenses.length>0&&(()=>{
               const now2=new Date();
