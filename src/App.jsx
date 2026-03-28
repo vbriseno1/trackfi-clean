@@ -3884,8 +3884,7 @@ function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGo
       (e.notes||"").replace(/,/g," "),
       e.owner||"me"
     ]);
-    dlBlob([hdr,...rows].map(r=>r.join(",")).join("
-"),
+    dlBlob([hdr,...rows].map(r=>r.join(",")).join("\r\n"),
       (appName||"trackfi")+"-expenses-all.csv");
   }
 
@@ -3895,8 +3894,7 @@ function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGo
     const rows=expenses.filter(e=>e.date?.startsWith(ms)).sort((a,b)=>b.date?.localeCompare(a.date)).map(e=>[
       e.date,(e.name||"").replace(/,/g," "),e.category||"",parseFloat(e.amount||0).toFixed(2),(e.notes||"").replace(/,/g," ")
     ]);
-    dlBlob([hdr,...rows].map(r=>r.join(",")).join("
-"),
+    dlBlob([hdr,...rows].map(r=>r.join(",")).join("\r\n"),
       (appName||"trackfi")+"-"+ms+"-statement.csv");
   }
 
@@ -3925,8 +3923,7 @@ function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGo
       ["NET WORTH",(ta-td).toFixed(2)],
       ["",""],["Exported",new Date().toLocaleDateString()],
     ];
-    dlBlob(rows.map(r=>r.join(",")).join("
-"),
+    dlBlob(rows.map(r=>r.join(",")).join("\r\n"),
       (appName||"trackfi")+"-networth-"+now.toISOString().split("T")[0]+".csv");
   }
 
@@ -3939,8 +3936,7 @@ function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGo
     ]);
     const total=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)),0);
     const int=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)),0);
-    dlBlob([hdr,...rows,["","","","","","",""],["TOTAL",total.toFixed(2),"","","","",int.toFixed(2)]].map(r=>r.join(",")).join("
-"),
+    dlBlob([hdr,...rows,["","","","","","",""],["TOTAL",total.toFixed(2),"","","","",int.toFixed(2)]].map(r=>r.join(",")).join("\r\n"),
       (appName||"trackfi")+"-debts.csv");
   }
 
