@@ -9,6 +9,52 @@ import { LayoutDashboard, Wallet, CalendarClock, CreditCard, Target, PiggyBank,
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, BarChart, Bar, Cell, PieChart, Pie, ComposedChart } from "recharts";
 
+// ── PWA: Register service worker ─────────────────────────────────────────────
+if(typeof window!=="undefined"&&"serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("/sw.js",{scope:"/"})
+      .then(r=>console.log("[SW] registered",r.scope))
+      .catch(e=>console.log("[SW] failed",e));
+  });
+}
+
+// ── Confetti burst — pure canvas, no library ──────────────────────────────────
+function launchConfetti(){
+  try{
+    const canvas=document.createElement("canvas");
+    canvas.style.cssText="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:99999;";
+    document.body.appendChild(canvas);
+    const ctx=canvas.getContext("2d");
+    const W=canvas.width=window.innerWidth;
+    const H=canvas.height=window.innerHeight;
+    const COLORS=["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316"];
+    const particles=Array.from({length:120},()=>({
+      x:W*Math.random(),y:-10,
+      vx:(Math.random()-0.5)*6,vy:Math.random()*4+2,
+      w:Math.random()*12+4,h:Math.random()*6+3,
+      color:COLORS[Math.floor(Math.random()*COLORS.length)],
+      rot:Math.random()*360,rv:(Math.random()-0.5)*8,
+      alpha:1,
+    }));
+    let frame=0;
+    function draw(){
+      ctx.clearRect(0,0,W,H);
+      particles.forEach(p=>{
+        p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.rot+=p.rv;
+        if(frame>60)p.alpha-=0.02;
+        ctx.save();ctx.globalAlpha=Math.max(0,p.alpha);
+        ctx.translate(p.x,p.y);ctx.rotate(p.rot*Math.PI/180);
+        ctx.fillStyle=p.color;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+        ctx.restore();
+      });
+      frame++;
+      if(frame<120)requestAnimationFrame(draw);
+      else document.body.removeChild(canvas);
+    }
+    draw();
+  }catch(e){}
+}
+
 // 🔑 Replace with your Supabase project URL when ready
 const SUPA_URL = "https://lkxznfbcnvsbugffvobw.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxreHpuZmJjbnZzYnVnZmZ2b2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODQ5MzAsImV4cCI6MjA4OTY2MDkzMH0.Fb1R7H5ltCRSnzTZpgAndrnDXUEPxKfqsy0fZ5ZtAuU";
@@ -466,7 +512,7 @@ function OnboardingWizard({onComplete}){
     ),btnLabel:"Continue →",canSkip:true},
 
     // ── STEP 4: Starting Balances ────────────────────────────
-    {title:"Almost there! 🎉",body:(
+    {title:"One last thing 🏦",body:(
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {d.name&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
         <div style={{fontSize:13,fontWeight:600,color:C.accent,marginBottom:4}}>Welcome, {d.name.split(" ")[0]}! Here's what we've set up:</div>
@@ -476,15 +522,23 @@ function OnboardingWizard({onComplete}){
         </div>
       </div>}
       <div style={{fontSize:13,color:C.textLight,lineHeight:1.6,marginBottom:12}}>Last step — add your account balances to unlock net worth tracking and safe-to-spend. Totally optional, you can skip and add later.</div>
-        {[{k:"checking",l:"Checking",ic:"🏦",ph:"2500"},{k:"savings",l:"Savings",ic:"💰",ph:"5000"},{k:"cushion",l:"Emergency / Cushion",ic:"🛡️",ph:"1000"},{k:"k401",l:"401(k)",ic:"🏢",ph:"0"},{k:"roth_ira",l:"Roth IRA",ic:"🌱",ph:"0"},{k:"brokerage",l:"Brokerage / Investments",ic:"📊",ph:"0"}].map(a=>(
+        <div style={{fontSize:13,color:C.accent,fontWeight:600,marginBottom:8}}>Core accounts (powers Safe-to-Spend)</div>
+        {[{k:"checking",l:"Checking",ic:"🏦",ph:"2500",req:true},{k:"savings",l:"Savings",ic:"💰",ph:"5000",req:false},{k:"cushion",l:"Emergency Fund",ic:"🛡️",ph:"1000",req:false}].map(a=>(
           <div key={a.k} style={{display:"flex",alignItems:"center",gap:12,background:C.surfaceAlt,borderRadius:12,padding:"11px 14px"}}>
             <span style={{fontSize:20,flexShrink:0}}>{a.ic}</span>
-            <div style={{flex:1,fontSize:13,fontWeight:600,color:C.text}}>{a.l}</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:600,color:C.text}}>{a.l}</div>
+              {a.req&&<div style={{fontSize:10,color:C.accent,fontWeight:600}}>Used for safe-to-spend</div>}
+            </div>
             <input type="number" placeholder={a.ph} value={d.accounts?.[a.k]||""}
               onChange={e=>setD(p=>({...p,accounts:{...(p.accounts||{}),[a.k]:e.target.value}}))}
               style={{width:110,background:"#fff",border:`1.5px solid ${parseFloat(d.accounts?.[a.k]||0)>0?C.accent:C.border}`,borderRadius:10,padding:"8px 10px",fontSize:15,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right"}}/>
           </div>
         ))}
+        <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",fontSize:12,color:C.accent,display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{fontSize:16}}>💡</span>
+          <span>You can add 401k, Roth IRA, brokerage, and crypto in the <strong>Accounts & Income</strong> tab after setup.</span>
+        </div>
         {(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0)+parseFloat(d.accounts?.cushion||0))>0&&(
           <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",fontSize:13,color:C.accent,fontWeight:600}}>
             💰 Liquid total: ${(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0)+parseFloat(d.accounts?.cushion||0)).toLocaleString()}
@@ -3519,6 +3573,109 @@ function CategoriesView({categories,setCategories,showToast}){
   );
 }
 
+function HouseholdView({household,setHousehold,expenses,showToast}){
+  const[editMember,setEditMember]=useState(null);
+  const[form,setForm]=useState({name:"",emoji:"😊",color:"#6366f1"});
+  const EMOJIS_HH=["😊","😄","🧑","👩","👨","🧔","👱","🧑‍💼","👩‍💼","👨‍💼","🧑‍🍳","🐶","🐱","⭐","🌟"];
+  const COLORS_HH=["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899"];
+
+  // Shared expense balances
+  const now=new Date();const ms=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  const thisMonthExp=expenses.filter(e=>e.date?.startsWith(ms));
+  const memberTotals=household.members.reduce((a,m)=>{
+    a[m.id]=thisMonthExp.filter(e=>e.owner===m.id||(e.owner==="shared"&&!e.owner)||(!e.owner&&m.id==="me"))
+      .reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+    return a;
+  },{});
+  const totalShared=thisMonthExp.filter(e=>e.owner==="shared").reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const splitPer=household.members.length>0?totalShared/household.members.length:0;
+
+  return(
+    <div className="fu">
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div>
+          <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text}}>Household</div>
+          <div style={{fontSize:13,color:C.textLight,marginTop:2}}>{household.members.length} members · {household.enabled?"Active":"Disabled"}</div>
+        </div>
+        <button onClick={()=>setHousehold(h=>({...h,enabled:!h.enabled}))} style={{background:household.enabled?C.accentBg:C.bg,border:`1.5px solid ${household.enabled?C.accent:C.border}`,borderRadius:99,padding:"7px 16px",cursor:"pointer",fontWeight:700,fontSize:13,color:household.enabled?C.accent:C.textMid}}>
+          {household.enabled?"Enabled ✓":"Enable"}
+        </button>
+      </div>
+
+      {/* Household name */}
+      <div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+        <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Household Name</div>
+        <input value={household.name} onChange={e=>setHousehold(h=>({...h,name:e.target.value}))}
+          style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontSize:16,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+      </div>
+
+      {/* Members */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Members</div>
+        {household.members.map((m,i)=>(
+          <div key={m.id} style={{background:C.surface,borderRadius:14,padding:"12px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 3px rgba(10,22,40,.05)"}}>
+            <div style={{width:42,height:42,borderRadius:"50%",background:m.color+"22",border:`2px solid ${m.color}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{m.emoji}</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:700,color:C.text}}>{m.name}{m.id==="me"&&" (You)"}</div>
+              <div style={{fontSize:12,color:C.textLight,marginTop:1}}>This month: {fmt(memberTotals[m.id]||0)}</div>
+            </div>
+            {m.id!=="me"&&<button onClick={()=>setHousehold(h=>({...h,members:h.members.filter(x=>x.id!==m.id)}))} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:4,display:"flex"}}><X size={14}/></button>}
+          </div>
+        ))}
+        {/* Add member */}
+        <div style={{background:C.surfaceAlt,borderRadius:14,padding:14,border:`1.5px dashed ${C.border}`}}>
+          <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:8}}>Add Member</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+            {EMOJIS_HH.map(e=>(
+              <button key={e} onClick={()=>setForm(f=>({...f,emoji:e}))} style={{fontSize:20,background:form.emoji===e?C.accentBg:"#fff",border:form.emoji===e?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"3px 5px",cursor:"pointer"}}>{e}</button>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
+            {COLORS_HH.map(c=>(
+              <button key={c} onClick={()=>setForm(f=>({...f,color:c}))} style={{width:24,height:24,borderRadius:"50%",background:c,border:form.color===c?"3px solid "+C.text:"3px solid transparent",cursor:"pointer"}}/>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Partner, Roommate..." style={{flex:1,background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:14,color:C.text,outline:"none"}}/>
+            <button onClick={()=>{if(!form.name.trim())return;const id="member_"+Date.now();setHousehold(h=>({...h,members:[...h.members,{id,name:form.name.trim(),emoji:form.emoji,color:form.color}]}));setForm({name:"",emoji:"😊",color:"#6366f1"});showToast("✓ "+form.name+" added");}} style={{background:C.accent,border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Add</button>
+          </div>
+        </div>
+      </div>
+
+      {/* This month split summary */}
+      {household.enabled&&household.members.length>1&&(
+        <div style={{background:C.surface,borderRadius:16,padding:16,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+          <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>This Month — Split</div>
+          {household.members.map(m=>{
+            const spent=memberTotals[m.id]||0;
+            const owes=splitPer-spent;
+            return(
+              <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                <span style={{fontSize:18}}>{m.emoji}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:600,color:C.text}}>{m.name}</div>
+                  <div style={{fontSize:11,color:C.textLight}}>Paid {fmt(spent)}</div>
+                </div>
+                {Math.abs(owes)>0.5&&(
+                  <div style={{fontSize:12,fontWeight:700,color:owes>0?C.red:C.green,background:owes>0?C.redBg:C.greenBg,borderRadius:99,padding:"4px 10px"}}>
+                    {owes>0?"owes "+fmt(owes):"gets back "+fmt(-owes)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <div style={{marginTop:10,fontSize:12,color:C.textLight}}>💡 Tag expenses to members in the Log tab for accurate splits</div>
+        </div>
+      )}
+
+      {!household.enabled&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:"14px 16px",fontSize:13,color:C.accent,lineHeight:1.6}}>
+        💡 Enable household mode to track shared expenses, see who owes what, and split bills fairly between household members.
+      </div>}
+    </div>
+  );
+}
+
 function AppInner(){
   const[tab,setTabRaw]=useState("home");
   const[tabHistory,setTabHistory]=useState([]);
@@ -3542,6 +3699,7 @@ function AppInner(){
   const[budgetGoals,setBGoals]=useState([]);
   const[savingsGoals,setSGoals]=useState([]);
   const[categories,setCats]=useState(DEF_CATS);
+  const[household,setHousehold]=useState({enabled:false,name:"Our Household",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10b981"}]});
   const[trades,setTrades]=useState([]);
   const[tradingAccount,setTradingAccount]=useState({deposit:"",balance:""});
   const[shifts,setShifts]=useState([]);
@@ -3558,6 +3716,14 @@ function AppInner(){
   const[darkMode,setDarkMode]=useState(()=>{try{return localStorage.getItem("fv_dark")==="1";}catch{return false;}});
   const[hidden,setHidden]=useState(false);
   const[heroIdx,setHeroIdx]=useState(0);
+  const[pwaPrompt,setPwaPrompt]=useState(null);
+  const[pwaInstalled,setPwaInstalled]=useState(()=>{try{return localStorage.getItem("fv_pwa_dismissed")==="1";}catch{return false;}});
+  useEffect(()=>{
+    const handler=e=>{e.preventDefault();setPwaPrompt(e);};
+    window.addEventListener("beforeinstallprompt",handler);
+    window.addEventListener("appinstalled",()=>{setPwaInstalled(true);localStorage.setItem("fv_pwa_dismissed","1");});
+    return()=>window.removeEventListener("beforeinstallprompt",handler);
+  },[]);
   const[pinEnabled,setPinEnabled]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[locked,setLocked]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[onboarded,setOnboarded]=useState(()=>{try{return localStorage.getItem("fv_onboarded")==="1";}catch{return false;}});
@@ -3590,6 +3756,7 @@ function AppInner(){
         try{if(ac)setAccounts(a=>({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:"",...a,...ac}));}catch{}
         try{if(inc)setIncome(a=>({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...a,...inc}));}catch{}
         try{if(sett)setSettings(a=>({...a,...sett}));}catch{}
+        try{const hh=await sg("fv6:household");if(hh)setHousehold(h=>({...h,...hh}));}catch{}
         try{if(cc)setCalColors(a=>({...a,...cc}));}catch{}
         try{if(nts&&nts.length)setNotifs(nts);}catch{}
         try{if(bh&&bh.length)setBalHist(bh);}catch{}
@@ -3623,6 +3790,7 @@ function AppInner(){
   useEffect(()=>{if(ready)ss("fv6:appName",appName);},[appName,ready]);
   useEffect(()=>{if(ready)ss("fv6:greetName",greetName);},[greetName,ready]);
   useEffect(()=>{if(ready)ss("fv6:settings",settings);},[settings,ready]);
+  useEffect(()=>{if(ready)ss("fv6:household",household);},[household,ready]);
   const pushNotif=(id,title,body,type)=>{
     setNotifs(p=>{if(p.find(n=>n.id===id))return p;return[{id,title,body,type,time:Date.now(),read:false},...p.slice(0,49)];});
     // Fire real OS notification if permission granted
@@ -3692,7 +3860,7 @@ function AppInner(){
     crossed.forEach(m=>{
       const label=m>=1000000?"$1M 🦄":m>=500000?"$500K":"$"+m.toLocaleString();
       pushNotif("nw_"+m,"🎉 Net Worth Milestone!","You crossed "+label+" net worth — incredible!","success");
-      showToast("🎉 "+label+" net worth milestone!","success");
+      showToast("🎉 "+label+" net worth milestone!","success");launchConfetti();
     });
   },[totalAssets,totalDebt,ready]);
 
@@ -3774,7 +3942,7 @@ function AppInner(){
     bills.forEach(b=>{if(b.paid)return;const d=dueIn(b.dueDate);if(d<0)pushNotif('ov_'+b.id,'🚨 Overdue: '+b.name,fmt(b.amount)+' was due '+Math.abs(d)+'d ago','danger');else if(d<=3)pushNotif('due3_'+b.id,'⚠️ Due soon: '+b.name,fmt(b.amount)+' due in '+d+' day'+(d!==1?'s':''),'warning');});
     const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0');
     budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
-    savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100)pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
+    savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100)pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');launchConfetti();else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
     // Payday reminder: notify when payday is tomorrow or today
     const payReminderKey="payremind_"+nextPayStr;
     const daysUntil=Math.ceil((nextPayDate-new Date())/86400000);
@@ -3841,7 +4009,7 @@ function AppInner(){
   const today=todayStr();
   const unread=unreadNotifs;
   const GROUPS=[
-    {key:"money",label:"Money",desc:"Accounts, bills & goals",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"debt",icon:CreditCard,label:"Debt Tracker"},{id:"savings",icon:Target,label:"Savings Goals"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"recurring",icon:RefreshCw,label:"Recurring"},{id:"calendar",icon:Calendar,label:"Bill Calendar"}]},
+    {key:"money",label:"Money",desc:"Accounts, bills & goals",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"debt",icon:CreditCard,label:"Debt Tracker"},{id:"savings",icon:Target,label:"Savings Goals"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"household",icon:Wallet,label:"Household / Shared"},{id:"recurring",icon:RefreshCw,label:"Recurring"},{id:"calendar",icon:Calendar,label:"Bill Calendar"}]},
     {key:"analytics",label:"Analytics",desc:"Insights & trends",items:[{id:"insights",icon:BarChart2,label:"Spending Insights 📊"},{id:"health",icon:Activity,label:"Health Score"},{id:"cashflow",icon:BarChart2,label:"Income vs Spending"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"}]},
     {key:"work",label:"Work & Reports",desc:"Shifts, trading & docs",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
     {key:"tools",label:"Tools",desc:"Search & customize",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"categories",icon:Filter,label:"Categories"},{id:"dashsettings",icon:Settings,label:"Dashboard Layout"}]},
@@ -4305,7 +4473,7 @@ function AppInner(){
                 {id:"debt",ic:"💳",l:"Debt",c:C.red,bg:C.redBg},
                 {id:"savings",ic:"🎯",l:"Goals",c:C.teal,bg:"rgba(13,148,136,.1)"},
                 {id:"calendar",ic:"📅",l:"Calendar",c:C.amber,bg:C.amberBg},
-                {id:"search",ic:"🔍",l:"Search",c:C.textMid,bg:C.surfaceAlt},
+                {id:"search",ic:"🔍",l:"Search",c:C.textMid,bg:C.surfaceAlt},{id:"household",ic:"🏠",l:"Household",c:C.accent,bg:C.accentBg},
               ].map(({id,ic,l,c,bg})=>(
                 <button key={id} onClick={()=>navTo(id)} className="ba" style={{background:bg,borderRadius:14,padding:"12px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,border:"none",cursor:"pointer"}}>
                   <span style={{fontSize:20}}>{ic}</span>
@@ -4429,6 +4597,7 @@ function AppInner(){
         {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} onNavigate={navTo}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
+        {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} showToast={showToast}/>}
         {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
@@ -4513,7 +4682,17 @@ function AppInner(){
         );})}
       </div>
 
-      {modal==="expense"&&<Modal title="Log Expense" icon={Wallet} onClose={cl} onSubmit={submit} submitLabel="Add Expense"><FI label="Name" placeholder="Coffee, groceries, gas..." value={form.name||""} onChange={e=>{ff("name",e.target.value);if(!form.category){const t=e.target.value.toLowerCase().trim();const mc=window._merchantCats||{};if(mc[t]){ff("category",mc[t]);}else{const catMap={"Groceries":["grocery","groceries","publix","kroger","walmart","costco","trader joe","aldi","whole foods","market"],"Fast Food":["mcdonald","burger","wendy","chipotle","taco bell","subway","chick","popeyes","kfc","domino","sonic"],"Restaurants":["restaurant","sushi","dinner out","doordash","ubereats","grubhub","dine"],"Coffee":["starbucks","dunkin","coffee","latte","espresso","cafe","cold brew","dutch bros"],"Gas":["gas","shell","bp","chevron","exxon","fuel","wawa","sheetz","quiktrip"],"Rideshare":["uber","lyft","taxi","ride"],"Subscriptions":["netflix","hulu","spotify","apple music","amazon prime","disney","hbo","membership","subscription"],"Health / Medical":["doctor","pharmacy","cvs","walgreens","medicine","dental","therapy","copay","clinic"],"Gym / Fitness":["gym","planet fitness","fitness","yoga","crossfit","peloton","workout"],"Grooming / Haircuts":["haircut","barber","salon","nails","manicure","wax","spa","sephora","ulta"],"Clothing":["clothes","shoes","nike","adidas","h&m","zara","nordstrom","fashion"],"Entertainment":["movie","game","steam","concert","ticket","bowling","bar","club"],"Travel":["hotel","airbnb","flight","airline","vacation","booking"],"Pets":["pet","petco","petsmart","vet","dog food","cat food"],"Shopping":["amazon","target","best buy","home depot","ikea","walmart","tj maxx"]};for(const[cat,kws]of Object.entries(catMap)){if(kws.some(k=>t.includes(k))){ff("category",cat);break;}}}}}}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)} autoFocus={!!form.name}/><FI half label="Date" type="date" value={form.date||todayStr()} onChange={e=>ff("date",e.target.value)}/></div><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Notes" placeholder="Optional" value={form.notes||""} onChange={e=>ff("notes",e.target.value)}/><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Recurring</div><div style={{fontSize:12,color:C.textLight}}>Auto-log this monthly</div></div><button onClick={()=>ff("recurring",!form.recurring)} style={{background:"none",border:"none",cursor:"pointer",color:form.recurring?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.recurring?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div></Modal>}
+      {modal==="expense"&&<Modal title="Log Expense" icon={Wallet} onClose={cl} onSubmit={submit} submitLabel="Add Expense"><FI label="Name" placeholder="Coffee, groceries, gas..." value={form.name||""} onChange={e=>{ff("name",e.target.value);if(!form.category){const t=e.target.value.toLowerCase().trim();const mc=window._merchantCats||{};if(mc[t]){ff("category",mc[t]);}else{const catMap={"Groceries":["grocery","groceries","publix","kroger","walmart","costco","trader joe","aldi","whole foods","market"],"Fast Food":["mcdonald","burger","wendy","chipotle","taco bell","subway","chick","popeyes","kfc","domino","sonic"],"Restaurants":["restaurant","sushi","dinner out","doordash","ubereats","grubhub","dine"],"Coffee":["starbucks","dunkin","coffee","latte","espresso","cafe","cold brew","dutch bros"],"Gas":["gas","shell","bp","chevron","exxon","fuel","wawa","sheetz","quiktrip"],"Rideshare":["uber","lyft","taxi","ride"],"Subscriptions":["netflix","hulu","spotify","apple music","amazon prime","disney","hbo","membership","subscription"],"Health / Medical":["doctor","pharmacy","cvs","walgreens","medicine","dental","therapy","copay","clinic"],"Gym / Fitness":["gym","planet fitness","fitness","yoga","crossfit","peloton","workout"],"Grooming / Haircuts":["haircut","barber","salon","nails","manicure","wax","spa","sephora","ulta"],"Clothing":["clothes","shoes","nike","adidas","h&m","zara","nordstrom","fashion"],"Entertainment":["movie","game","steam","concert","ticket","bowling","bar","club"],"Travel":["hotel","airbnb","flight","airline","vacation","booking"],"Pets":["pet","petco","petsmart","vet","dog food","cat food"],"Shopping":["amazon","target","best buy","home depot","ikea","walmart","tj maxx"]};for(const[cat,kws]of Object.entries(catMap)){if(kws.some(k=>t.includes(k))){ff("category",cat);break;}}}}}}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)} autoFocus={!!form.name}/><FI half label="Date" type="date" value={form.date||todayStr()} onChange={e=>ff("date",e.target.value)}/></div><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Notes" placeholder="Optional" value={form.notes||""} onChange={e=>ff("notes",e.target.value)}/>
+        {household.enabled&&household.members.length>1&&<div style={{marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Assign to</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {[{id:"shared",name:"Shared",emoji:"🏠"},...household.members].map(m=>(
+              <button key={m.id} onClick={()=>ff("owner",m.id)} style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:99,border:`1.5px solid ${(form.owner||"shared")===m.id?C.accent:C.border}`,background:(form.owner||"shared")===m.id?C.accentBg:"#fff",cursor:"pointer",fontSize:12,fontWeight:(form.owner||"shared")===m.id?700:400,color:(form.owner||"shared")===m.id?C.accent:C.textMid}}>
+                <span>{m.emoji}</span><span>{m.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>}<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Recurring</div><div style={{fontSize:12,color:C.textLight}}>Auto-log this monthly</div></div><button onClick={()=>ff("recurring",!form.recurring)} style={{background:"none",border:"none",cursor:"pointer",color:form.recurring?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.recurring?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div></Modal>}
       {modal==="bill"&&<Modal title="Add Bill" icon={CalendarClock} onClose={cl} onSubmit={submit} submitLabel="Add Bill" accent={C.amber}><FI label="Bill Name" placeholder="Rent, Electric, Netflix..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Monthly","Bi-weekly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/></Modal>}
       {modal==="debt"&&<Modal title="Add Debt" icon={CreditCard} onClose={cl} onSubmit={submit} submitLabel="Track Debt" accent={C.red} wide><FI label="Name" placeholder="Car loan, student debt..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div style={{display:"flex",gap:12}}><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/></div></Modal>}
       {modal==="bgoal_home"&&<Modal title="Spending Envelope" icon={Target} onClose={cl} onSubmit={()=>{if(!form.category||!form.limit)return;setBGoals(p=>[...p,{id:Date.now(),...form}]);cl();}} submitLabel="Add Envelope" accent={C.purple}><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.accent,lineHeight:1.5}}>
