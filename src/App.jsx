@@ -537,11 +537,7 @@ function OnboardingWizard({onComplete}){
         ))}
         <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",fontSize:12,color:C.accent,display:"flex",gap:8,alignItems:"center"}}>
           <span style={{fontSize:16}}>💡</span>
-          <span>You can add 401k, Roth IRA, brokerage, and crypto in the <strong>Accounts & Income</strong> tab after setup.</span>
-        </div>
-        <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",fontSize:12,color:C.accent,display:"flex",gap:8,alignItems:"center"}}>
-          <span style={{fontSize:16}}>💡</span>
-          <span>You can add 401k, Roth IRA, brokerage, and crypto in the <strong>Accounts & Income</strong> tab after setup.</span>
+          <span>You can add 401k, Roth IRA, brokerage, and crypto in <strong>Accounts & Income</strong> after setup.</span>
         </div>
         {(parseFloat(d.accounts?.checking||0)+parseFloat(d.accounts?.savings||0)+parseFloat(d.accounts?.cushion||0))>0&&(
           <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",fontSize:13,color:C.accent,fontWeight:600}}>
@@ -2667,7 +2663,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   </div>);
 }
 
-function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast}){
+function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo}){
   const[nm,setNm]=useState(appName||"");
   const[showPIN,setShowPIN]=useState(false);
 
@@ -2777,6 +2773,8 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Features</div>
       </div>
       {Tog("showTrading","Futures Trading","Track P&L, win rate, equity curve","📈")}
+      {/* Household mode toggle in settings */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>🏠</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>Household / Shared Mode</div><div style={{fontSize:12,color:C.textLight}}>Split expenses with a partner or roommate</div></div></div><button onClick={()=>{navTo&&navTo("household");}} style={{background:household?.enabled?C.accentBg:C.surfaceAlt,border:`1.5px solid ${household?.enabled?C.accent:C.border}`,borderRadius:99,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:12,color:household?.enabled?C.accent:C.textMid}}>{household?.enabled?"On — View →":"Set Up →"}</button></div>
       {Tog("showHealth","Health Score","A–F grade on your finances","🏆")}
       {Tog("showSavings","Savings Goals","Goal rings with projected dates","🎯")}
       {Tog("showForecast","Month Forecast","Burn rate + spending projection","🔮")}
@@ -4616,7 +4614,7 @@ function AppInner(){
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} showToast={showToast}/>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
