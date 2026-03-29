@@ -177,7 +177,7 @@ const getProfSub = (pId,sId) => { const p=getProfession(pId); return p.subs.find
 const fmt    = n => { const v=Number(n); return "$"+(isNaN(v)?0:v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const fmtK   = n => { const v=Number(n||0); return v>=1000?"$"+(v/1000).toFixed(1)+"k":fmt(v); };
 const todayStr = () => new Date().toISOString().split("T")[0];
-const dueIn  = d => Math.ceil((new Date(d)-new Date(todayStr()))/86400000);
+const dueIn  = d => { if(!d)return 999; const [ty,tm,tdy]=todayStr().split('-').map(Number); const [dy,dm,ddd]=d.split('-').map(Number); const today2=new Date(ty,tm-1,tdy); const due=new Date(dy,dm-1,ddd); return Math.ceil((due-today2)/86400000); };
 const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); };
 const dayOfMonth  = () => new Date().getDate();
 const fmtDate = s => { if(!s)return""; const d=new Date(s+"T00:00:00"); return FULL_MOS[d.getMonth()]+" "+d.getDate(); };
@@ -1804,7 +1804,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         return(
           <div key={b.id} style={{marginBottom:8}}>
             <div className="rw" style={{display:"flex",alignItems:"center",gap:12,padding:"14px 14px",background:C.surface,border:`1.5px solid ${b.paid?C.border:d<0?C.redMid:d<=7?C.amberMid:C.border}`,borderRadius:14}}>
-              <button onClick={()=>{setBills(p=>p.map(x=>{if(x.id!==b.id)return x;const nowPaid=!x.paid;if(nowPaid)setTimeout(()=>showToast&&showToast("✓ Paid — "+x.name),0);if(nowPaid&&x.recurring&&x.recurring!=="One-time"){return{...x,paid:false,dueDate:advanceDueDate(x.dueDate,1),paidDate:todayStr()};}return{...x,paid:nowPaid};}));}} style={{background:"none",border:"none",cursor:"pointer",color:b.paid?C.green:C.border,padding:0,display:"flex",flexShrink:0}}>{b.paid?<CheckCircle2 size={22}/>:<Circle size={22}/>}</button>
+              <button onClick={()=>{setBills(p=>p.map(x=>{if(x.id!==b.id)return x;const nowPaid=!x.paid;if(nowPaid)setTimeout(()=>showToast&&showToast("✓ Paid — "+x.name),0);if(nowPaid&&x.recurring&&x.recurring!=="One-time"){return{...x,paid:false,dueDate:(()=>{const d=new Date((x.dueDate||todayStr())+"T00:00:00");if(x.recurring==="Weekly"){d.setDate(d.getDate()+7);}else if(x.recurring==="Bi-weekly"){d.setDate(d.getDate()+14);}else if(x.recurring==="Quarterly"){d.setMonth(d.getMonth()+3);}else if(x.recurring==="Annual"){d.setFullYear(d.getFullYear()+1);}else{d.setMonth(d.getMonth()+1);}return d.toISOString().split("T")[0];})(),paidDate:todayStr()};}return{...x,paid:nowPaid};}));}} style={{background:"none",border:"none",cursor:"pointer",color:b.paid?C.green:C.border,padding:0,display:"flex",flexShrink:0}}>{b.paid?<CheckCircle2 size={22}/>:<Circle size={22}/>}</button>
               <div style={{flex:1}}>
                 <div style={{fontSize:14,fontWeight:600,color:b.paid?C.textLight:C.text,textDecoration:b.paid?"line-through":"none"}}>{b.name}</div>
                 <div style={{fontSize:12,marginTop:2,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -1926,7 +1926,7 @@ function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,
   function calcPayoff(d){
     const bal=parseFloat(d.balance)||0;
     const rate=(parseFloat(d.rate)||0)/100/12;
-    const minPay=d.minPayment?parseFloat(d.minPayment):Math.max(25,bal*0.02+(rate*bal));
+    const minPay=d.minPayment?parseFloat(d.minPayment):Math.max(25,bal*0.02);
     if(bal<=0)return{months:0,totalInterest:0,payoffDate:"Paid off"};
     if(minPay<=rate*bal)return{months:999,totalInterest:999999,payoffDate:"Never"};
     let b=bal,mo=0,interest=0;
@@ -2955,7 +2955,7 @@ function generateDemoData(){
       const day=1+Math.floor(Math.random()*Math.max(1,maxDay-1));
       const amt=(rng[0]+Math.random()*(rng[1]-rng[0])).toFixed(2);
       const ownerId=Math.random()>0.6?"shared":Math.random()>0.5?"partner":"me";
-      expenses.push({id:Date.now()+mo*10000+i,name:nm,category:cat,amount:amt,
+      expenses.push({id:Date.now()+mo*10000+i+Math.floor(Math.random()*100),name:nm,category:cat,amount:amt,
         date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),
         notes:"",owner:ownerId});
     }
@@ -3405,7 +3405,7 @@ function SubsView({detectedSubs,expenses}){
   const monthly=active.filter(s=>s.interval==="Monthly");
   const other=active.filter(s=>s.interval!=="Monthly");
   const totalMo=monthly.reduce((s,x)=>s+(parseFloat(x.amount)||0),0);
-  const totalAll=active.reduce((s,x)=>{const a=parseFloat(x.amount)||0;if(x.interval==="Monthly")return s+a;if(x.interval==="Weekly")return s+a*4.33;if(x.interval==="Annual")return s+a/12;return s+a;},[]);
+  const totalAll=active.reduce((s,x)=>{const a=parseFloat(x.amount)||0;if(x.interval==="Monthly")return s+a;if(x.interval==="Weekly")return s+a*4.33;if(x.interval==="Annual")return s+a/12;return s+a;},0);
   const catMap=active.reduce((a,s)=>{a[s.category]=(a[s.category]||0)+(parseFloat(s.amount)||0);return a},{});
   const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   const maxCat=cats[0]?.[1]||1;
@@ -3606,6 +3606,9 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady}){
   useEffect(()=>{
     if(!appReady)return;
     const today=todayStr();
+    const lastRun=localStorage.getItem("fv_recurring_last");
+    if(lastRun===today)return; // already ran today — skip
+    localStorage.setItem("fv_recurring_last",today);
     const updated=recurrings.map(r=>{
       if(r.nextDate<=today&&r.active!==false){
         setExpenses(p=>[...p,{id:Date.now()+Math.random(),name:r.name,amount:r.amount,category:r.category,date:today,notes:"Auto-logged"}]);
@@ -3819,7 +3822,7 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
   const sharedTotal=sharedExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const splitPer=household.members.length>0?sharedTotal/household.members.length:0;
   const memberStats=household.members.map(m=>{
-    const personal=thisMonthExp.filter(e=>e.owner===m.id||(m.id==="me"&&!e.owner&&e.owner!=="shared"&&e.owner!=="partner"))
+    const personal=thisMonthExp.filter(e=>e.owner===m.id||(m.id==="me"&&(!e.owner||e.owner==="me")&&e.owner!=="shared"&&e.owner!=="partner"))
       .reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
     const share=splitPer;
     const totalOwed=personal+share;
@@ -4868,7 +4871,7 @@ function AppInner(){
   const[syncing,setSyncing]=useState(false);
   const[syncStatus,setSyncStatus]=useState(null);
   const[toast,setToast]=useState(null);
-  const showToast=(msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),2500);};
+  const showToast=(msg,type='success')=>{setToast({msg,type});const dur=msg.length>40?4000:2500;setTimeout(()=>setToast(null),dur);};
 
   const[isDemoMode,setIsDemoMode]=useState(()=>{try{return localStorage.getItem("fv_demo")==="1";}catch{return false;}});
 
@@ -4974,7 +4977,7 @@ function AppInner(){
   const monthlyIncome=useMemo(()=>(parseFloat(income.primary||0)*paycheckMultiplier)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income,paycheckMultiplier]);
   // totalIncome = alias for monthlyIncome (keeps all existing references working)
   const totalIncome=monthlyIncome;
-  const totalAssets=useMemo(()=>(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0)),[accounts]);
+  const totalAssets=useMemo(()=>(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount.balance||0)),[accounts,tradingAccount]);
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const totalDebt=useMemo(()=>debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0),[debts]);
   const cashflow=totalIncome-totalExp;
