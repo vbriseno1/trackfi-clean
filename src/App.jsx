@@ -4079,7 +4079,7 @@ function BankImportModal({categories,expenses,setExpenses,household,showToast,on
     {name:"Bank of America",detect:h=>h.toLowerCase().includes("posted date")||h.toLowerCase().includes("payee"),
      date:r=>r[0],desc:r=>r[2]||r[1],amt:r=>parseFloat((r[4]||r[3]||"0").replace(/[^0-9.-]/g,""))},
     // Wells Fargo: Date,Amount,*,*,Description
-    {name:"Wells Fargo",detect:h=>!h.toLowerCase().includes("date")&&r=>/^\d{1,2}\/\d{1,2}\/\d{4}/.test(h),
+    {name:"Wells Fargo",detect:h=>/amount/i.test(h)&&!/transaction date/i.test(h),
      date:r=>r[0],desc:r=>r[4],amt:r=>parseFloat((r[1]||"0").replace(/[^0-9.-]/g,""))},
     // Capital One: Transaction Date,Post Date,Description,Category,Debit,Credit
     {name:"Capital One",detect:h=>h.toLowerCase().includes("transaction date")&&h.toLowerCase().includes("debit"),
