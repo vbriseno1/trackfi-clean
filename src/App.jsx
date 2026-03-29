@@ -1622,7 +1622,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
           <button key={id} className="ba" onClick={()=>{setDateFilter(id);setCatFilter("all");}} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:dateFilter===id?"#fff":"transparent",color:dateFilter===id?C.accent:C.textLight,fontWeight:dateFilter===id?700:500,fontSize:12,cursor:"pointer",boxShadow:dateFilter===id?"0 1px 4px rgba(0,0,0,.08)":"none"}}>{label}</button>
         ))}
       </div>
-      {/* ── Household member filter — visible when household enabled ── */
+      {/* ── Household member filter — visible when household enabled ── */}
       {household?.enabled&&household?.members?.length>1&&(
         <div style={{display:"flex",gap:6,marginBottom:10,overflowX:"auto",paddingBottom:2}}>
           <button onClick={()=>setTagFilter("all")} style={{flexShrink:0,padding:"6px 13px",borderRadius:99,border:"none",background:tagFilter==="all"?C.accent:C.surface,color:tagFilter==="all"?"#fff":C.textMid,fontWeight:tagFilter==="all"?700:500,fontSize:12,cursor:"pointer",boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>Everyone</button>
@@ -1796,8 +1796,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         </div>
       </div>}
       {soonAmt>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"11px 15px",marginBottom:14,fontSize:13,color:C.amber,fontWeight:500}}>⚠️ <strong>{fmt(soonAmt)}</strong> due in the next 7 days</div>}
-      )}
-      {bills.length===0&&<Empty text='No bills yet. Use AI Logger — type "rent 1200 due 28th"' icon={CalendarClock}/>}}
+      {bills.length===0&&<Empty text='No bills yet. Use AI Logger — type "rent 1200 due 28th"' icon={CalendarClock}/>}
       {bills.sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).map(b=>{
         const d=dueIn(b.dueDate);
         const uc=b.paid?C.green:d<0?C.red:d<=3?C.red:d<=7?C.amber:C.textLight;
