@@ -1547,6 +1547,63 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
           </div>
         </div>
       )}
+
+      {/* ── HYSA / Yield Calculator ─────────────────────────── */}
+      <div style={{background:C.surface,borderRadius:18,padding:18,marginTop:14,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:15,color:C.text,marginBottom:4}}>💰 Money Growth Calculator</div>
+        <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>What your balances earn at different rates</div>
+        {(()=>{
+          const liquid=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));
+          const SCENARIOS=[
+            {label:"Traditional Savings",rate:0.5,icon:"🏦",desc:"Big bank",highlight:false},
+            {label:"High-Yield Savings",rate:4.75,icon:"⚡",desc:"HYSA / online bank",highlight:true},
+            {label:"Money Market",rate:5.1,icon:"📊",desc:"Money market fund",highlight:true},
+            {label:"6-Month CD",rate:5.25,icon:"🔒",desc:"Certificate of deposit",highlight:true},
+            {label:"S&P 500 avg",rate:10.0,icon:"📈",desc:"Historical avg, not guaranteed",highlight:false},
+          ];
+          if(liquid<=0)return(<div style={{fontSize:13,color:C.textLight,textAlign:"center",padding:"12px 0"}}>Add liquid balances to see projections</div>);
+          return(
+            <div>
+              <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"9px 14px",marginBottom:12,fontSize:13,color:C.accent}}>
+                Liquid balance: <strong style={{fontFamily:MF}}>{fmt(liquid)}</strong>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {SCENARIOS.map(s=>{
+                  const yr1=liquid*(s.rate/100);
+                  const yr5=liquid*(Math.pow(1+s.rate/100,5)-1);
+                  const yr10=liquid*(Math.pow(1+s.rate/100,10)-1);
+                  return(
+                    <div key={s.label} style={{background:s.highlight?C.greenBg:C.surfaceAlt,border:`1px solid ${s.highlight?C.greenMid:C.border}`,borderRadius:12,padding:"11px 14px"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:700,color:s.highlight?C.green:C.text}}>{s.icon} {s.label}</div>
+                          <div style={{fontSize:11,color:C.textLight}}>{s.desc} · {s.rate}% APY</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontFamily:MF,fontWeight:800,fontSize:15,color:s.highlight?C.green:C.text}}>{fmt(yr1)}/yr</div>
+                          <div style={{fontSize:10,color:C.textLight}}>{fmt(yr1/12)}/mo</div>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        {[["5yr gain",yr5],["10yr gain",yr10],["10yr total",liquid+yr10]].map(([l,v])=>(
+                          <div key={l} style={{flex:1,background:"rgba(0,0,0,.04)",borderRadius:7,padding:"5px 7px"}}>
+                            <div style={{fontSize:9,color:C.textLight,fontWeight:600,marginBottom:1,textTransform:"uppercase"}}>{l}</div>
+                            <div style={{fontFamily:MF,fontWeight:700,fontSize:12,color:s.highlight?C.green:C.textMid}}>{fmt(v)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.accent,lineHeight:1.5}}>
+                  💡 Switching {fmt(liquid)} to a 4.75% HYSA earns <strong>{fmt(liquid*(4.75-0.5)/100)} extra/yr</strong> vs a standard 0.5% savings account — {fmt(liquid*(4.75-0.5)/100/12)}/mo for free.
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
     </div>
   );
 }
@@ -2090,8 +2147,25 @@ function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,
                   <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.7)"}}>What if you paid extra?</div>
                   <div style={{fontFamily:MF,fontWeight:800,fontSize:15,color:extraPayDebt>0?C.greenMid:"rgba(255,255,255,.4)"}}>+{fmt(extraPayDebt)}/mo</div>
                 </div>
-                <input type="range" min="0" max="500" step="25" value={extraPayDebt} onChange={e=>setExtraPayDebt(parseInt(e.target.value))} style={{width:"100%",accentColor:C.green,cursor:"pointer",marginBottom:8}}/>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"rgba(255,255,255,.3)",marginBottom:extraPayDebt>0?10:0}}><span>$0</span><span>$250</span><span>$500</span></div>
+                {/* Quick amounts */}
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                  {[25,50,100,200,500,1000].map(amt=>(
+                    <button key={amt} onClick={()=>setExtraPayDebt(amt)}
+                      style={{padding:"5px 11px",borderRadius:99,border:`1.5px solid ${extraPayDebt===amt?"rgba(52,211,153,.8)":"rgba(255,255,255,.15)"}`,background:extraPayDebt===amt?"rgba(52,211,153,.15)":"rgba(255,255,255,.06)",color:extraPayDebt===amt?"#34D399":"rgba(255,255,255,.5)",fontSize:11,fontWeight:extraPayDebt===amt?700:500,cursor:"pointer",fontFamily:MF}}>
+                      +${amt}
+                    </button>
+                  ))}
+                </div>
+                {/* Typed input */}
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:extraPayDebt>0?10:0}}>
+                  <div style={{position:"relative",flex:1}}>
+                    <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"rgba(255,255,255,.4)",fontWeight:700,fontSize:15}}>$</span>
+                    <input type="number" value={extraPayDebt||""} onChange={e=>setExtraPayDebt(Math.max(0,parseInt(e.target.value)||0))}
+                      placeholder="Custom amount"
+                      style={{width:"100%",background:"rgba(255,255,255,.08)",border:`1.5px solid ${extraPayDebt>0?"rgba(52,211,153,.5)":"rgba(255,255,255,.15)"}`,borderRadius:10,padding:"10px 12px 10px 28px",fontSize:15,fontFamily:MF,fontWeight:700,color:extraPayDebt>0?"#34D399":"#fff",outline:"none",boxSizing:"border-box"}}/>
+                  </div>
+                  {extraPayDebt>0&&<button onClick={()=>setExtraPayDebt(0)} style={{background:"rgba(255,255,255,.08)",border:"none",borderRadius:8,padding:"10px 12px",color:"rgba(255,255,255,.4)",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>Clear</button>}
+                </div>
                 {extraPayDebt>0&&withExtra&&withExtra.months<base.months&&<div style={{background:"rgba(52,211,153,.15)",border:"1px solid rgba(52,211,153,.3)",borderRadius:10,padding:"10px 12px"}}>
                   <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.greenMid,marginBottom:2}}>{dfDateExtra.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
                   <div style={{fontSize:12,color:"rgba(255,255,255,.6)"}}>🎉 {moSaved} months sooner · save {fmt(intSaved)} in interest</div>
@@ -5718,7 +5792,7 @@ function AppInner(){
                 {id:"debt",ic:"💳",l:"Debt",c:C.red,bg:C.redBg},
                 {id:"savings",ic:"🎯",l:"Goals",c:C.teal,bg:"rgba(13,148,136,.1)"},
                 {id:"calendar",ic:"📅",l:"Calendar",c:C.amber,bg:C.amberBg},
-                {id:"search",ic:"🔍",l:"Search",c:C.textMid,bg:C.surfaceAlt},{id:"household",ic:"🏠",l:"Household",c:C.accent,bg:C.accentBg},
+                {id:"search",ic:"🔍",l:"Search",c:C.textMid,bg:C.surfaceAlt},{id:"household",ic:"🏠",l:"Household",c:C.accent,bg:C.accentBg},{id:"networthtrend",ic:"💰",l:"HYSA Calc",c:C.green,bg:C.greenBg},
               ].map(({id,ic,l,c,bg})=>(
                 <button key={id} onClick={()=>navTo(id)} className="ba" style={{background:bg,borderRadius:14,padding:"12px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,border:"none",cursor:"pointer"}}>
                   <span style={{fontSize:20}}>{ic}</span>
@@ -5760,6 +5834,21 @@ function AppInner(){
                 </div>
               ))}
             </div>
+            {/* HYSA opportunity tip */}
+            {(()=>{
+              const liq=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));
+              if(liq<1000)return null;
+              const extraPerYr=liq*(4.75-0.5)/100;
+              return(
+                <div onClick={()=>{}} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:14,padding:"12px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:700,color:C.green,marginBottom:2}}>⚡ HYSA Opportunity</div>
+                    <div style={{fontSize:12,color:C.green,opacity:.8}}>Your {fmt(liq)} could earn {fmt(extraPerYr)}/yr more</div>
+                  </div>
+                  <div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.green}}>{fmt(extraPerYr/12)}/mo</div>
+                </div>
+              );
+            })()}
             {/* Investment & Retirement Accounts */}
             <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10,marginTop:4}}>Investments & Retirement</div>
             <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
