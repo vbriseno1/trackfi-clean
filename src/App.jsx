@@ -2304,7 +2304,7 @@ function GoalRing({pct,size=80,color,icon,label,saved,target}){
   );
 }
 
-function SavingsGoalsView({goals,setGoals,income,showToast}){
+function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAccountRates,showToast}){
   const[view,setView]=useState("rings");
   const[editGoal,setEditGoal]=useState(null);
   const[editForm,setEditForm]=useState({});
@@ -2346,7 +2346,7 @@ function SavingsGoalsView({goals,setGoals,income,showToast}){
   return(
     <div className="fu">
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:12,padding:4,marginBottom:16}}>
-        {[["rings","Rings"],["list","List"]].map(([id,l])=>(<button key={id} onClick={()=>setView(id)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:view===id?C.surface:"transparent",color:view===id?C.accent:C.textLight,fontWeight:view===id?700:500,fontSize:13,cursor:"pointer"}}>{l}</button>))}
+        {[["rings","Rings"],["list","List"],["earn","💰 Earn"]].map(([id,l])=>(<button key={id} onClick={()=>setView(id)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:view===id?C.surface:"transparent",color:view===id?C.accent:C.textLight,fontWeight:view===id?700:500,fontSize:13,cursor:"pointer"}}>{l}</button>))}
       </div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:goals.length>0?10:16}}>
         <div><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Savings Goals</div><div style={{fontSize:13,color:C.textLight}}>{goals.length} goal{goals.length!==1?"s":""} · {fmt(goals.reduce((s,g)=>s+(parseFloat(g.saved||0)),0))} saved total</div></div>
@@ -2448,6 +2448,179 @@ function SavingsGoalsView({goals,setGoals,income,showToast}){
           </div>);
         })}
       </div>}
+      {view==="earn"&&(()=>{
+        // Per-account APY configuration + earnings calculator
+        const ACCT_CONFIG=[
+          {key:"checking",  label:"Checking",    icon:"🏦", desc:"Most earn 0–0.1%. Online banks offer more."},
+          {key:"savings",   label:"Savings",     icon:"💰", desc:"National avg ~0.5%. HYSA rates 4–5%."},
+          {key:"cushion",   label:"Emergency Fund",icon:"🛡️",desc:"Keep liquid in HYSA for 4–5% return."},
+          {key:"k401",      label:"401(k)",      icon:"🏢", desc:"Stock market returns avg ~7-10%/yr long-term."},
+          {key:"roth_ira",  label:"Roth IRA",    icon:"🌱", desc:"Tax-free growth. Index funds avg ~7-10%."},
+          {key:"brokerage", label:"Brokerage",   icon:"📊", desc:"Depends on holdings. S&P 500 avg ~10%."},
+          {key:"hsa",       label:"HSA",         icon:"🏥", desc:"Invested HSAs earn market returns."},
+        ].filter(a=>parseFloat(accounts?.[a.key]||0)>0);
+
+        const totalYearlyEarnings=ACCT_CONFIG.reduce((s,a)=>{
+          const bal=parseFloat(accounts?.[a.key]||0);
+          const rate=parseFloat(accountRates[a.key]||0);
+          return s+(bal*(rate/100));
+        },0);
+
+        // Benchmark: what they'd earn with optimal rates
+        const OPTIMAL_RATES={checking:0.5,savings:4.75,cushion:4.75,k401:7,roth_ira:7,brokerage:7,hsa:6};
+        const optimalEarnings=ACCT_CONFIG.reduce((s,a)=>{
+          const bal=parseFloat(accounts?.[a.key]||0);
+          const optimal=OPTIMAL_RATES[a.key]||4;
+          return s+(bal*(optimal/100));
+        },0);
+        const leaveOnTable=Math.max(0,optimalEarnings-totalYearlyEarnings);
+
+        // Tips based on their actual data
+        const tips=[];
+        ACCT_CONFIG.forEach(a=>{
+          const bal=parseFloat(accounts?.[a.key]||0);
+          const rate=parseFloat(accountRates[a.key]||0);
+          const optimal=OPTIMAL_RATES[a.key]||4;
+          if(rate<1&&["savings","cushion","checking"].includes(a.key)&&bal>500){
+            const gain=bal*(optimal-Math.max(rate,0))/100;
+            tips.push({icon:"⚡",color:C.green,title:`Move ${a.label} to a HYSA`,body:`Earn ~${optimal}% instead of ${rate||0}% — that's ${fmt(gain)} more per year (${fmt(gain/12)}/mo).`,urgency:"high"});
+          }
+          if(rate===0&&["k401","roth_ira","brokerage"].includes(a.key)&&bal>0){
+            tips.push({icon:"📈",color:C.accent,title:`Set a return assumption for ${a.label}`,body:`Enter your expected annual return above so we can project your growth accurately. S&P 500 averages ~10%/yr historically.`,urgency:"low"});
+          }
+        });
+        if(ACCT_CONFIG.length===0){
+          tips.push({icon:"💡",color:C.accent,title:"Add your account balances first",body:"Go to Accounts & Income and enter your balances. Then come back here to see what they're earning.",urgency:"low"});
+        }
+
+        return(
+          <div>
+            {/* Earnings summary bar */}
+            <div style={{background:"#0A1628",borderRadius:16,padding:18,marginBottom:14}}>
+              <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Your Money Earns</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:10}}>
+                <div>
+                  <div style={{fontFamily:MF,fontWeight:900,fontSize:32,color:"#34D399",letterSpacing:-1}}>{fmt(totalYearlyEarnings)}/yr</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>{fmt(totalYearlyEarnings/12)}/mo across all accounts</div>
+                </div>
+                {leaveOnTable>50&&<div style={{textAlign:"right"}}>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>could earn</div>
+                  <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:"#F59E0B"}}>{fmt(leaveOnTable)}/yr more</div>
+                </div>}
+              </div>
+              {totalYearlyEarnings===0&&ACCT_CONFIG.length>0&&<div style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>Enter APY rates below to see your earnings</div>}
+            </div>
+
+            {/* Per-account APY inputs */}
+            <div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+              <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Your Account Rates</div>
+              <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>Enter the APY from your bank's website or statement</div>
+              {ACCT_CONFIG.length===0&&<div style={{fontSize:13,color:C.textLight,padding:"8px 0"}}>No accounts with balances found. Add balances in Accounts & Income.</div>}
+              {ACCT_CONFIG.map(a=>{
+                const bal=parseFloat(accounts?.[a.key]||0);
+                const rate=parseFloat(accountRates[a.key]||0);
+                const earned=bal*(rate/100);
+                return(
+                  <div key={a.key} style={{marginBottom:14}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:18}}>{a.icon}</span>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:700,color:C.text}}>{a.label}</div>
+                          <div style={{fontSize:11,color:C.textLight}}>{fmt(bal)} balance</div>
+                        </div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        {rate>0&&<div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.green}}>{fmt(earned)}/yr</div>}
+                        {rate>0&&<div style={{fontSize:10,color:C.textLight}}>{fmt(earned/12)}/mo</div>}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <div style={{position:"relative",flex:1}}>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={accountRates[a.key]||""}
+                          onChange={e=>setAccountRates&&setAccountRates(p=>({...p,[a.key]:parseFloat(e.target.value)||0}))}
+                          placeholder="0.00"
+                          style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${rate>0?C.green:C.border}`,borderRadius:10,padding:"9px 36px 9px 12px",fontSize:14,fontFamily:MF,fontWeight:700,color:rate>0?C.green:C.text,outline:"none",boxSizing:"border-box"}}
+                        />
+                        <span style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",fontSize:12,fontWeight:700,color:C.textLight}}>%</span>
+                      </div>
+                      {/* Quick preset rates */}
+                      <div style={{display:"flex",gap:4}}>
+                        {(["savings","cushion","checking"].includes(a.key)?[0.5,4.75,5.0]:["k401","roth_ira","brokerage"].includes(a.key)?[6,7,10]:[4,5,6]).map(r=>(
+                          <button key={r} onClick={()=>setAccountRates&&setAccountRates(p=>({...p,[a.key]:r}))}
+                            style={{padding:"6px 9px",borderRadius:8,border:`1px solid ${Math.abs(rate-r)<0.01?C.green:C.border}`,background:Math.abs(rate-r)<0.01?C.greenBg:C.surface,color:Math.abs(rate-r)<0.01?C.green:C.textMid,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                            {r}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{fontSize:11,color:C.textLight,marginTop:4}}>{a.desc}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Smart tips */}
+            {tips.length>0&&(
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+                <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:2}}>💡 Personalized Tips</div>
+                {tips.map((tip,i)=>(
+                  <div key={i} style={{background:tip.urgency==="high"?C.greenBg:C.accentBg,border:`1px solid ${tip.urgency==="high"?C.greenMid:C.accentMid}`,borderRadius:12,padding:"12px 14px"}}>
+                    <div style={{fontSize:13,fontWeight:700,color:tip.urgency==="high"?C.green:C.accent,marginBottom:4}}>{tip.icon} {tip.title}</div>
+                    <div style={{fontSize:12,color:tip.urgency==="high"?C.green:C.accent,opacity:.85,lineHeight:1.5}}>{tip.body}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Projection table with their real rates */}
+            {totalYearlyEarnings>0&&ACCT_CONFIG.length>0&&(
+              <div style={{background:C.surface,borderRadius:16,padding:16,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+                <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Growth Projection</div>
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead>
+                      <tr style={{borderBottom:`1px solid ${C.border}`}}>
+                        {["Account","Balance","APY","1 Year","5 Years","10 Years"].map(h=>(
+                          <td key={h} style={{padding:"4px 8px",fontWeight:700,color:C.textLight,fontSize:10,textTransform:"uppercase",letterSpacing:.4}}>{h}</td>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ACCT_CONFIG.map(a=>{
+                        const bal=parseFloat(accounts?.[a.key]||0);
+                        const rate=parseFloat(accountRates[a.key]||0)/100;
+                        const yr1=rate>0?bal*rate:0;
+                        const yr5=rate>0?bal*(Math.pow(1+rate,5)-1):0;
+                        const yr10=rate>0?bal*(Math.pow(1+rate,10)-1):0;
+                        return(
+                          <tr key={a.key} style={{borderBottom:`1px solid ${C.borderLight}`}}>
+                            <td style={{padding:"8px 8px",fontWeight:600,color:C.text}}>{a.icon} {a.label}</td>
+                            <td style={{padding:"8px 8px",fontFamily:MF,color:C.textMid}}>{fmt(bal)}</td>
+                            <td style={{padding:"8px 8px",fontFamily:MF,fontWeight:700,color:rate>0?C.green:C.textFaint}}>{rate>0?(rate*100).toFixed(2)+"%":"—"}</td>
+                            <td style={{padding:"8px 8px",fontFamily:MF,color:C.green}}>{rate>0?"+"+fmt(yr1):"—"}</td>
+                            <td style={{padding:"8px 8px",fontFamily:MF,color:C.green}}>{rate>0?"+"+fmt(yr5):"—"}</td>
+                            <td style={{padding:"8px 8px",fontFamily:MF,fontWeight:700,color:C.green}}>{rate>0?"+"+fmt(yr10):"—"}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{borderTop:`2px solid ${C.border}`,background:C.surfaceAlt}}>
+                        <td colSpan={3} style={{padding:"8px 8px",fontWeight:700,color:C.text,fontSize:12}}>Total Earnings</td>
+                        <td style={{padding:"8px 8px",fontFamily:MF,fontWeight:700,color:C.green}}>{fmt(totalYearlyEarnings)}</td>
+                        <td style={{padding:"8px 8px",fontFamily:MF,fontWeight:700,color:C.green}}>{fmt(ACCT_CONFIG.reduce((s,a)=>{const b=parseFloat(accounts?.[a.key]||0);const r=parseFloat(accountRates[a.key]||0)/100;return s+(r>0?b*(Math.pow(1+r,5)-1):0);},0))}</td>
+                        <td style={{padding:"8px 8px",fontFamily:MF,fontWeight:700,color:C.green}}>{fmt(ACCT_CONFIG.reduce((s,a)=>{const b=parseFloat(accounts?.[a.key]||0);const r=parseFloat(accountRates[a.key]||0)/100;return s+(r>0?b*(Math.pow(1+r,10)-1):0);},0))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {editGoal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setEditGoal(null)}><div style={{background:"#fff",borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:16}}>Edit Goal</div><FI label="Goal Name" value={editForm.name||""} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}/><div style={{display:"flex",gap:10}}><FI half label="Target ($)" type="number" value={editForm.target||""} onChange={e=>setEditForm(p=>({...p,target:e.target.value}))}/><FI half label="Saved ($)" type="number" value={editForm.saved||""} onChange={e=>setEditForm(p=>({...p,saved:e.target.value}))}/></div><FI label="Monthly Contribution ($)" type="number" value={editForm.monthly||""} onChange={e=>setEditForm(p=>({...p,monthly:e.target.value}))}/><div style={{display:"flex",gap:10,marginTop:8}}><button onClick={()=>setEditGoal(null)} style={{flex:1,padding:"13px",borderRadius:14,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:700,fontSize:16,cursor:"pointer"}}>Cancel</button><button onClick={()=>{setGoals(p=>p.map(g=>g.id===editGoal.id?{...g,name:editForm.name||g.name,target:parseFloat(editForm.target)||g.target,saved:parseFloat(editForm.saved||0),monthly:parseFloat(editForm.monthly||0)}:g));showToast&&showToast("Goal updated!");setEditGoal(null);}} style={{flex:2,padding:"13px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Save Changes</button></div></div></div>}
             {showAdd&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setShowAdd(false)}>
@@ -4907,6 +5080,7 @@ function AppInner(){
   const[budgetGoals,setBGoals]=useState([]);
   const[savingsGoals,setSGoals]=useState([]);
   const[categories,setCats]=useState(DEF_CATS);
+  const[accountRates,setAccountRates]=useState(()=>{try{const r=localStorage.getItem("fv_account_rates");return r?JSON.parse(r):{checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0};}catch{return{checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0};}});
   const[household,setHousehold]=useState({enabled:false,name:"Our Household",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10b981"}]});
   const[trades,setTrades]=useState([]);
   const[tradingAccount,setTradingAccount]=useState({deposit:"",balance:""});
@@ -5001,6 +5175,7 @@ function AppInner(){
   useEffect(()=>{if(ready)ss("fv6:greetName",greetName);},[greetName,ready]);
   useEffect(()=>{if(ready)ss("fv6:settings",settings);},[settings,ready]);
   useEffect(()=>{if(ready)ss("fv6:household",household);},[household,ready]);
+  useEffect(()=>{try{localStorage.setItem("fv_account_rates",JSON.stringify(accountRates));}catch{}},[accountRates]);
   const pushNotif=(id,title,body,type)=>{
     setNotifs(p=>{if(p.find(n=>n.id===id))return p;return[{id,title,body,type,time:Date.now(),read:false},...p.slice(0,49)];});
     // Fire real OS notification if permission granted
@@ -5914,7 +6089,7 @@ function AppInner(){
         )}
 
         {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem} showToast={showToast} extraPayDebt={extraPayDebt} setExtraPayDebt={setExtraPayDebt}/>}
-        {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} showToast={showToast}/>}
+        {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} accounts={accounts} accountRates={accountRates} setAccountRates={setAccountRates} showToast={showToast}/>}
         {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
         {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals}/>}
