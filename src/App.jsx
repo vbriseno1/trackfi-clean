@@ -3757,133 +3757,563 @@ function CategoriesView({categories,setCategories,showToast}){
   );
 }
 
-function HouseholdView({household,setHousehold,expenses,bills=[],showToast}){
-  const[editMember,setEditMember]=useState(null);
+function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBills}){
+  const[tab,setTab]=useState("split");// split | settle | budget | members
   const[form,setForm]=useState({name:"",emoji:"😊",color:"#6366f1"});
-  const EMOJIS_HH=["😊","😄","🧑","👩","👨","🧔","👱","🧑‍💼","👩‍💼","👨‍💼","🧑‍🍳","🐶","🐱","⭐","🌟"];
+  const[settlements,setSettlements]=useState(()=>{try{return JSON.parse(localStorage.getItem("fv_settlements")||"[]");}catch{return[];}});
+  const[hhBudgets,setHhBudgets]=useState(()=>{try{return JSON.parse(localStorage.getItem("fv_hh_budgets")||"[]");}catch{return[];}});
+  const EMOJIS_HH=["😊","😄","🧑","👩","👨","🧔","👱","🧑‍💼","👩‍💼","🧑‍⚕️","👩‍⚕️","⭐","🌟","🏠"];
   const COLORS_HH=["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899"];
 
-  // Shared expense balances
-  const now=new Date();const ms=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  const now=new Date();
+  const ms=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const thisMonthExp=expenses.filter(e=>e.date?.startsWith(ms));
-  const memberTotals=household.members.reduce((a,m)=>{
-    a[m.id]=thisMonthExp.filter(e=>e.owner===m.id||(e.owner==="shared"&&!e.owner)||(!e.owner&&m.id==="me"))
+
+  // ── Split math ────────────────────────────────────────────────────────────
+  // Each member's personal spend + half of shared
+  const sharedExp=thisMonthExp.filter(e=>e.owner==="shared");
+  const sharedTotal=sharedExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const splitPer=household.members.length>0?sharedTotal/household.members.length:0;
+  const memberStats=household.members.map(m=>{
+    const personal=thisMonthExp.filter(e=>e.owner===m.id||(m.id==="me"&&!e.owner&&e.owner!=="shared"&&e.owner!=="partner"))
       .reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-    return a;
-  },{});
-  const totalShared=thisMonthExp.filter(e=>e.owner==="shared").reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-  const splitPer=household.members.length>0?totalShared/household.members.length:0;
+    const share=splitPer;
+    const totalOwed=personal+share;
+    // Bills this member pays
+    const memberBills=bills.filter(b=>b.paidBy===m.id&&!b.paid);
+    const billTotal=memberBills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+    return{...m,personal,share,totalOwed,memberBills,billTotal};
+  });
+
+  // ── Who owes whom (Splitwise-style) ──────────────────────────────────────
+  const avgOwed=memberStats.length>0?memberStats.reduce((s,m)=>s+m.totalOwed,0)/memberStats.length:0;
+  const balances=memberStats.map(m=>({...m,balance:m.totalOwed-avgOwed}));
+  // Positive balance = paid more than fair share = others owe them
+  // Negative balance = paid less = they owe others
+
+  function markSettled(){
+    const entry={date:new Date().toISOString().split("T")[0],month:ms,
+      from:balances.filter(m=>m.balance<-0.5).map(m=>m.name).join(", "),
+      to:balances.filter(m=>m.balance>0.5).map(m=>m.name).join(", "),
+      amount:Math.abs(balances.filter(m=>m.balance<-0.5).reduce((s,m)=>s+m.balance,0)).toFixed(2)
+    };
+    const next=[entry,...settlements].slice(0,12);
+    setSettlements(next);
+    try{localStorage.setItem("fv_settlements",JSON.stringify(next));}catch{}
+    showToast("✅ Settled up! Balances reset.");
+  }
+
+  function saveHhBudgets(next){
+    setHhBudgets(next);
+    try{localStorage.setItem("fv_hh_budgets",JSON.stringify(next));}catch{}
+  }
+
+  const TABS=[{id:"split",label:"Split"},{id:"settle",label:"Settle Up"},{id:"budget",label:"Budget"},{id:"members",label:"Members"}];
 
   return(
     <div className="fu">
       {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div>
-          <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text}}>Household</div>
+          <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text}}>{household.name||"Household"}</div>
           <div style={{fontSize:13,color:C.textLight,marginTop:2}}>{household.members.length} members · {household.enabled?"Active":"Disabled"}</div>
         </div>
         <button onClick={()=>setHousehold(h=>({...h,enabled:!h.enabled}))} style={{background:household.enabled?C.accentBg:C.bg,border:`1.5px solid ${household.enabled?C.accent:C.border}`,borderRadius:99,padding:"7px 16px",cursor:"pointer",fontWeight:700,fontSize:13,color:household.enabled?C.accent:C.textMid}}>
-          {household.enabled?"Enabled ✓":"Enable"}
+          {household.enabled?"Active ✓":"Enable"}
         </button>
       </div>
 
-      {/* Household name */}
-      <div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
-        <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Household Name</div>
-        <input value={household.name} onChange={e=>setHousehold(h=>({...h,name:e.target.value}))}
-          style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontSize:16,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box"}}/>
-      </div>
-
-      {/* Members */}
-      <div style={{marginBottom:14}}>
-        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Members</div>
-        {household.members.map((m,i)=>(
-          <div key={m.id} style={{background:C.surface,borderRadius:14,padding:"12px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 3px rgba(10,22,40,.05)"}}>
-            <div style={{width:42,height:42,borderRadius:"50%",background:m.color+"22",border:`2px solid ${m.color}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{m.emoji}</div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:14,fontWeight:700,color:C.text}}>{m.name}{m.id==="me"&&" (You)"}</div>
-              <div style={{fontSize:12,color:C.textLight,marginTop:1}}>This month: {fmt(memberTotals[m.id]||0)}</div>
-            </div>
-            {m.id!=="me"&&<button onClick={()=>setHousehold(h=>({...h,members:h.members.filter(x=>x.id!==m.id)}))} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:4,display:"flex"}}><X size={14}/></button>}
-          </div>
+      {/* Tab bar */}
+      <div style={{display:"flex",background:C.surfaceAlt,borderRadius:12,padding:3,marginBottom:18,gap:3}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"8px 4px",borderRadius:9,border:"none",background:tab===t.id?"#fff":"transparent",color:tab===t.id?C.accent:C.textMid,fontWeight:tab===t.id?700:500,fontSize:12,cursor:"pointer",boxShadow:tab===t.id?"0 1px 4px rgba(0,0,0,.08)":"none",transition:"all .15s"}}>{t.label}</button>
         ))}
-        {/* Add member */}
-        <div style={{background:C.surfaceAlt,borderRadius:14,padding:14,border:`1.5px dashed ${C.border}`}}>
-          <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:8}}>Add Member</div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {EMOJIS_HH.map(e=>(
-              <button key={e} onClick={()=>setForm(f=>({...f,emoji:e}))} style={{fontSize:20,background:form.emoji===e?C.accentBg:"#fff",border:form.emoji===e?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"3px 5px",cursor:"pointer"}}>{e}</button>
-            ))}
-          </div>
-          <div style={{display:"flex",gap:8,marginBottom:8}}>
-            {COLORS_HH.map(c=>(
-              <button key={c} onClick={()=>setForm(f=>({...f,color:c}))} style={{width:24,height:24,borderRadius:"50%",background:c,border:form.color===c?"3px solid "+C.text:"3px solid transparent",cursor:"pointer"}}/>
-            ))}
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Partner, Roommate..." style={{flex:1,background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:14,color:C.text,outline:"none"}}/>
-            <button onClick={()=>{if(!form.name.trim())return;const id="member_"+Date.now();setHousehold(h=>({...h,members:[...h.members,{id,name:form.name.trim(),emoji:form.emoji,color:form.color}]}));setForm({name:"",emoji:"😊",color:"#6366f1"});showToast("✓ "+form.name+" added");}} style={{background:C.accent,border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Add</button>
-          </div>
-        </div>
       </div>
 
-      {/* This month split summary */}
-      {household.enabled&&household.members.length>1&&(
-        <div style={{background:C.surface,borderRadius:16,padding:16,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
-          <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>This Month — Split</div>
-          {household.members.map(m=>{
-            const spent=memberTotals[m.id]||0;
-            const owes=splitPer-spent;
-            return(
-              <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-                <span style={{fontSize:18}}>{m.emoji}</span>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:600,color:C.text}}>{m.name}</div>
-                  <div style={{fontSize:11,color:C.textLight}}>Paid {fmt(spent)}</div>
-                </div>
-                {Math.abs(owes)>0.5&&(
-                  <div style={{fontSize:12,fontWeight:700,color:owes>0?C.red:C.green,background:owes>0?C.redBg:C.greenBg,borderRadius:99,padding:"4px 10px"}}>
-                    {owes>0?"owes "+fmt(owes):"gets back "+fmt(-owes)}
-                  </div>
-                )}
+      {/* ── TAB: SPLIT ── */}
+      {tab==="split"&&(
+        <div>
+          {/* This month summary cards */}
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${household.members.length},1fr)`,gap:10,marginBottom:16}}>
+            {memberStats.map(m=>(
+              <div key={m.id} style={{background:C.surface,borderRadius:16,padding:"14px 12px",textAlign:"center",boxShadow:"0 1px 4px rgba(10,22,40,.07)"}}>
+                <div style={{fontSize:24,marginBottom:4}}>{m.emoji}</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:6}}>{m.name}</div>
+                <div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.red,marginBottom:4}}>{fmt(m.personal+m.share)}</div>
+                <div style={{fontSize:10,color:C.textLight}}>personal</div>
+                <div style={{fontSize:10,color:C.textLight}}>{fmt(m.personal)} + {fmt(m.share)} shared</div>
               </div>
-            );
-          })}
-          <div style={{marginTop:10,fontSize:12,color:C.textLight}}>💡 Tag expenses to members in the Log tab for accurate splits</div>
-          {/* Shared bills section */}
-          {(()=>{
-            const sharedBills=expenses.slice(0,0);// placeholder — actual bill amounts shown below
-            const billsByMember=household.members.map(m=>({
-              ...m,
-              bills:bills.filter(b=>b.paidBy===m.id&&!b.paid),
-              totalBills:bills.filter(b=>b.paidBy===m.id&&!b.paid).reduce((s,b)=>s+(parseFloat(b.amount||0)),0)
-            }));
-            const unassignedBills=bills.filter(b=>(!b.paidBy||b.paidBy==="shared")&&!b.paid);
-            const unassignedTotal=unassignedBills.reduce((s,b)=>s+(parseFloat(b.amount||0)),0);
-            const splitBillsEach=household.members.length>0?unassignedTotal/household.members.length:0;
-            if(!bills.length)return null;
-            return(
-              <div style={{marginTop:16,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
-                <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text,marginBottom:8}}>Bill Responsibility</div>
-                {billsByMember.map(m=>(
-                  <div key={m.id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.borderLight}`}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}><span>{m.emoji}</span><span style={{fontSize:12,color:C.text,fontWeight:600}}>{m.name}</span><span style={{fontSize:10,color:C.textLight}}>({m.bills.length} bills)</span></div>
-                    <span style={{fontFamily:MF,fontWeight:700,fontSize:12,color:C.red}}>{fmt(m.totalBills)}</span>
+            ))}
+          </div>
+
+          {/* Shared expense breakdown */}
+          <div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+            <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Shared Expenses — {now.toLocaleDateString("en-US",{month:"long"})}</div>
+            {sharedExp.length===0
+              ? <div style={{fontSize:13,color:C.textLight,textAlign:"center",padding:"12px 0"}}>No shared expenses this month yet. Tag expenses as "Shared" when logging.</div>
+              : <>
+                {sharedExp.sort((a,b)=>b.date?.localeCompare(a.date)).slice(0,8).map(e=>(
+                  <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.borderLight}`}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:C.text}}>{e.name}</div>
+                      <div style={{fontSize:11,color:C.textLight}}>{e.date} · {e.category}</div>
+                    </div>
+                    <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(e.amount)}</div>
                   </div>
                 ))}
-                {unassignedBills.length>0&&<div style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.borderLight}`}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}><span>🏠</span><span style={{fontSize:12,color:C.text,fontWeight:600}}>Shared</span><span style={{fontSize:10,color:C.textLight}}>({unassignedBills.length} bills · {fmt(splitBillsEach)}/ea)</span></div>
-                  <span style={{fontFamily:MF,fontWeight:700,fontSize:12,color:C.amber}}>{fmt(unassignedTotal)}</span>
-                </div>}
-              </div>
-            );
-          })()}
+                <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0 0",marginTop:4,borderTop:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.text}}>Total shared · each owes</span>
+                  <span style={{fontFamily:MF,fontWeight:800,fontSize:13,color:C.accent}}>{fmt(sharedTotal)} · {fmt(splitPer)}</span>
+                </div>
+              </>
+            }
+          </div>
+
+          {/* Bills by member */}
+          {bills.length>0&&(
+            <div style={{background:C.surface,borderRadius:16,padding:16,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+              <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Bill Responsibility</div>
+              {memberStats.map(m=>(
+                <div key={m.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.borderLight}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:18}}>{m.emoji}</span>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:C.text}}>{m.name}</div>
+                      <div style={{fontSize:11,color:C.textLight}}>{m.memberBills.length} unpaid bill{m.memberBills.length!==1?"s":""}</div>
+                    </div>
+                  </div>
+                  <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:m.billTotal>0?C.amber:C.textFaint}}>{fmt(m.billTotal)}</div>
+                </div>
+              ))}
+              {(()=>{
+                const unassigned=bills.filter(b=>(!b.paidBy||b.paidBy==="shared")&&!b.paid);
+                const uTotal=unassigned.reduce((s,b)=>s+(parseFloat(b.amount||0)),0);
+                if(!unassigned.length)return null;
+                return(
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:18}}>🏠</span>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:600,color:C.text}}>Shared / Unassigned</div>
+                        <div style={{fontSize:11,color:C.textLight}}>{unassigned.length} bill{unassigned.length!==1?"s":""} · {fmt(uTotal/Math.max(1,household.members.length))}/ea</div>
+                      </div>
+                    </div>
+                    <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.amber}}>{fmt(uTotal)}</div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
       )}
 
-      {!household.enabled&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:"14px 16px",fontSize:13,color:C.accent,lineHeight:1.6}}>
-        💡 Enable household mode to track shared expenses, see who owes what, and split bills fairly between household members.
-      </div>}
+      {/* ── TAB: SETTLE UP ── */}
+      {tab==="settle"&&(
+        <div>
+          <div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 4px rgba(10,22,40,.07)"}}>
+            <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Current Balances</div>
+            {balances.map(m=>{
+              const isEven=Math.abs(m.balance)<0.5;
+              const isOwed=m.balance>0.5;
+              return(
+                <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:`1px solid ${C.borderLight}`}}>
+                  <div style={{width:40,height:40,borderRadius:"50%",background:m.color+"22",border:`2px solid ${m.color}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{m.emoji}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:700,color:C.text}}>{m.name}</div>
+                    <div style={{fontSize:11,color:C.textLight}}>Paid {fmt(m.totalOwed)} · fair share {fmt(avgOwed)}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    {isEven
+                      ? <span style={{fontSize:12,fontWeight:700,color:C.green,background:C.greenBg,borderRadius:99,padding:"4px 10px"}}>Even ✓</span>
+                      : isOwed
+                        ? <div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.green}}>+{fmt(m.balance)}</div><div style={{fontSize:10,color:C.textLight}}>gets back</div></div>
+                        : <div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.red}}>{fmt(Math.abs(m.balance))}</div><div style={{fontSize:10,color:C.textLight}}>owes</div></div>
+                    }
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Settle Up CTA */}
+          {balances.some(m=>Math.abs(m.balance)>0.5)&&(
+            <div style={{background:"#0A1628",borderRadius:16,padding:18,marginBottom:14}}>
+              <div style={{fontFamily:MF,fontWeight:800,fontSize:15,color:"#fff",marginBottom:4}}>Ready to settle?</div>
+              {(()=>{
+                const payers=balances.filter(m=>m.balance<-0.5);
+                const receivers=balances.filter(m=>m.balance>0.5);
+                return payers.map(p=>(
+                  receivers.map(r=>(
+                    <div key={p.id+r.id} style={{fontSize:13,color:"rgba(255,255,255,.7)",marginBottom:4}}>
+                      {p.emoji} <strong style={{color:"#fff"}}>{p.name}</strong> pays {r.emoji} <strong style={{color:"#fff"}}>{r.name}</strong> → <span style={{color:"#34D399",fontWeight:700}}>{fmt(Math.min(Math.abs(p.balance),r.balance))}</span>
+                    </div>
+                  ))
+                ));
+              })()}
+              <button onClick={markSettled} style={{marginTop:12,width:"100%",background:"#6366F1",border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:MF}}>
+                Mark as Settled ✓
+              </button>
+            </div>
+          )}
+
+          {/* Settlement history */}
+          {settlements.length>0&&(
+            <div style={{background:C.surface,borderRadius:16,padding:16,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+              <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Settlement History</div>
+              {settlements.map((s,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:i<settlements.length-1?`1px solid ${C.borderLight}`:"none"}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:600,color:C.text}}>{s.from} → {s.to}</div>
+                    <div style={{fontSize:11,color:C.textLight}}>{s.date}</div>
+                  </div>
+                  <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.green}}>{fmt(s.amount)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB: BUDGET ── */}
+      {tab==="budget"&&(
+        <div>
+          <div style={{fontSize:13,color:C.textLight,marginBottom:14,lineHeight:1.5}}>
+            Set shared spending limits for household categories. These are separate from personal budgets.
+          </div>
+          {hhBudgets.map((b,i)=>{
+            const spent=thisMonthExp.filter(e=>e.category===b.category&&(e.owner==="shared")).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+            const pct=parseFloat(b.limit)>0?Math.min(100,(spent/parseFloat(b.limit))*100):0;
+            const over=spent>parseFloat(b.limit||0);
+            return(
+              <div key={i} style={{background:C.surface,borderRadius:14,padding:"14px 16px",marginBottom:10,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <div style={{fontSize:14,fontWeight:700,color:C.text}}>{b.category}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:over?C.red:C.text}}>{fmt(spent)}</span>
+                    <span style={{fontSize:12,color:C.textLight}}>/ {fmt(b.limit)}</span>
+                    <button onClick={()=>{const next=hhBudgets.filter((_,j)=>j!==i);saveHhBudgets(next);}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:2,display:"flex"}}><X size={13}/></button>
+                  </div>
+                </div>
+                <div style={{height:6,background:C.borderLight,borderRadius:99,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:pct.toFixed(1)+"%",background:over?C.red:pct>75?C.amber:C.green,borderRadius:99,transition:"width .4s"}}/>
+                </div>
+                {over&&<div style={{fontSize:11,color:C.red,marginTop:4}}>Over by {fmt(spent-parseFloat(b.limit||0))}</div>}
+              </div>
+            );
+          })}
+          {/* Add budget */}
+          <div style={{background:C.surfaceAlt,borderRadius:14,padding:14,border:`1.5px dashed ${C.border}`,marginTop:4}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:8}}>Add Shared Budget</div>
+            <div style={{display:"flex",gap:8}}>
+                <input id="hh_cat" placeholder="Category (e.g. Groceries)" style={{flex:2,background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.text,outline:"none"}}/>
+                <input id="hh_amt" type="number" placeholder="Limit $" style={{flex:1,background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.text,outline:"none"}}/>
+                <button onClick={()=>{const cat=document.getElementById("hh_cat")?.value?.trim();const amt=document.getElementById("hh_amt")?.value;if(!cat||!amt)return;saveHhBudgets([...hhBudgets,{category:cat,limit:amt}]);document.getElementById("hh_cat").value="";document.getElementById("hh_amt").value="";}} style={{background:C.accent,border:"none",borderRadius:10,padding:"9px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Add</button>
+              </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB: MEMBERS ── */}
+      {tab==="members"&&(
+        <div>
+          {/* Household name */}
+          <div style={{background:C.surface,borderRadius:14,padding:14,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.05)"}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Household Name</div>
+            <input value={household.name} onChange={e=>setHousehold(h=>({...h,name:e.target.value}))}
+              style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 14px",fontSize:16,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+          </div>
+
+          {/* Member list */}
+          {household.members.map(m=>(
+            <div key={m.id} style={{background:C.surface,borderRadius:14,padding:"12px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 3px rgba(10,22,40,.05)"}}>
+              <div style={{width:42,height:42,borderRadius:"50%",background:m.color+"22",border:`2px solid ${m.color}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{m.emoji}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:C.text}}>{m.name}{m.id==="me"&&" (You)"}</div>
+                <div style={{fontSize:12,color:C.textLight,marginTop:1}}>This month: {fmt((memberStats.find(ms=>ms.id===m.id)||{totalOwed:0}).totalOwed)}</div>
+              </div>
+              {m.id!=="me"&&<button onClick={()=>setHousehold(h=>({...h,members:h.members.filter(x=>x.id!==m.id)}))} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:4,display:"flex"}}><X size={14}/></button>}
+            </div>
+          ))}
+
+          {/* Add member */}
+          <div style={{background:C.surfaceAlt,borderRadius:14,padding:14,border:`1.5px dashed ${C.border}`,marginTop:4}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.text,marginBottom:8}}>Add Member</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+              {EMOJIS_HH.map(e=>(<button key={e} onClick={()=>setForm(f=>({...f,emoji:e}))} style={{fontSize:18,background:form.emoji===e?C.accentBg:"#fff",border:form.emoji===e?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"3px 5px",cursor:"pointer"}}>{e}</button>))}
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
+              {COLORS_HH.map(c=>(<button key={c} onClick={()=>setForm(f=>({...f,color:c}))} style={{width:22,height:22,borderRadius:"50%",background:c,border:form.color===c?"3px solid "+C.text:"3px solid transparent",cursor:"pointer"}}/>))}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Partner, Roommate..." style={{flex:1,background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:14,color:C.text,outline:"none"}}/>
+              <button onClick={()=>{if(!form.name.trim())return;const id="member_"+Date.now();setHousehold(h=>({...h,members:[...h.members,{id,name:form.name.trim(),emoji:form.emoji,color:form.color}]}));setForm({name:"",emoji:"😊",color:"#6366f1"});showToast("✓ "+form.name+" added");}} style={{background:C.accent,border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Add</button>
+            </div>
+          </div>
+
+          {/* Shared login info */}
+          <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:"14px 16px",marginTop:16,fontSize:13,color:C.accent,lineHeight:1.6}}>
+            💡 <strong>Shared access coming soon.</strong> Currently one person logs expenses for the household. Real-time sync between devices is on the roadmap — use the same account and device for now.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function BankImportModal({categories,expenses,setExpenses,household,showToast,onClose}){
+  const[step,setStep]=useState("paste");// paste | preview | done
+  const[rawText,setRawText]=useState("");
+  const[parsed,setParsed]=useState([]);
+  const[editCats,setEditCats]=useState({});
+  const[editOwner,setEditOwner]=useState({});
+  const[importing,setImporting]=useState(false);
+  const[error,setError]=useState("");
+  const[skipped,setSkipped]=useState({});
+
+  const BANK_FORMATS=[
+    // Chase: Date,Description,Amount (negative=debit)
+    {name:"Chase",detect:h=>h.includes("Transaction Date")||h.includes("Post Date"),
+     date:r=>r[0]||r[1],desc:r=>r[2],amt:r=>-parseFloat((r[3]||r[4]||"0").replace(/[^0-9.-]/g,""))},
+    // BofA: Date,Description,Amount (negative=debit)
+    {name:"Bank of America",detect:h=>h.toLowerCase().includes("posted date")||h.toLowerCase().includes("payee"),
+     date:r=>r[0],desc:r=>r[2]||r[1],amt:r=>parseFloat((r[4]||r[3]||"0").replace(/[^0-9.-]/g,""))},
+    // Wells Fargo: Date,Amount,*,*,Description
+    {name:"Wells Fargo",detect:h=>!h.toLowerCase().includes("date")&&r=>/^\d{1,2}\/\d{1,2}\/\d{4}/.test(h),
+     date:r=>r[0],desc:r=>r[4],amt:r=>parseFloat((r[1]||"0").replace(/[^0-9.-]/g,""))},
+    // Capital One: Transaction Date,Post Date,Description,Category,Debit,Credit
+    {name:"Capital One",detect:h=>h.toLowerCase().includes("transaction date")&&h.toLowerCase().includes("debit"),
+     date:r=>r[0],desc:r=>r[2],amt:r=>{const d=parseFloat((r[4]||"").replace(/[^0-9.-]/g,""));const c=parseFloat((r[5]||"").replace(/[^0-9.-]/g,""));return d>0?d:-c;}},
+    // Citi: Status,Date,Description,Debit,Credit
+    {name:"Citi",detect:h=>h.toLowerCase().includes("status")&&h.toLowerCase().includes("debit")&&h.toLowerCase().includes("credit"),
+     date:r=>r[1],desc:r=>r[2],amt:r=>{const d=parseFloat((r[3]||"").replace(/[^0-9.-]/g,""));const c=parseFloat((r[4]||"").replace(/[^0-9.-]/g,""));return d>0?d:-c;}},
+    // Generic: first col=date, second=desc, third=amount
+    {name:"Generic",detect:()=>true,
+     date:r=>r[0],desc:r=>r[1],amt:r=>Math.abs(parseFloat((r[2]||r[3]||"0").replace(/[^0-9.-]/g,"")))}
+  ];
+
+  // Auto-categorize by merchant name
+  const MC=window._merchantCats||{};
+  const CAT_RULES=[
+    {r:/grocery|groceries|publix|kroger|safeway|trader joe|whole foods|aldi|costco|walmart|wegmans|sprouts/i,c:"Groceries"},
+    {r:/mcdonald|burger king|wendy|chick-fil|taco bell|subway|chipotle|popeyes|kfc|domino|sonic|five guys|sonic|whataburger/i,c:"Fast Food"},
+    {r:/restaurant|doordash|grubhub|ubereats|postmates|dine|sushi|bistro|steakhouse|grill/i,c:"Restaurants"},
+    {r:/starbucks|dunkin|coffee|latte|espresso|dutch bros|caribou|peet/i,c:"Coffee"},
+    {r:/shell|bp|chevron|exxon|mobil|speedway|wawa|sheetz|pilot|loves|quiktrip|fuel|gas\s/i,c:"Gas"},
+    {r:/uber|lyft|taxi|cab\b/i,c:"Rideshare"},
+    {r:/netflix|hulu|spotify|apple music|disney|hbo|paramount|peacock|youtube premium|crunchyroll|adobe|dropbox|icloud/i,c:"Subscriptions"},
+    {r:/cvs|walgreens|rite aid|pharmacy|medical|doctor|hospital|dental|dentist|urgent care|copay/i,c:"Health / Medical"},
+    {r:/planet fitness|la fitness|anytime fitness|equinox|ymca|crossfit|orangetheory|peloton|gym/i,c:"Gym / Fitness"},
+    {r:/barber|salon|great clips|supercuts|hair|nails|manicure|spa|massage|ulta|sephora|wax/i,c:"Grooming / Haircuts"},
+    {r:/nike|adidas|h&m|zara|gap|old navy|nordstrom|target|forever 21|shein|clothing|clothes|shoes/i,c:"Clothing"},
+    {r:/amazon|target|walmart|best buy|home depot|lowes|ikea|tj maxx|marshalls|ross|kohls/i,c:"Shopping"},
+    {r:/petco|petsmart|vet|veterinary|pet food|chewy/i,c:"Pets"},
+    {r:/movie|amc|regal|theater|concert|ticketmaster|steam|playstation|xbox|nintendo|bowling/i,c:"Entertainment"},
+    {r:/hotel|airbnb|vrbo|flight|airline|southwest|delta|united|frontier|spirit|booking|expedia|vacation/i,c:"Travel"},
+    {r:/rent|mortgage|landlord|lease|apartment/i,c:"Rent / Mortgage"},
+    {r:/electric|utility|water|internet|cable|xfinity|comcast|att|verizon|t-mobile|phone/i,c:"Utilities"},
+    {r:/bar|nightclub|happy hour|brunch|dining out/i,c:"Dining Out"},
+  ];
+
+  function autoCategory(desc){
+    if(!desc)return "Misc";
+    const dl=desc.toLowerCase().trim();
+    if(MC[dl])return MC[dl];
+    for(const {r,c} of CAT_RULES){if(r.test(dl))return c;}
+    return "Misc";
+  }
+
+  function parseCSV(text){
+    // Split into lines, handle quoted fields
+    const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<2)return[];
+    const parseRow=line=>{
+      const cols=[];let cur="";let inQ=false;
+      for(let i=0;i<line.length;i++){
+        const ch=line[i];
+        if(ch==='"'){inQ=!inQ;}
+        else if(ch===","&&!inQ){cols.push(cur.trim().replace(/^"|"$/g,""));cur="";}
+        else{cur+=ch;}
+      }
+      cols.push(cur.trim().replace(/^"|"$/g,""));
+      return cols;
+    };
+    const header=lines[0].toLowerCase();
+    const fmt=BANK_FORMATS.find(f=>f.detect(header))||BANK_FORMATS[BANK_FORMATS.length-1];
+    const rows=[];
+    for(let i=1;i<lines.length;i++){
+      const r=parseRow(lines[i]);
+      if(r.length<2)continue;
+      const rawDate=fmt.date(r)||"";
+      const desc=(fmt.desc(r)||"").trim();
+      const rawAmt=fmt.amt(r);
+      if(!desc||isNaN(rawAmt)||rawAmt<=0)continue;
+      // Normalize date to YYYY-MM-DD
+      let date="";
+      const dm=rawDate.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+      if(dm){
+        const yr=dm[3].length===2?"20"+dm[3]:dm[3];
+        date=`${yr}-${dm[1].padStart(2,"0")}-${dm[2].padStart(2,"0")}`;
+      }else if(/\d{4}-\d{2}-\d{2}/.test(rawDate)){date=rawDate.slice(0,10);}
+      if(!date)continue;
+      rows.push({id:`imp_${Date.now()}_${i}`,name:desc,amount:rawAmt.toFixed(2),date,category:autoCategory(desc),notes:"Imported",owner:"me"});
+    }
+    return rows;
+  }
+
+  function handleParse(){
+    setError("");
+    if(!rawText.trim()){setError("Paste your bank CSV data above.");return;}
+    const rows=parseCSV(rawText);
+    if(!rows.length){setError("Couldn't read this format. Make sure you're pasting CSV text exported from your bank's website.");return;}
+    // Deduplicate against existing expenses
+    const existing=new Set(expenses.map(e=>e.date+"_"+e.name+"_"+e.amount));
+    const deduped=rows.filter(r=>!existing.has(r.date+"_"+r.name+"_"+r.amount));
+    setParsed(deduped);
+    setEditCats(Object.fromEntries(deduped.map(r=>[r.id,r.category])));
+    setEditOwner(Object.fromEntries(deduped.map(r=>[r.id,"me"])));
+    setSkipped({});
+    setStep("preview");
+  }
+
+  function handleFile(file){
+    const reader=new FileReader();
+    reader.onload=e=>{setRawText(e.target.result);};
+    reader.readAsText(file);
+  }
+
+  function doImport(){
+    setImporting(true);
+    const toAdd=parsed
+      .filter(r=>!skipped[r.id])
+      .map(r=>({...r,category:editCats[r.id]||r.category,owner:editOwner[r.id]||"me",notes:"Imported"}));
+    setExpenses(p=>[...p,...toAdd]);
+    const skippedCount=Object.values(skipped).filter(Boolean).length;
+    showToast(`✅ Imported ${toAdd.length} transactions${skippedCount?` · ${skippedCount} skipped`:""}`);
+    setStep("done");
+    setImporting(false);
+  }
+
+  const totalAmt=parsed.filter(r=>!skipped[r.id]).reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+  const catNames=categories.map(c=>c.name);
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(10,22,40,.55)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:560,maxHeight:"92vh",overflowY:"auto",padding:"0 0 40px",animation:"slideUp .26s cubic-bezier(.22,1,.36,1)",boxShadow:"0 -4px 60px rgba(10,22,40,.22)"}}>
+        <div style={{width:40,height:4,background:C.border,borderRadius:99,margin:"14px auto 4px"}}/>
+        <div style={{padding:"16px 24px 20px",borderBottom:`1px solid ${C.borderLight}`,marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{background:C.greenBg,borderRadius:12,padding:"9px 10px",display:"flex"}}><FileText size={20} color={C.green}/></div>
+            <div>
+              <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,letterSpacing:-.3}}>Bank Import</div>
+              <div style={{fontSize:12,color:C.textLight,marginTop:1}}>Paste CSV from your bank's website</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:C.surfaceAlt,border:"none",cursor:"pointer",color:C.textMid,padding:"7px 8px",borderRadius:10,display:"flex"}}><X size={15}/></button>
+        </div>
+
+        <div style={{padding:"0 24px"}}>
+
+          {step==="paste"&&<>
+            <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",marginBottom:16,fontSize:13,color:C.accent,lineHeight:1.6}}>
+              <strong>How to get your CSV:</strong>
+              <div style={{marginTop:6,display:"flex",flexDirection:"column",gap:3}}>
+                {[["Chase","Accounts → Download account activity → CSV"],["Bank of America","Transactions → Download → Microsoft Excel"],["Wells Fargo","Account Activity → Download → CSV"],["Capital One","Transactions → Download → CSV"],["Other bank","Look for 'Download', 'Export', or 'Statement' → choose CSV"]].map(([bank,steps])=>(
+                  <div key={bank} style={{fontSize:12}}><strong style={{color:C.accent}}>{bank}:</strong> {steps}</div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Option 1 — Upload CSV file</div>
+              <label style={{display:"flex",alignItems:"center",gap:10,background:C.surfaceAlt,border:`1.5px dashed ${C.border}`,borderRadius:12,padding:"14px 16px",cursor:"pointer"}}>
+                <FileText size={20} color={C.textLight}/>
+                <div>
+                  <div style={{fontSize:14,fontWeight:600,color:C.text}}>Choose file</div>
+                  <div style={{fontSize:12,color:C.textLight}}>Select the .csv file from your bank</div>
+                </div>
+                <input type="file" accept=".csv,.txt" style={{display:"none"}} onChange={e=>e.target.files[0]&&handleFile(e.target.files[0])}/>
+              </label>
+            </div>
+
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Option 2 — Paste CSV text</div>
+              <textarea
+                value={rawText} onChange={e=>setRawText(e.target.value)}
+                placeholder={"Date,Description,Amount\n01/15/2025,STARBUCKS #1234,-4.75\n01/14/2025,PUBLIX SUPERMARKET,-89.23\n..."}
+                style={{width:"100%",height:140,background:C.surfaceAlt,border:`1.5px solid ${rawText?C.accent:C.border}`,borderRadius:12,padding:"12px 14px",fontSize:12,fontFamily:"'SF Mono',monospace",color:C.text,outline:"none",resize:"none",boxSizing:"border-box",lineHeight:1.5}}
+              />
+            </div>
+
+            {error&&<div style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:13,color:C.red}}>{error}</div>}
+
+            <button onClick={handleParse} disabled={!rawText.trim()} style={{width:"100%",background:rawText.trim()?C.green:C.border,border:"none",borderRadius:14,padding:"15px 0",color:rawText.trim()?"#fff":C.textFaint,fontWeight:800,fontSize:16,cursor:rawText.trim()?"pointer":"default",fontFamily:MF}}>
+              Parse Transactions →
+            </button>
+          </>}
+
+          {step==="preview"&&<>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div>
+                <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text}}>{parsed.filter(r=>!skipped[r.id]).length} transactions ready</div>
+                <div style={{fontSize:12,color:C.textLight}}>Total: {fmt(totalAmt)} · tap rows to adjust</div>
+              </div>
+              <button onClick={()=>{setStep("paste");setParsed([]);}} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,color:C.textMid,fontWeight:600}}>← Back</button>
+            </div>
+
+            <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"9px 14px",marginBottom:12,fontSize:12,color:C.accent}}>
+              ✅ Auto-categorized by merchant. Tap any category pill to change it. Toggle 🚫 to skip a row.
+            </div>
+
+            <div style={{marginBottom:16,maxHeight:380,overflowY:"auto",borderRadius:12,border:`1px solid ${C.border}`}}>
+              {parsed.map((r,i)=>{
+                const isSkipped=skipped[r.id];
+                return(
+                  <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderBottom:i<parsed.length-1?`1px solid ${C.border}`:"none",background:isSkipped?"#f8f9fc":C.surface,opacity:isSkipped?.4:1}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+                      <div style={{fontSize:11,color:C.textLight,marginTop:2}}>{r.date}</div>
+                      <div style={{marginTop:4,display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+                        <select value={editCats[r.id]||r.category} onChange={e=>{setEditCats(p=>({...p,[r.id]:e.target.value}));}} disabled={isSkipped}
+                          style={{fontSize:10,fontWeight:700,background:C.accentBg,color:C.accent,border:`1px solid ${C.accentMid}`,borderRadius:99,padding:"2px 8px",cursor:"pointer",outline:"none",appearance:"none"}}>
+                          {catNames.map(c=><option key={c} value={c}>{c}</option>)}
+                        </select>
+                        {household?.enabled&&household?.members?.length>1&&(
+                          <select value={editOwner[r.id]||"me"} onChange={e=>setEditOwner(p=>({...p,[r.id]:e.target.value}))} disabled={isSkipped}
+                            style={{fontSize:10,fontWeight:700,background:C.surfaceAlt,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:99,padding:"2px 8px",cursor:"pointer",outline:"none",appearance:"none"}}>
+                            {[{id:"me",name:"Me"},...household.members.filter(m=>m.id!=="me"),{id:"shared",name:"Shared"}].map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:isSkipped?C.textFaint:C.red,flexShrink:0}}>-{fmt(r.amount)}</div>
+                    <button onClick={()=>setSkipped(p=>({...p,[r.id]:!p[r.id]}))}
+                      title={isSkipped?"Include":"Skip"}
+                      style={{background:"none",border:"none",cursor:"pointer",color:isSkipped?C.green:C.textFaint,padding:"4px",fontSize:16,flexShrink:0}}>
+                      {isSkipped?"✓":"🚫"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button onClick={doImport} disabled={importing||parsed.filter(r=>!skipped[r.id]).length===0}
+              style={{width:"100%",background:C.green,border:"none",borderRadius:14,padding:"15px 0",color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>
+              Import {parsed.filter(r=>!skipped[r.id]).length} Transactions
+            </button>
+          </>}
+
+          {step==="done"&&(
+            <div style={{textAlign:"center",padding:"40px 20px"}}>
+              <div style={{fontSize:48,marginBottom:12}}>✅</div>
+              <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:8}}>Import Complete!</div>
+              <div style={{fontSize:14,color:C.textLight,marginBottom:24}}>Your transactions are now in Trackfi.</div>
+              <button onClick={onClose} style={{background:C.accent,border:"none",borderRadius:14,padding:"14px 32px",color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button>
+            </div>
+          )}
+
+        </div>
+      </div>
     </div>
   );
 }
@@ -3895,11 +4325,29 @@ function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGo
   const monthName=now.toLocaleDateString("en-US",{month:"long",year:"numeric"});
 
   function dlBlob(data,filename,type="text/html"){
-    const b=new Blob([data],{type});
-    const u=URL.createObjectURL(b);
-    const a=document.createElement("a");
-    a.href=u;a.download=filename;a.click();
-    setTimeout(()=>URL.revokeObjectURL(u),1000);
+    if(type==="text/csv"){
+      // CSV: standard blob download works everywhere
+      const b=new Blob([data],{type:"text/csv;charset=utf-8;"});
+      const u=URL.createObjectURL(b);
+      const a=document.createElement("a");
+      a.href=u;a.download=filename;a.click();
+      setTimeout(()=>URL.revokeObjectURL(u),1000);
+    }else{
+      // HTML reports: open in new tab via document.write
+      // avoids blob: URL CSP restrictions in sandboxed environments
+      const w=window.open("","_blank");
+      if(w){
+        w.document.open();
+        w.document.write(data);
+        w.document.close();
+        w.document.title=filename;
+      }else{
+        // Fallback if popup blocked: data URI download
+        const encoded="data:text/html;charset=utf-8,"+encodeURIComponent(data);
+        const a=document.createElement("a");
+        a.href=encoded;a.download=filename;a.click();
+      }
+    }
   }
 
   const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
@@ -4368,6 +4816,7 @@ function AppInner(){
   const[onboarded,setOnboarded]=useState(()=>{try{return localStorage.getItem("fv_onboarded")==="1";}catch{return false;}});
   const[modal,setModal]=useState(null);
   const[showExport,setShowExport]=useState(false);
+  const[showImport,setShowImport]=useState(false);
   const[form,setForm]=useState({});
   const[editItem,setEditItem]=useState(null);
   const[extraPayDebt,setExtraPayDebt]=useState(0);
@@ -4652,7 +5101,7 @@ function AppInner(){
     {key:"money",label:"Money",desc:"Accounts, bills & goals",items:[{id:"accounts",icon:Wallet,label:"Accounts & Income"},{id:"debt",icon:CreditCard,label:"Debt Tracker"},{id:"savings",icon:Target,label:"Savings Goals"},{id:"paycheck",icon:DollarSign,label:"Paycheck Planner"},{id:"household",icon:Wallet,label:"Household / Shared"},{id:"recurring",icon:RefreshCw,label:"Recurring"},{id:"calendar",icon:Calendar,label:"Bill Calendar"}]},
     {key:"analytics",label:"Analytics",desc:"Insights & trends",items:[{id:"insights",icon:BarChart2,label:"Spending Insights 📊"},{id:"health",icon:Activity,label:"Health Score"},{id:"cashflow",icon:BarChart2,label:"Income vs Spending"},{id:"networthtrend",icon:TrendingUp,label:"Net Worth Trend"},{id:"trend",icon:TrendingUp,label:"Balance Trend"},{id:"subscriptions",icon:RefreshCw,label:"Subscriptions"}]},
     {key:"work",label:"Work & Reports",desc:"Shifts, trading & docs",items:[{id:"shifts",icon:Clock,label:"Shift Tracker"},...(settings.showTrading?[{id:"trading",icon:TrendingUp,label:"Trading"}]:[]),{id:"statement",icon:FileText,label:"Monthly Statement"},{id:"tax",icon:FileText,label:"Tax Summary"},{id:"physical",icon:Activity,label:"Financial Physical"}]},
-    {key:"tools",label:"Tools",desc:"Search & customize",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"categories",icon:Filter,label:"Categories"},{id:"dashsettings",icon:Settings,label:"Dashboard Layout"},{id:"export",icon:Download,label:"Export Data"}]},
+    {key:"tools",label:"Tools",desc:"Search & customize",items:[{id:"search",icon:Search,label:"Search"},{id:"notifs",icon:Bell,label:"Notifications"},{id:"categories",icon:Filter,label:"Categories"},{id:"dashsettings",icon:Settings,label:"Dashboard Layout"},{id:"export",icon:Download,label:"Export Data"},{id:"import",icon:FileText,label:"Import Bank CSV"}]},
   ];
   const allTabIds=GROUPS.flatMap(g=>g.items.map(i=>i.id));
   const isMoreTab=allTabIds.includes(tab);
@@ -5316,8 +5765,9 @@ function AppInner(){
         {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} onNavigate={navTo}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
-        {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} showToast={showToast}/>}
+        {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
+        {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
         {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
@@ -5422,6 +5872,7 @@ function AppInner(){
       {modal==="receipt"&&<Modal title="Scan Receipt" icon={Scan} onClose={cl} accent={C.purple}><div style={{textAlign:"center",padding:"10px 0 20px"}}><div style={{width:64,height:64,borderRadius:18,background:C.purpleBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><Scan size={30} color={C.purple}/></div><div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:8}}>Scan Receipt</div><label style={{display:"block",background:C.purple,borderRadius:12,padding:"13px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📷 Take Photo<input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><label style={{display:"block",background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:12,padding:"13px 0",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>🖼 Choose from Library<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><button className="ba" onClick={cl} style={{background:C.bg,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",width:"100%"}}>Cancel</button></div></Modal>}
       {modal==="simulator"&&debts.length>0&&(()=>{const dL=debts.map(d=>({...d,bal:parseFloat(d.balance||0),rate:parseFloat(d.rate||0)/100/12,min:parseFloat(d.minPayment||0)}));const tm=dL.reduce((s,d)=>s+d.min,0);const ex=parseFloat(form.extra||"0")||0;function sim(strat){let r=dL.map(d=>({...d}));let mo=0,ti=0;while(r.some(d=>d.bal>0)&&mo<600){mo++;let av=tm+ex;r=r.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;ti+=i;const p=Math.min(d.min,d.bal+i);av-=p;return{...d,bal:Math.max(0,d.bal+i-p)};});const ac=r.filter(d=>d.bal>0);if(ac.length&&av>0){const tgt=strat==="avalanche"?ac.reduce((a,b)=>a.rate>b.rate?a:b):ac.reduce((a,b)=>a.bal<b.bal?a:b);const idx=r.findIndex(d=>d.name===tgt.name);r[idx].bal=Math.max(0,r[idx].bal-av);}}return{months:mo,interest:ti};}const sn=sim("snowball"),av=sim("avalanche"),diff=sn.interest-av.interest;return(<Modal title="Payoff Simulator" icon={Calculator} onClose={cl} accent={C.green} wide><div style={{background:C.navy,borderRadius:14,padding:16,marginBottom:14,color:"#fff"}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",marginBottom:4}}>TOTAL DEBT</div><div style={{fontFamily:MF,fontSize:26,fontWeight:800,color:C.red}}>{fmt(debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0))}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>Min payments: {fmt(tm)}/mo</div></div><div style={{marginBottom:16}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Extra Monthly Payment</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.accent}}>{ex>0?"+"+fmt(ex):"$0"}</div></div><input type="range" min="0" max="1000" step="25" value={form.extra||0} onChange={e=>ff("extra",e.target.value)} style={{width:"100%",accentColor:C.accent,cursor:"pointer",marginBottom:6}}/><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textFaint}}><span>$0</span><span>$500</span><span>$1,000</span></div><div style={{marginTop:8,fontSize:12,color:C.textLight}}>Total: <span style={{fontWeight:700,color:C.text}}>{fmt(tm+ex)}/mo</span></div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>{[{label:"❄️ Snowball",sub:"Smallest first",m:sn.months,i:sn.interest,c:C.accent},{label:"🔥 Avalanche",sub:"Highest rate first",m:av.months,i:av.interest,c:C.green}].map(s=><div key={s.label} style={{background:C.surface,border:`1.5px solid ${s.c}44`,borderRadius:14,padding:14,borderTop:`3px solid ${s.c}`}}><div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:s.c,marginBottom:2}}>{s.label}</div><div style={{fontSize:11,color:C.textLight,marginBottom:10}}>{s.sub}</div><div style={{marginBottom:6}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>DEBT FREE</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.text}}>{s.m>=600?"∞":s.m<12?s.m+"mo":Math.floor(s.m/12)+"y "+(s.m%12)+"mo"}</div></div><div><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>INTEREST</div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red}}>{fmt(s.i)}</div></div></div>)}</div>{diff>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",fontSize:13,color:C.green,fontWeight:500}}>💡 Avalanche saves <strong>{fmt(diff)}</strong> vs Snowball</div>}</Modal>);})()} 
 
+      {showImport&&<BankImportModal categories={categories} expenses={expenses} setExpenses={setExpenses} household={household} showToast={showToast} onClose={()=>setShowImport(false)}/>}
       {showExport&&<ExportModal expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} budgetGoals={budgetGoals} trades={trades} shifts={shifts} categories={categories} appName={appName} greetName={greetName} onClose={()=>setShowExport(false)}/>}
       {confirm&&<ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)} danger={confirm.danger}/>}
       {editItem&&editItem.type==="expense"&&<EditModal item={editItem} categories={categories} onSave={u=>{setExpenses(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Expense updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Expense",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setExpenses(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
