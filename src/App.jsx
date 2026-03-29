@@ -1796,19 +1796,6 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         </div>
       </div>}
       {soonAmt>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"11px 15px",marginBottom:14,fontSize:13,color:C.amber,fontWeight:500}}>⚠️ <strong>{fmt(soonAmt)}</strong> due in the next 7 days</div>}
-      {/* Household member bill filter */}
-      {household?.enabled&&household?.members?.length>1&&(
-        <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto",paddingBottom:2}}>
-          <button onClick={()=>{}} style={{flexShrink:0,padding:"6px 13px",borderRadius:99,border:"none",background:C.surface,color:C.textMid,fontWeight:500,fontSize:12,cursor:"default",opacity:.5}}>Filter by payer →</button>
-          {[{id:"all",name:"All",emoji:"📋"},...household.members,{id:"shared",name:"Shared",emoji:"🏠"}].map(m=>(
-            <button key={m.id} onClick={()=>{}} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:99,border:`1px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:500,fontSize:12,cursor:"pointer",boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
-              <span>{m.emoji}</span><span>{m.name}</span>
-              <span style={{fontSize:10,color:C.accent,fontWeight:700,background:C.accentBg,borderRadius:99,padding:"1px 6px",marginLeft:2}}>
-                {fmt(bills.filter(b=>!b.paid&&(m.id==="all"?true:b.paidBy===m.id||(m.id==="shared"&&!b.paidBy))).reduce((s,b)=>s+(parseFloat(b.amount||0)),0))}
-              </span>
-            </button>
-          ))}
-        </div>
       )}
       {bills.length===0&&<Empty text='No bills yet. Use AI Logger — type "rent 1200 due 28th"' icon={CalendarClock}/>}}
       {bills.sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).map(b=>{
