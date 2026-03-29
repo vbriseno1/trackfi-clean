@@ -1381,9 +1381,9 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
   const totalOriginal=debts.reduce((s,d)=>s+(parseFloat(d.original||d.balance||0)),0);
   const totalPaidDown=Math.max(0,totalOriginal-totalDebt);
   const overallPct=totalOriginal>0?Math.round(totalPaidDown/totalOriginal*100):0;
-  const totalAssets=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
+  const totalAssets=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
   const currentNW=totalAssets-totalDebt;
-  const chartData=balHist.map(h=>({date:h.date,assets:(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0),netWorth:((h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0))-totalDebt})).slice(-52);
+  const chartData=balHist.map(h=>({date:h.date,assets:(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0),netWorth:((h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0))-totalDebt})).slice(-52);
   const firstNW=chartData[0]?.netWorth||currentNW;
   const change=currentNW-firstNW;
   const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return FULL_MOS[d.getMonth()]+" "+d.getDate();};
@@ -1848,21 +1848,65 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
 function ExtraPayModal({debt,onConfirm,onClose}){
   const[amt,setAmt]=useState("");
   const bal=parseFloat(debt?.balance||0);
+  const minPay=parseFloat(debt?.minPayment||0);
   const pay=parseFloat(amt)||0;
   const newBal=Math.max(0,bal-pay);
+  const pctPaid=bal>0?Math.min(100,(pay/bal)*100):0;
+  // Quick amount options
+  const quickAmts=[minPay>0&&{l:"Min pmt",v:minPay},{l:"$100",v:100},{l:"$250",v:250},{l:"$500",v:500},{l:"Pay off",v:bal}].filter(Boolean);
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Extra Payment</div>
-        <div style={{fontSize:13,color:C.textLight,marginBottom:18}}>{debt?.name} — current balance {fmt(bal)}</div>
-        <div style={{position:"relative",marginBottom:16}}>
-          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontWeight:700,color:C.textMid,fontSize:16}}>$</span>
-          <input autoFocus type="number" value={amt} onChange={e=>setAmt(e.target.value)} placeholder="0.00" style={{width:"100%",border:`2px solid ${pay>0?C.green:C.border}`,borderRadius:14,padding:"14px 14px 14px 30px",fontSize:20,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",boxSizing:"border-box",background:C.surface}}/>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:"24px 24px 36px",width:"100%",maxWidth:480,boxShadow:"0 -4px 40px rgba(10,22,40,.2)"}} onClick={e=>e.stopPropagation()}>
+        {/* Drag handle */}
+        <div style={{width:36,height:4,background:C.border,borderRadius:99,margin:"0 auto 20px"}}/>
+        <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:2}}>Make a Payment</div>
+        <div style={{fontSize:13,color:C.textLight,marginBottom:20}}>{debt?.name} · balance {fmt(bal)}</div>
+
+        {/* Quick-tap amounts */}
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
+          {quickAmts.map(q=>(
+            <button key={q.l} onClick={()=>setAmt(String(q.v.toFixed(2)))}
+              style={{padding:"7px 13px",borderRadius:99,border:`1.5px solid ${Math.abs(pay-q.v)<0.01?C.green:C.border}`,background:Math.abs(pay-q.v)<0.01?C.greenBg:"#fff",color:Math.abs(pay-q.v)<0.01?C.green:C.textMid,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+              {q.l}{q.v===bal?"":" · "+fmt(q.v)}
+            </button>
+          ))}
         </div>
-        {pay>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",marginBottom:16,fontSize:13,color:C.green,fontWeight:500}}>New balance: <strong>{fmt(newBal)}</strong>{newBal===0?" — PAID OFF! 🎉":""}</div>}
+
+        {/* Amount input */}
+        <div style={{position:"relative",marginBottom:14}}>
+          <span style={{position:"absolute",left:16,top:"50%",transform:"translateY(-50%)",fontWeight:800,color:pay>0?C.green:C.textMid,fontSize:18}}>$</span>
+          <input autoFocus type="number" value={amt} onChange={e=>setAmt(e.target.value)}
+            placeholder="Enter amount"
+            style={{width:"100%",border:`2px solid ${pay>0?C.green:C.border}`,borderRadius:14,padding:"15px 16px 15px 36px",fontSize:22,fontFamily:MF,fontWeight:800,color:pay>0?C.green:C.text,outline:"none",boxSizing:"border-box",background:pay>0?C.greenBg:C.surface,transition:"all .15s"}}/>
+        </div>
+
+        {/* New balance preview */}
+        {pay>0&&(
+          <div style={{background:newBal===0?"#0A1628":C.greenBg,border:`1px solid ${newBal===0?"#6366F1":C.greenMid}`,borderRadius:12,padding:"12px 16px",marginBottom:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:newBal>0?8:0}}>
+              <span style={{fontSize:13,color:newBal===0?"rgba(255,255,255,.7)":C.green,fontWeight:600}}>
+                {newBal===0?"🎉 PAID OFF!":"New balance after payment"}
+              </span>
+              <span style={{fontFamily:MF,fontWeight:800,fontSize:16,color:newBal===0?"#34D399":C.green}}>
+                {fmt(newBal)}
+              </span>
+            </div>
+            {newBal>0&&bal>0&&(
+              <div style={{height:6,background:C.border,borderRadius:99,overflow:"hidden"}}>
+                <div style={{height:"100%",width:pctPaid.toFixed(1)+"%",background:C.green,borderRadius:99,transition:"width .3s"}}/>
+              </div>
+            )}
+            {pay>bal&&<div style={{fontSize:11,color:C.amber,marginTop:6}}>⚠ Payment exceeds balance — will pay off fully</div>}
+          </div>
+        )}
+
         <div style={{display:"flex",gap:10}}>
-          <button onClick={onClose} style={{flex:1,padding:"13px",borderRadius:14,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:700,fontSize:16,cursor:"pointer"}}>Cancel</button>
-          <button onClick={()=>{if(pay<=0)return;onConfirm(pay);}} disabled={pay<=0} style={{flex:2,padding:"13px",borderRadius:14,border:"none",background:pay>0?C.green:C.border,color:"#fff",fontWeight:800,fontSize:16,cursor:pay>0?"pointer":"default",fontFamily:MF}}>Confirm Payment</button>
+          <button onClick={onClose} style={{flex:1,padding:"14px",borderRadius:14,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:700,fontSize:15,cursor:"pointer"}}>Cancel</button>
+          <button onClick={()=>{if(pay<=0)return;onConfirm(Math.min(pay,bal));}}
+            disabled={pay<=0}
+            style={{flex:2,padding:"14px",borderRadius:14,border:"none",background:pay>0?C.green:C.borderLight,color:pay>0?"#fff":C.textFaint,fontWeight:800,fontSize:15,cursor:pay>0?"pointer":"default",fontFamily:MF,transition:"all .15s"}}>
+            {newBal===0?"Pay Off Debt 🎉":"Confirm — "+fmt(Math.min(pay,bal))}
+          </button>
         </div>
       </div>
     </div>
@@ -5299,8 +5343,8 @@ function AppInner(){
                         </div>
                       ))}
                     </div>
-                    {balHist.length>3&&(()=>{const last6=balHist.slice(-6);const maxV=Math.max(...last6.map(h=>(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)),1);return(<div style={{display:"flex",gap:3,alignItems:"flex-end",height:28}}>
-                      {last6.map((h,i)=>{const v=(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0);const hh=Math.max(3,Math.round((v/maxV)*24));const isLast=i===last6.length-1;return(<div key={i} style={{flex:1,height:hh,background:isLast?"#fff":"rgba(255,255,255,.25)",borderRadius:"2px 2px 0 0"}}/>);})}
+                    {balHist.length>3&&(()=>{const last6=balHist.slice(-6);const maxV=Math.max(...last6.map(h=>(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0)),1);savings||0)+(h.cushion||0)+(h.investments||0)),1);return(<div style={{display:"flex",gap:3,alignItems:"flex-end",height:28}}>
+                      {last6.map((h,i)=>{const v=(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0);const hh=Math.max(3,Math.round((v/maxV)*24));const isLast=i===last6.length-1;return(<div key={i} style={{flex:1,height:hh,background:isLast?"#fff":"rgba(255,255,255,.25)",borderRadius:"2px 2px 0 0"}}/>);})}
                     </div>);})()}
                   </div>
                 )},
@@ -5498,6 +5542,36 @@ function AppInner(){
 
             {/* ── 6. UPCOMING BILLS ─────────────────────────────── */}
             {/* ── HOUSEHOLD SPLIT CARD — visible when enabled ─── */}
+            {/* Month Forecast */}
+            {(()=>{
+              const _now=new Date();const _ms=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
+              const _dom=_now.getDate(),_dim=new Date(_now.getFullYear(),_now.getMonth()+1,0).getDate();
+              const _mtd=expenses.filter(e=>e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+              const _proj=_dom>2?(_mtd/_dom)*_dim:0;
+              if(_mtd===0||_dom<3)return null;
+              const _onTrack=totalIncome<=0||_proj<=totalIncome;
+              const _pct=totalIncome>0?Math.min(100,(_mtd/totalIncome)*100):0;
+              const _projPct=totalIncome>0?Math.min(100,(_proj/totalIncome)*100):0;
+              return(
+                <div style={{background:C.surface,borderRadius:16,padding:"14px 16px",marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div>
+                      <div style={{fontSize:10,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Month Forecast</div>
+                      <div style={{fontFamily:MF,fontWeight:800,fontSize:17,color:_onTrack?C.text:C.red}}>{fmt(_proj)} projected</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:11,fontWeight:700,color:_onTrack?C.green:C.red}}>{_onTrack?"On track ✓":"Over budget"}</div>
+                      <div style={{fontFamily:MF,fontWeight:700,fontSize:12,color:_onTrack?C.green:C.red,marginTop:1}}>{_onTrack&&totalIncome>0?fmt(totalIncome-_proj)+" left":!_onTrack?"+"+fmt(_proj-totalIncome):" "}</div>
+                    </div>
+                  </div>
+                  <div style={{position:"relative",height:5,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:4}}>
+                    <div style={{position:"absolute",left:0,top:0,height:"100%",width:_pct.toFixed(1)+"%",background:_onTrack?C.accent:C.red,borderRadius:99}}/>
+                    {_proj>_mtd&&<div style={{position:"absolute",left:_pct.toFixed(1)+"%",top:0,height:"100%",width:Math.min(_projPct-_pct,100-_pct).toFixed(1)+"%",background:_onTrack?"rgba(99,102,241,.2)":"rgba(220,38,38,.2)"}}/>}
+                  </div>
+                  <div style={{fontSize:10,color:C.textFaint}}>{fmt(_mtd)} spent · day {_dom} of {_dim}{totalIncome>0?" · "+fmt(totalIncome)+" income":""}</div>
+                </div>
+              );
+            })()}
             {household?.enabled&&household?.members?.length>1&&(()=>{
               const ms_hh=new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0");
               const thisM=expenses.filter(e=>e.date?.startsWith(ms_hh));
