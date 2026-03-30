@@ -844,7 +844,21 @@ Ask me anything:\
     if(t.includes("biggest")||t.includes("largest")||t.includes("most spent")){
       const top=_thisExp.slice().sort((a,b)=>parseFloat(b.amount)-parseFloat(a.amount))[0];
       const topCat=_topCats[0];
-      return(top?"\ud83d\udcb8 Biggest: "+top.name+" "+fmt(top.amount)+" on "+top.date+"\n":"")+(topCat?"\ud83d\udce6 Top category: "+topCat[0]+" "+fmt(topCat[1]):"");
+      return(top?"💸 Biggest: "+top.name+" "+fmt(top.amount)+" on "+top.date+"
+":"")+(topCat?"📦 Top category: "+topCat[0]+" "+fmt(topCat[1]):"");
+    }
+    if(t.includes("last week")||t.includes("this week")){
+      const now2=new Date();const day=now2.getDay();
+      const weekStart=new Date(now2);weekStart.setDate(now2.getDate()-(t.includes("last week")?day+7:day));weekStart.setHours(0,0,0,0);
+      const weekEnd=new Date(weekStart);weekEnd.setDate(weekStart.getDate()+7);
+      const weekExp=expenses.filter(e=>{const d=new Date((e.date||"")+"T00:00:00");return d>=weekStart&&d<weekEnd;});
+      const weekTotal=weekExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+      const weekCats=Object.entries(weekExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{})).sort((a,b)=>b[1]-a[1]);
+      return(t.includes("last week")?"Last week":"This week")+": "+fmt(weekTotal)+" across "+weekExp.length+" transactions"+(weekCats.length?" · Top: "+weekCats[0][0]+" "+fmt(weekCats[0][1]):"");
+    }
+    if(t.includes("average")||t.includes("avg")||t.includes("typical")){
+      const dom2=now.getDate();
+      return"📊 Daily average: "+fmt(_thisTotal/Math.max(1,dom2))+" · At this pace: "+fmt((_thisTotal/Math.max(1,dom2))*new Date(now.getFullYear(),now.getMonth()+1,0).getDate())+" this month";
     }
     if(t.includes("savings rate")||t.includes("saving rate")){
       const mult=chatPayFreq==="Weekly"?4.33:chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:2.17;
@@ -1073,7 +1087,47 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
         <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Spending Insights</div>
 
       </div>
-      <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>Deep dive into your spending patterns</div>
+      <div style={{fontSize:13,color:C.textLight,marginBottom:14}}>Deep dive into your spending patterns</div>
+
+      {/* Smart insight callouts — personalized to real data */}
+      {(()=>{
+        const cards=[];
+        const dom=now.getDate();const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+        const pace=thisTotal/Math.max(1,dom);
+        const projected=pace*dim;
+
+        // Projection vs income
+        if(ti>0&&projected>ti*1.1) cards.push({icon:"🔴",color:C.red,bg:C.redBg,title:"Overspend Alert",body:`At this pace you'll spend ${fmt(projected)} — ${fmt(projected-ti)} over your ${fmt(ti)} income this month.`});
+        else if(ti>0&&projected<ti*0.8) cards.push({icon:"🟢",color:C.green,bg:C.greenBg,title:"Great pace!",body:`Projected to spend ${fmt(projected)} this month — ${fmt(ti-projected)} under your income. Solid savings rate.`});
+
+        // Category spike vs last month
+        const bigSpike=catSorted.find(([cat,amt])=>{const last=lastCatMap[cat]||0;return last>0&&amt>last*1.5&&amt>50;});
+        if(bigSpike){const[cat,amt]=bigSpike;const last=lastCatMap[cat]||0;cards.push({icon:"📈",color:C.amber,bg:C.amberBg,title:`${cat} up ${(((amt-last)/last)*100).toFixed(0)}%`,body:`Spent ${fmt(amt)} on ${cat} vs ${fmt(last)} last month — ${fmt(amt-last)} more.`});}
+
+        // Budget over limit
+        const overBudget=budgetGoals.find(g=>{const spent=thisExp.filter(e=>e.category===g.category).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);return spent>parseFloat(g.limit||0);});
+        if(overBudget){const spent=thisExp.filter(e=>e.category===overBudget.category).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);cards.push({icon:"⚠️",color:C.red,bg:C.redBg,title:`${overBudget.category} over budget`,body:`${fmt(spent)} spent vs ${fmt(overBudget.limit)} limit — ${fmt(spent-parseFloat(overBudget.limit))} over.`});}
+
+        // Savings goal progress
+        const nearGoal=savingsGoals.find(g=>{const pct=(parseFloat(g.saved||0)/parseFloat(g.target||1))*100;return pct>=80&&pct<100;});
+        if(nearGoal){const pct=((parseFloat(nearGoal.saved||0)/parseFloat(nearGoal.target))*100).toFixed(0);const rem=parseFloat(nearGoal.target)-parseFloat(nearGoal.saved||0);cards.push({icon:"🎯",color:C.accent,bg:C.accentBg,title:`${nearGoal.name} almost done!`,body:`${pct}% there — only ${fmt(rem)} left to hit your ${fmt(nearGoal.target)} goal.`});}
+
+        if(!cards.length)return null;
+        return(
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+            {cards.slice(0,2).map((c,i)=>(
+              <div key={i} style={{background:c.bg,border:`1px solid ${c.color}33`,borderRadius:14,padding:"12px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
+                <span style={{fontSize:18,flexShrink:0}}>{c.icon}</span>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:c.color,marginBottom:2}}>{c.title}</div>
+                  <div style={{fontSize:12,color:c.color,opacity:.85,lineHeight:1.5}}>{c.body}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       <div style={{background:C.navy,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>This Month vs Last Month</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
@@ -5878,6 +5932,7 @@ function AppInner(){
     if(d.useCase==="couple"){setHousehold(h=>({...h,enabled:true,name:(d.name?d.name.split(" ")[0]+"'s Household":"Our Household"),members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10B981"}]}));}
     else if(d.useCase==="roommates"){setHousehold(h=>({...h,enabled:true,name:"Shared Household",members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"roommate",name:"Roommate",emoji:"🏠",color:"#D97706"}]}));}
     else if(d.useCase==="family"){setHousehold(h=>({...h,enabled:true,name:(d.name?d.name.split(" ")[0]+"'s Family":"Our Family"),members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10B981"}]}));}
+    else{setHousehold(h=>({...h,enabled:false}));} // "personal" — ensure household is off
 
     const hasTrading=parseFloat(d.income?.trading||0)>0;
     setSettings(p=>({...p,showTrading:hasTrading,showHealth:true,showSavings:true,showForecast:true}));
@@ -5921,22 +5976,16 @@ function AppInner(){
               </div>
             </div>
 
-            {isDemoMode&&expenses.length>0&&(()=>{
-              // Auto-hide after user has seen it 5+ times
-              const _dv=parseInt(localStorage.getItem("fv_demo_views")||"0")+1;
-              localStorage.setItem("fv_demo_views",String(_dv));
-              if(_dv>5)return null;
-              return(
-                <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(217,119,6,.12)",border:"1px solid rgba(217,119,6,.3)",borderRadius:99,padding:"5px 10px 5px 8px",marginBottom:10,width:"fit-content"}}>
-                  <span style={{fontSize:11}}>🧪</span>
-                  <span style={{fontSize:11,fontWeight:700,color:C.amber}}>Demo data</span>
-                  <button onClick={()=>setConfirm({title:"Exit Demo",message:"Clear all demo data and start fresh.",onConfirm:()=>{exitDemo();setConfirm(null);},danger:false})}
-                    style={{background:"rgba(217,119,6,.15)",border:"none",borderRadius:99,padding:"2px 8px",color:C.amber,fontWeight:700,fontSize:10,cursor:"pointer",lineHeight:1.5}}>
-                    Exit
-                  </button>
-                </div>
-              );
-            })()}
+            {isDemoMode&&expenses.length>0&&(
+              <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(217,119,6,.1)",border:"1px solid rgba(217,119,6,.25)",borderRadius:99,padding:"4px 10px 4px 8px",marginBottom:10,width:"fit-content"}}>
+                <span style={{fontSize:10}}>🧪</span>
+                <span style={{fontSize:10,fontWeight:600,color:C.amber,letterSpacing:.1}}>Demo</span>
+                <button onClick={()=>setConfirm({title:"Exit Demo",message:"Clear all demo data and start fresh.",onConfirm:()=>{exitDemo();setConfirm(null);},danger:false})}
+                  style={{background:"rgba(217,119,6,.15)",border:"none",borderRadius:99,padding:"1px 7px",color:C.amber,fontWeight:700,fontSize:9,cursor:"pointer",lineHeight:1.6}}>
+                  Exit
+                </button>
+              </div>
+            )}
 
             {overdue.length>0&&<div onClick={()=>navTo("bills")} style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",gap:8,alignItems:"center",cursor:"pointer"}}><AlertCircle size={15} color={C.red} style={{flexShrink:0}}/><div style={{flex:1,fontSize:13,color:C.red,fontWeight:600}}>{overdue.length} bill{overdue.length!==1?"s":""} overdue — tap to resolve</div><ChevronRight size={13} color={C.red}/></div>}
 
