@@ -209,23 +209,30 @@ async function sg(k) {
   } catch { return null; }
 }
 
+// Debounce buffer: {key -> {value, timer}}
+const _ssBuffer = {};
+async function _flushKey(uid, bare, v) {
+  try {
+    await supaFetch("/rest/v1/user_data", {
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates" },
+      body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: new Date().toISOString() })
+    });
+    localStorage.setItem("fv_last_sync", String(Date.now()));
+  } catch {}
+}
 async function ss(k, v) {
   const uid = _getUserId();
   const bare = k.replace("fv6:","");
-  // Always write localStorage (offline / fast reads)
+  // Always write localStorage immediately (instant, works offline)
   try { localStorage.setItem(getScope()+bare, JSON.stringify(v)); } catch {}
-  // Also write to Supabase when logged in
+  // Debounce Supabase writes: wait 1.5s after last change before posting
   if (uid) {
-    try {
-      await supaFetch("/rest/v1/user_data", {
-        method: "POST",
-        headers: {
-          "Prefer": "resolution=merge-duplicates",
-        },
-        body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: new Date().toISOString() })
-      });
-      localStorage.setItem("fv_last_sync", String(Date.now()));
-    } catch {}
+    if (_ssBuffer[bare]?.timer) clearTimeout(_ssBuffer[bare].timer);
+    _ssBuffer[bare] = {
+      value: v,
+      timer: setTimeout(() => _flushKey(uid, bare, _ssBuffer[bare].value), 1500)
+    };
   }
 }
 
@@ -5167,8 +5174,26 @@ function AppInner(){
   function handleAuth(sess){
     setAuthSession(sess);
     localStorage.setItem("fv_session",JSON.stringify(sess));
-    // Migrate legacy unscoped keys to scoped keys
-    try{const uid=sess?.user?.id?.slice(0,8);if(uid){const scope="fv6_"+uid+":";["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName"].forEach(k=>{const legacy=localStorage.getItem("fv6:"+k);const scoped=localStorage.getItem(scope+k);if(legacy&&!scoped)localStorage.setItem(scope+k,legacy);});}}catch{}
+    // Only migrate legacy local data if this looks like a returning user
+    // (don't pollute a brand-new account with data from a previous offline session)
+    try{
+      const uid=sess?.user?.id?.slice(0,8);
+      if(uid){
+        const scope="fv6_"+uid+":";
+        const prevSession=localStorage.getItem("fv_session");
+        const hasLocalExpenses=localStorage.getItem("fv6:expenses");
+        const hasScoped=localStorage.getItem(scope+"expenses");
+        // Only migrate if: had a previous session OR has scoped data already
+        // Don't migrate raw device data into a fresh account
+        if((prevSession||hasScoped)&&hasLocalExpenses&&!hasScoped){
+          ["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName"].forEach(k=>{
+            const legacy=localStorage.getItem("fv6:"+k);
+            const scoped=localStorage.getItem(scope+k);
+            if(legacy&&!scoped)localStorage.setItem(scope+k,legacy);
+          });
+        }
+      }
+    }catch{}
     // Pull fresh data from Supabase after login
     loadFromSupabase(sess);
   }
@@ -5211,6 +5236,7 @@ function AppInner(){
       try { if (map["profSub"])  setProfSub(map["profSub"]); } catch {}
       try { if (map["merchantCats"]) window._merchantCats = map["merchantCats"]; } catch {}
       try { if (map["accountRates"]) setAccountRates(prev => ({...prev,...map["accountRates"]})); } catch {}
+      try { if (map["onboarded"]) { localStorage.setItem("fv_onboarded","1"); setOnboarded(true); } } catch {}
       // Mirror Supabase data into scoped localStorage for offline use
       const scope = "fv6_" + uid.slice(0,8) + ":";
       res.data.forEach(row => {
@@ -5302,6 +5328,7 @@ function AppInner(){
         try{if(gn)setGreetName(gn);}catch{}
         try{if(mc)window._merchantCats=mc;}catch{}
         try{const ar=await sg("fv6:accountRates");if(ar)setAccountRates(prev=>({...prev,...ar}));}catch{}
+        try{const ob=await sg("fv6:onboarded");if(ob){localStorage.setItem("fv_onboarded","1");setOnboarded(true);}}catch{}
       }catch(e){console.error("Load error",e);}
       setReady(true);
     })();
@@ -5475,6 +5502,18 @@ function AppInner(){
 
   useEffect(()=>{
     if(!ready)return;
+    // Clean up stale bill notifications first — remove any notif for a bill
+    // that no longer exists or has been marked as paid
+    setNotifs(prev=>{
+      const billIds=new Set(bills.filter(b=>!b.paid).map(b=>b.id));
+      return prev.filter(n=>{
+        if(n.id.startsWith('ov_')||n.id.startsWith('due3_')){
+          const billId=n.id.replace('ov_','').replace('due3_','');
+          return billIds.has(billId);
+        }
+        return true; // keep all other notification types
+      });
+    });
     bills.forEach(b=>{if(b.paid)return;const d=dueIn(b.dueDate);if(d<0)pushNotif('ov_'+b.id,'🚨 Overdue: '+b.name,fmt(b.amount)+' was due '+Math.abs(d)+'d ago','danger');else if(d<=3)pushNotif('due3_'+b.id,'⚠️ Due soon: '+b.name,fmt(b.amount)+' due in '+d+' day'+(d!==1?'s':''),'warning');});
     const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0');
     budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
@@ -5596,6 +5635,7 @@ function AppInner(){
     setSettings(p=>({...p,showTrading:true,showHealth:true,showSavings:true,showForecast:true,
       quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]}));
     try{localStorage.setItem("fv_onboarded","1");localStorage.setItem("fv_demo","1");}catch{}
+    ss("fv6:onboarded",true);
     setIsDemoMode(true);setOnboarded(true);
   }
   useEffect(()=>{window._loadDemo=loadDemo;return()=>{delete window._loadDemo;};},[]);
@@ -5626,6 +5666,7 @@ function AppInner(){
     const hasTrading=parseFloat(d.income?.trading||0)>0;
     setSettings(p=>({...p,showTrading:hasTrading,showHealth:true,showSavings:true,showForecast:true}));
     try{localStorage.setItem("fv_onboarded","1");}catch{}
+    ss("fv6:onboarded",true);
     setOnboarded(true);
   }}/></>);
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
