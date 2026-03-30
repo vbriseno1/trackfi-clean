@@ -884,6 +884,28 @@ Ask me anything:\
       const grade=overall>=9?"A+":overall>=8?"A":overall>=7?"B":overall>=6?"C":overall>=5?"D":"F";
       return"\u2764\ufe0f Health Score: "+overall+"/10 ("+grade+")\n\u2022 Savings rate: "+sr.toFixed(0)+"%\n\u2022 Emergency fund: "+ef.toFixed(1)+" months\n\u2022 Debt: "+(td===0?"Debt free \u2705":fmt(td)+" total")+"\nOpen Health Score tab for full breakdown.";
     }
+    if(t.includes("compare")||t.includes("vs last")||t.includes("last month")&&t.includes("vs")){
+      if(!_prevTotal)return"No data from last month yet.";
+      const diff=_thisTotal-_prevTotal;const pct=Math.abs(diff/_prevTotal*100).toFixed(0);
+      const top=_topCats[0];
+      return(diff>0?"📈 Up "+pct+"% vs last month — spending "+fmt(diff)+" more.":"📉 Down "+pct+"% vs last month — "+fmt(Math.abs(diff))+" less. Nice!")+(top?"
+Biggest category: "+top[0]+" "+fmt(top[1]):"");
+    }
+    if(t.includes("on track")||t.includes("pace")||t.includes("budget for")){
+      const mult=chatPayFreq==="Weekly"?4.33:chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:2.17;
+      const monthly=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0));
+      if(!monthly)return"Set your income first so I can check your pace.";
+      const dom=new Date().getDate();const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+      const pace=(monthly/dim)*dom;const diff=_thisTotal-pace;
+      return diff<=0?"✅ On track — "+fmt(Math.abs(diff))+" under pace for the month.":"⚠️ "+fmt(diff)+" over pace. Projected: "+fmt((_thisTotal/Math.max(1,dom))*dim)+" vs "+fmt(monthly)+" income.";
+    }
+    if((t.includes("where")&&(t.includes("spend")||t.includes("most")))||(t.includes("what")&&t.includes("most"))){
+      if(!_topCats.length)return"No spending logged yet this month.";
+      return"💸 Where you're spending most:
+"+_topCats.slice(0,5).map(([c,a],i)=>(i+1)+". "+c+": "+fmt(a)).join("
+")+"
+Total: "+fmt(_thisTotal);
+    }
     if(t.includes("help")||t.includes("what can")||t.includes("commands")||t.includes("how do")){
       return"\ud83d\udcac I can help with:\n\u2022 \"lunch 12\", \"groceries 85\" \u2192 log expense\n\u2022 \"rent 1200 due 28th\" \u2192 add bill\n\u2022 \"checking 3200\" \u2192 update balance\n\u2022 \"can I afford $200?\"\n\u2022 \"how am I doing?\"\n\u2022 \"what did I spend on groceries?\"\n\u2022 \"when\'s my next payday?\"\n\u2022 \"what are my goals?\"\n\u2022 \"my income\" or \"my debt\"\n\u2022 \"undo\" \u2192 undo last entry";
     }
@@ -3846,8 +3868,9 @@ function TaxView({expenses,income,trades,shifts,appName}){
 }
 
 
-function SubsView({detectedSubs,expenses}){
-  const[dismissed,setDismissed]=useState([]);
+function SubsView({detectedSubs,expenses,showToast}){
+  const[dismissed,setDismissed]=useState(()=>{try{return JSON.parse(localStorage.getItem("fv_sub_dismissed")||"[]");}catch{return[];}});
+  useEffect(()=>{try{localStorage.setItem("fv_sub_dismissed",JSON.stringify(dismissed));}catch{}},[dismissed]);
   const active=detectedSubs.filter(s=>!dismissed.includes(s.name));
   const monthly=active.filter(s=>s.interval==="Monthly");
   const other=active.filter(s=>s.interval!=="Monthly");
@@ -3859,7 +3882,10 @@ function SubsView({detectedSubs,expenses}){
   return(
     <div className="fu">
       <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3,marginBottom:4}}>Subscriptions</div>
-      <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>Auto-detected from your expenses</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontSize:13,color:C.textLight}}>Auto-detected from your expenses</div>
+        {dismissed.length>0&&<button onClick={()=>{setDismissed([]);localStorage.removeItem("fv_sub_dismissed");}} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.accent,fontWeight:600,padding:0}}>Restore {dismissed.length} hidden</button>}
+      </div>
       {active.length===0&&<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:36,marginBottom:12}}>🔍</div><div style={{fontSize:14,fontWeight:600,color:C.text,marginBottom:4}}>No subscriptions detected yet</div><div style={{fontSize:13,color:C.textLight}}>Add more expenses and Trackfi will find recurring patterns.</div></div>}
       {active.length>0&&<>
         {/* summary card */}
@@ -3899,7 +3925,7 @@ function SubsView({detectedSubs,expenses}){
               <div style={{fontFamily:MF,fontWeight:700,fontSize:15,color:C.red}}>{fmt(s.amount)}</div>
               <div style={{fontSize:10,color:C.textLight}}>per month</div>
             </div>
-            <button onClick={()=>setDismissed(p=>[...p,s.name])} style={{background:'none',border:'none',cursor:'pointer',color:C.textLight,padding:4,display:'flex'}}><X size={14}/></button>
+            <button onClick={()=>{setDismissed(p=>[...p,s.name]);showToast&&showToast(s.name+' hidden');}} style={{background:'none',border:'none',cursor:'pointer',color:C.textLight,padding:4,display:'flex'}}><X size={14}/></button>
           </div>))}
         </div>}
         {other.length>0&&<div>
@@ -5797,7 +5823,7 @@ function AppInner(){
       const now60=Date.now()-60000;
       const isDupe=expenses.some(e=>e.name?.toLowerCase()===form.name.toLowerCase()&&parseFloat(e.amount)===amt&&e.id>now60);
       if(isDupe&&!form.forceAdd){ff("forceAdd",true);showToast("Already logged — tap again to add anyway","error");return;}
-      setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:String(amt),category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[]}]);try{const mc=window._merchantCats||{};mc[form.name.toLowerCase().trim()]=form.category||"Misc";window._merchantCats=mc;ss("fv6:merchantCats",mc);}catch{}
+      setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:String(amt),category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[],owner:form.owner||"shared"}]);try{const mc=window._merchantCats||{};mc[form.name.toLowerCase().trim()]=form.category||"Misc";window._merchantCats=mc;ss("fv6:merchantCats",mc);}catch{}
       showToast("✓ "+form.name+" — "+fmt(amt));try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
     }else if(modal==="bill"){
@@ -6569,7 +6595,7 @@ function AppInner(){
         {tab==="trend"&&<TrendView balHist={balHist} accounts={accounts} expenses={expenses} onNavigate={navTo}/>}
         {tab==="statement"&&<StatementView expenses={expenses} bills={bills} income={income} accounts={accounts} debts={debts} trades={trades} appName={appName} categories={categories} onAdd={()=>om("expense")}/>}
         {tab==="search"&&<SearchView expenses={expenses} bills={bills} debts={debts} trades={trades} categories={categories} setEditItem={setEditItem} onNavigate={navTo}/>}
-        {tab==="subscriptions"&&<SubsView detectedSubs={detectedSubs} expenses={expenses}/>}
+        {tab==="subscriptions"&&<SubsView detectedSubs={detectedSubs} expenses={expenses} showToast={showToast}/>}
         {tab==="insights"&&<InsightsView expenses={expenses} income={income} bills={bills} debts={debts} budgetGoals={budgetGoals} savingsGoals={savingsGoals}/>}
         {tab==="paycheck"&&<PaycheckView bills={bills} income={income} setIncome={setIncome} expenses={expenses} accounts={accounts} budgetGoals={budgetGoals} onAdd={()=>om("expense")}/>}
         {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} onNavigate={navTo}/>}
@@ -6578,7 +6604,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});setGreetName("");setCats(DEF_CATS);setSettings({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]});setTradingAccount({deposit:"",balance:""});const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
