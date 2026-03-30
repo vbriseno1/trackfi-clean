@@ -1907,7 +1907,21 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       </div>}
       {soonAmt>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"11px 15px",marginBottom:14,fontSize:13,color:C.amber,fontWeight:500}}>⚠️ <strong>{fmt(soonAmt)}</strong> due in the next 7 days</div>}
       {bills.length===0&&<Empty text='No bills yet. Use AI Logger — type "rent 1200 due 28th"' icon={CalendarClock}/>}
-      {bills.sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate)).map(b=>{
+      {bills.length>0&&(()=>{
+        const[billTab,setBillTab]=React.useState("upcoming");
+        const upcomingBills=[...bills.filter(b=>!b.paid)].sort((a,b2)=>new Date(a.dueDate)-new Date(b2.dueDate));
+        const paidBills=[...bills.filter(b=>b.paid)].sort((a,b2)=>(b2.paidDate||b2.dueDate||"").localeCompare(a.paidDate||a.dueDate||""));
+        return(
+          <div>
+            <div style={{display:"flex",background:C.borderLight,borderRadius:10,padding:3,marginBottom:14}}>
+              {[["upcoming","Upcoming ("+upcomingBills.length+")"],["history","Paid History ("+paidBills.length+")"]].map(([id,l])=>(
+                <button key={id} onClick={()=>setBillTab(id)} style={{flex:1,padding:"7px 0",borderRadius:8,border:"none",background:billTab===id?C.surface:"transparent",color:billTab===id?C.accent:C.textLight,fontWeight:billTab===id?700:500,fontSize:13,cursor:"pointer"}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {billTab==="upcoming"&&upcomingBills.length===0&&<div style={{textAlign:"center",padding:"20px 0",fontSize:13,color:C.textLight}}>🎉 All bills paid!</div>}
+            {(billTab==="upcoming"?upcomingBills:paidBills).map(b=>{
         const d=dueIn(b.dueDate);
         const uc=b.paid?C.green:d<0?C.red:d<=3?C.red:d<=7?C.amber:C.textLight;
         const ul=b.paid?"Paid ✓":d<0?Math.abs(d)+"d overdue":d===0?"Due today!":d<=7?"Due in "+d+"d":"Due "+fmtDate(b.dueDate);
@@ -1930,6 +1944,9 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
           </div>
         );
       })}
+          </div>
+        );
+      })()}
     {bills.length>3&&(()=>{
       const now3=new Date();
       const last6=Array.from({length:6},(_,i)=>{const d=new Date(now3.getFullYear(),now3.getMonth()-5+i,1);const ms=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');const paid=bills.filter(b=>b.dueDate?.startsWith(ms)&&b.paid).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);const total=bills.filter(b=>b.dueDate?.startsWith(ms)).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);return{month:FULL_MOS[d.getMonth()].slice(0,3),paid,total,isCurrent:i===5};});
@@ -3199,6 +3216,72 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
 
     {/* ── Account ────────────────────────────────── */}
     <div style={{paddingTop:4,borderTop:`1px solid ${C.border}`}}>
+      {userEmail&&(()=>{
+        const[showEmailChange,setShowEmailChange]=React.useState(false);
+        const[showPwChange,setShowPwChange]=React.useState(false);
+        const[newEmail,setNewEmail]=React.useState("");
+        const[newPw1,setNewPw1]=React.useState("");const[newPw2,setNewPw2]=React.useState("");
+        const[acctMsg,setAcctMsg]=React.useState("");const[acctLoading,setAcctLoading]=React.useState(false);
+        return(
+          <div style={{marginBottom:8}}>
+            {/* Account actions row */}
+            <div style={{display:"flex",gap:8,marginBottom:8}}>
+              <button className="ba" onClick={()=>{setShowEmailChange(e=>!e);setShowPwChange(false);setAcctMsg("");}}
+                style={{flex:1,padding:"10px 0",borderRadius:12,border:`1.5px solid ${C.accentMid}`,background:showEmailChange?C.accentBg:"transparent",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                ✉️ Change Email
+              </button>
+              <button className="ba" onClick={()=>{setShowPwChange(p=>!p);setShowEmailChange(false);setAcctMsg("");}}
+                style={{flex:1,padding:"10px 0",borderRadius:12,border:`1.5px solid ${C.border}`,background:showPwChange?C.surfaceAlt:"transparent",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                🔑 Change Password
+              </button>
+            </div>
+            {/* Change email form */}
+            {showEmailChange&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:14,marginBottom:8}}>
+              <div style={{fontSize:12,color:C.textLight,marginBottom:10}}>Current: <strong>{userEmail}</strong></div>
+              <input type="email" value={newEmail} onChange={e=>{setNewEmail(e.target.value);setAcctMsg("");}} placeholder="New email address"
+                style={{width:"100%",background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box",marginBottom:8}}/>
+              {acctMsg&&<div style={{fontSize:12,color:acctMsg.includes("✓")?C.green:C.red,marginBottom:8}}>{acctMsg}</div>}
+              <button onClick={async()=>{
+                if(!newEmail.includes("@")){setAcctMsg("Enter a valid email.");return;}
+                setAcctLoading(true);
+                try{
+                  const r=await supaFetch("/auth/v1/user",{method:"PUT",body:JSON.stringify({email:newEmail})});
+                  if(r.error){setAcctMsg("Failed: "+(r.error?.message||"try again"));setAcctLoading(false);return;}
+                  setAcctMsg("✓ Confirmation sent to "+newEmail+" — check your inbox.");
+                  setNewEmail("");
+                }catch{setAcctMsg("Network error.");}
+                setAcctLoading(false);
+              }} disabled={acctLoading||!newEmail}
+                style={{width:"100%",padding:"10px",borderRadius:10,border:"none",background:acctLoading||!newEmail?C.borderLight:C.accent,color:acctLoading||!newEmail?C.textFaint:"#fff",fontWeight:700,fontSize:13,cursor:acctLoading||!newEmail?"default":"pointer"}}>
+                {acctLoading?"Sending...":"Send Confirmation"}
+              </button>
+            </div>}
+            {/* Change password form */}
+            {showPwChange&&<div style={{background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:8}}>
+              <input type="password" value={newPw1} onChange={e=>{setNewPw1(e.target.value);setAcctMsg("");}} placeholder="New password (min 6 chars)"
+                style={{width:"100%",background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box",marginBottom:8}}/>
+              <input type="password" value={newPw2} onChange={e=>{setNewPw2(e.target.value);setAcctMsg("");}} placeholder="Confirm new password"
+                style={{width:"100%",background:"#fff",border:`1.5px solid ${newPw2&&newPw1!==newPw2?C.red:C.border}`,borderRadius:10,padding:"10px 12px",fontSize:14,color:C.text,outline:"none",boxSizing:"border-box",marginBottom:8}}/>
+              {acctMsg&&<div style={{fontSize:12,color:acctMsg.includes("✓")?C.green:C.red,marginBottom:8}}>{acctMsg}</div>}
+              <button onClick={async()=>{
+                if(newPw1.length<6){setAcctMsg("Must be at least 6 characters.");return;}
+                if(newPw1!==newPw2){setAcctMsg("Passwords don't match.");return;}
+                setAcctLoading(true);
+                try{
+                  const r=await supaFetch("/auth/v1/user",{method:"PUT",body:JSON.stringify({password:newPw1})});
+                  if(r.error){setAcctMsg("Failed: "+(r.error?.message||"try again"));setAcctLoading(false);return;}
+                  setAcctMsg("✓ Password updated!");setNewPw1("");setNewPw2("");
+                  setTimeout(()=>{setShowPwChange(false);setAcctMsg("");},2000);
+                }catch{setAcctMsg("Network error.");}
+                setAcctLoading(false);
+              }} disabled={acctLoading||newPw1.length<6||newPw1!==newPw2}
+                style={{width:"100%",padding:"10px",borderRadius:10,border:"none",background:acctLoading||newPw1.length<6||newPw1!==newPw2?C.borderLight:C.green,color:acctLoading||newPw1.length<6||newPw1!==newPw2?C.textFaint:"#fff",fontWeight:700,fontSize:13,cursor:acctLoading||newPw1.length<6||newPw1!==newPw2?"default":"pointer"}}>
+                {acctLoading?"Updating...":"Update Password"}
+              </button>
+            </div>}
+          </div>
+        );
+      })()}
       {onSignOut&&<button className="ba" onClick={()=>onSignOut()} style={{width:"100%",marginBottom:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}
       {onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}
     </div>
@@ -3889,7 +3972,7 @@ function AuthScreen({onAuth,onSkip}){
         <div style={{marginBottom:err?8:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Password</div>
-            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}await supaFetch("/auth/v1/recover",{method:"POST",body:JSON.stringify({email:email.trim()})});setErr("Reset link sent to "+email+" — check inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot?</button>}
+            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}const redirectTo=window.location.origin+window.location.pathname;await fetch(SUPA_URL+"/auth/v1/recover",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},body:JSON.stringify({email:email.trim(),options:{emailRedirectTo:redirectTo}})});setErr("✓ Reset link sent to "+email+" — check your inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot?</button>}
           </div>
           <div style={{position:"relative"}}>
             <input id="pw-inp" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder={mode==="login"?"Your password":"Min. 6 characters"} style={{width:"100%",background:"#f8f9fc",border:`1.5px solid ${err&&(err.toLowerCase().includes("password")||err.toLowerCase().includes("6 char"))?C.red:C.border}`,borderRadius:12,padding:"12px 44px 12px 14px",fontSize:15,color:C.text,outline:"none",boxSizing:"border-box"}} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/>
@@ -5139,6 +5222,29 @@ function AppInner(){
   const[authLoading,setAuthLoading]=useState(true);
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const authToken=authSession?.access_token||null;
+  // Background token refresh — Supabase tokens expire after 1hr, refresh every 45min
+  useEffect(()=>{
+    if(!authSession?.refresh_token)return;
+    const doRefresh=async()=>{
+      try{
+        const s=JSON.parse(localStorage.getItem("fv_session")||"null");
+        if(!s?.refresh_token)return;
+        const res=await fetch(SUPA_URL+"/auth/v1/token?grant_type=refresh_token",{
+          method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
+          body:JSON.stringify({refresh_token:s.refresh_token})
+        });
+        const r=await res.json();
+        if(r.access_token){
+          const newSess={...s,...r};
+          localStorage.setItem("fv_session",JSON.stringify(newSess));
+          setAuthSession(newSess);
+        }
+      }catch{}
+    };
+    const iv=setInterval(doRefresh,45*60*1000);
+    return()=>clearInterval(iv);
+  },[authSession?.refresh_token]);
+
   // Auto-sync when user returns to the app (tab focus, phone unlock, etc.)
   useEffect(()=>{
     function onFocus(){
@@ -5170,15 +5276,19 @@ function AppInner(){
       const type = params.get("type"); // "signup" or "recovery"
       if(accessToken) {
         const sess = {access_token: accessToken, refresh_token: refreshToken, token_type:"bearer"};
-        // Fetch user info to complete the session
         supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+accessToken}}).then(u=>{
           const user = u?.data || u;
           if(user?.id) {
             const fullSess = {...sess, user};
             localStorage.setItem("fv_session", JSON.stringify(fullSess));
-            handleAuth(fullSess);
+            if(type==="recovery") {
+              // Password reset flow — sign in but show change-password prompt
+              setAuthSession(fullSess);
+              localStorage.setItem("fv_pw_reset","1");
+            } else {
+              handleAuth(fullSess);
+            }
           }
-          // Clean up the URL so tokens don't stay in the address bar
           window.history.replaceState(null,"",window.location.pathname);
           setAuthLoading(false);
         }).catch(()=>{window.history.replaceState(null,"",window.location.pathname);setAuthLoading(false);});
@@ -5719,9 +5829,45 @@ function AppInner(){
   }
 
   if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
+
+  // Password reset flow — show set-new-password screen
+  const[pwResetMode]=React.useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
+  const[newPw,setNewPw]=React.useState("");const[pwMsg,setPwMsg]=React.useState("");const[pwLoading,setPwLoading]=React.useState(false);
+  if(pwResetMode&&authSession){return(
+    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 55%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <style>{CSS}</style>
+      <div style={{background:"rgba(255,255,255,.97)",borderRadius:24,width:"100%",maxWidth:400,padding:"32px 28px",boxShadow:"0 32px 80px rgba(0,0,0,.3)"}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{fontSize:36,marginBottom:8}}>🔐</div>
+          <div style={{fontFamily:MF,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>Set New Password</div>
+          <div style={{fontSize:13,color:C.textLight}}>Choose something strong</div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>New Password</div>
+          <input type="password" value={newPw} onChange={e=>{setNewPw(e.target.value);setPwMsg("");}} placeholder="Min. 6 characters"
+            style={{width:"100%",background:"#f8f9fc",border:`1.5px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.text,outline:"none",boxSizing:"border-box"}}/>
+        </div>
+        {pwMsg&&<div style={{background:pwMsg.includes("✓")?C.greenBg:C.redBg,border:`1px solid ${pwMsg.includes("✓")?C.greenMid:C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:pwMsg.includes("✓")?C.green:C.red,marginBottom:14}}>{pwMsg}</div>}
+        <button onClick={async()=>{
+          if(newPw.length<6){setPwMsg("Password must be at least 6 characters.");return;}
+          setPwLoading(true);
+          try{
+            const r=await supaFetch("/auth/v1/user",{method:"PUT",body:JSON.stringify({password:newPw})});
+            if(r.error){setPwMsg("Failed — try again.");setPwLoading(false);return;}
+            localStorage.removeItem("fv_pw_reset");
+            setPwMsg("✓ Password updated! Signing you in...");
+            setTimeout(()=>handleAuth(authSession),1200);
+          }catch{setPwMsg("Network error — try again.");setPwLoading(false);}
+        }} disabled={pwLoading||newPw.length<6}
+          style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:pwLoading||newPw.length<6?C.borderLight:`linear-gradient(135deg,${C.accent},${C.teal})`,color:pwLoading||newPw.length<6?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:pwLoading||newPw.length<6?"default":"pointer"}}>
+          {pwLoading?"Updating...":"Set New Password →"}
+        </button>
+      </div>
+    </div>
+  );}
   if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip}/>;
   if(!ready)return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.navyMid} 100%)`,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:20}}>💰 Trackfi</div><div style={{width:36,height:36,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading your data...</div></div></div>);
-  if(!onboarded)return(<><style>{CSS}</style><OnboardingWizard onComplete={async d=>{
+  if(!onboarded&&ready)return(<><style>{CSS}</style><OnboardingWizard onComplete={async d=>{
     if(d.name)setGreetName(d.name);
     setAppName("Trackfi");
     if(d.profCategory)setProfCategory(d.profCategory);if(d.profSub)setProfSub(d.profSub);
