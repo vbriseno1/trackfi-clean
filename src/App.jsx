@@ -194,10 +194,8 @@ async function sg(k) {
   const bare = k.replace("fv6:","");
   if (uid) {
     try {
-      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&key=eq.${bare}&select=value`, {
-        headers: {"Accept":"application/vnd.pgrst.object+json"}
-      });
-      if (res?.data?.value !== undefined) return res.data.value;
+      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&key=eq.${bare}&select=value`);
+      if (Array.isArray(res?.data) && res.data.length > 0) return res.data[0].value;
     } catch {}
   }
   // localStorage fallback
@@ -909,17 +907,20 @@ Ask me anything:\
 }
 
 function SearchView({expenses,bills,debts,trades,categories,setEditItem,onNavigate}){
-  const[q,setQ]=useState("");const[filter,setFilter]=useState("all");
+  const[q,setQ]=useState("");
+  const[dq,setDq]=useState("");
+  const _sqRef=React.useRef(null);
+  React.useEffect(()=>{clearTimeout(_sqRef.current);_sqRef.current=setTimeout(()=>setDq(q),200);},[q]);const[filter,setFilter]=useState("all");
   const results=useMemo(()=>{
-    if(!q.trim())return[];
-    const t=q.toLowerCase();
+    if(!dq.trim())return[];
+    const t=dq.toLowerCase();
     const res=[];
     if(filter==="all"||filter==="expenses")expenses.forEach(e=>{if(e.name?.toLowerCase().includes(t)||e.category?.toLowerCase().includes(t)||e.notes?.toLowerCase().includes(t))res.push({type:"expense",data:e,title:e.name,sub:e.date+" - "+e.category,val:"-"+fmt(e.amount),color:C.red,icon:"💸"});});
     if(filter==="all"||filter==="bills")bills.forEach(b=>{if(b.name?.toLowerCase().includes(t))res.push({type:"bill",data:b,title:b.name,sub:"Due "+fmtDate(b.dueDate)+(b.paid?" - Paid":""),val:fmt(b.amount),color:b.paid?C.green:C.amber,icon:"📅"});});
     if(filter==="all"||filter==="debts")debts.forEach(d=>{if(d.name?.toLowerCase().includes(t))res.push({type:"debt",data:d,title:d.name,sub:(d.type||"Debt")+" - "+d.rate+"%APR",val:fmt(d.balance),color:C.red,icon:"💳"});});
     if(filter==="all"||filter==="trades")trades.forEach(t2=>{if(t2.symbol?.toLowerCase().includes(t)||t2.note?.toLowerCase().includes(t))res.push({type:"trade",data:t2,title:t2.symbol+" "+t2.side,sub:t2.date+(t2.note?" - "+t2.note:""),val:(parseFloat(t2.pnl)>=0?"+":"")+fmt(t2.pnl),color:parseFloat(t2.pnl)>=0?C.green:C.red,icon:parseFloat(t2.pnl)>=0?"📈":"📉"});});
     return res.slice(0,50);
-  },[q,filter,expenses,bills,debts,trades]);
+  },[dq,filter,expenses,bills,debts,trades]);
   return(
     <div className="fu">
       <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4,letterSpacing:-.3}}>Search</div>
@@ -5055,7 +5056,7 @@ function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGo
   // ── REPORT 4: Raw data CSV (for accountant / spreadsheet) ─────────────────
   function exportRawCSV(){
     const hdr=["Date","Description","Category","Amount","Type","Notes","Owner"];
-    const expRows=expenses.sort((a,b)=>b.date?.localeCompare(a.date)).map(e=>[
+    const expRows=[...expenses].sort((a,b)=>b.date?.localeCompare(a.date)).map(e=>[
       e.date,(e.name||"").replace(/,/g," "),e.category||"","-"+parseFloat(e.amount||0).toFixed(2),"Expense",(e.notes||"").replace(/,/g," "),e.owner||"me"
     ]);
     const billRows=bills.filter(b=>b.paid).map(b=>[
@@ -5131,10 +5132,12 @@ function AppInner(){
         }
       }
     }
+    const onVis=()=>{if(!document.hidden)onFocus();};
     window.addEventListener("focus",onFocus);
-    document.addEventListener("visibilitychange",()=>{if(!document.hidden)onFocus();});
+    document.addEventListener("visibilitychange",onVis);
     return()=>{
       window.removeEventListener("focus",onFocus);
+      document.removeEventListener("visibilitychange",onVis);
     };
   },[authSession]);
 
@@ -5163,12 +5166,32 @@ function AppInner(){
         return;
       }
     }
-    // Normal boot: validate existing session
+    // Normal boot: validate + refresh existing session
     const s=JSON.parse(localStorage.getItem("fv_session")||"null");
     if(!s?.access_token){setAuthLoading(false);return;}
-    supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+s.access_token}}).then(u=>{
-      if(u?.data?.id||u?.id){setAuthSession(s);}else{localStorage.removeItem("fv_session");}
-      setAuthLoading(false);
+    // Try to refresh the token first (handles expired access tokens)
+    async function tryRefresh(session){
+      if(!session?.refresh_token) return session;
+      try{
+        const res=await fetch(SUPA_URL+"/auth/v1/token?grant_type=refresh_token",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
+          body:JSON.stringify({refresh_token:session.refresh_token})
+        });
+        const r=await res.json();
+        if(r.access_token){
+          const newSess={...session,...r};
+          localStorage.setItem("fv_session",JSON.stringify(newSess));
+          return newSess;
+        }
+      }catch{}
+      return session;
+    }
+    tryRefresh(s).then(sess=>{
+      return supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+sess.access_token}}).then(u=>{
+        if(u?.data?.id||u?.id){setAuthSession(sess);}else{localStorage.removeItem("fv_session");}
+        setAuthLoading(false);
+      });
     }).catch(()=>setAuthLoading(false));
   },[]);
   function handleAuth(sess){
@@ -5194,12 +5217,13 @@ function AppInner(){
         }
       }
     }catch{}
-    // Pull fresh data from Supabase after login
-    loadFromSupabase(sess);
+    // Pull fresh data from Supabase after login (delay slightly to let boot load finish)
+    setTimeout(()=>loadFromSupabase(sess), 800);
   }
   async function loadFromSupabase(sess) {
     const uid = sess?.user?.id;
     if (!uid) return;
+    setSyncing(true);
     try {
       const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&select=key,value`);
       if (!res?.data || !Array.isArray(res.data)) return;
@@ -5244,9 +5268,20 @@ function AppInner(){
       });
       localStorage.setItem("fv_last_sync", String(Date.now()));
     } catch(e) { console.error("loadFromSupabase error", e); }
+    finally { setSyncing(false); }
   }
   function handleSkip(){localStorage.setItem("fv_skip_auth","1");setSkipAuth(true);}
-  function handleSignOut(){if(authToken)supaFetch("/auth/v1/logout",{method:"POST"});setAuthSession(null);localStorage.removeItem("fv_session");localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}
+  function handleSignOut(){
+    // Flush any pending debounced writes before signing out
+    Object.entries(_ssBuffer).forEach(([bare,buf])=>{
+      if(buf.timer){clearTimeout(buf.timer);const uid=_getUserId();if(uid)_flushKey(uid,bare,buf.value);}
+    });
+    if(authToken)supaFetch("/auth/v1/logout",{method:"POST"});
+    setAuthSession(null);
+    localStorage.removeItem("fv_session");
+    localStorage.removeItem("fv_skip_auth");
+    setSkipAuth(false);
+  }
   const[ready,setReady]=useState(false);
   const[accounts,setAccounts]=useState({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});
   const[income,setIncome]=useState({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});
@@ -5302,8 +5337,22 @@ function AppInner(){
   useEffect(()=>{
     (async()=>{
       try{
+        // Bulk fetch all keys in one query when logged in (1 read vs 21)
+        const BOOT_KEYS=["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName","merchantCats","onboarded","accountRates"];
+        const uid_boot=_getUserId();
+        let _bulkMap={};
+        if(uid_boot){
+          try{
+            const bulk=await supaFetch(`/rest/v1/user_data?user_id=eq.${uid_boot}&select=key,value`);
+            if(Array.isArray(bulk?.data))bulk.data.forEach(r=>{_bulkMap[r.key]=r.value;});
+          }catch{}
+        }
+        async function _sg_boot(bare){
+          if(_bulkMap[bare]!==undefined)return _bulkMap[bare];
+          return sg("fv6:"+bare);
+        }
         const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName","fv6:merchantCats"];
-        const vals=await Promise.all(keys.map(k=>sg(k)));
+        const vals=await Promise.all(keys.map(k=>_sg_boot(k.replace("fv6:",""))));
         const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn,mc]=vals;
         try{if(exp&&exp.length)setExpenses(exp);}catch{}
         try{if(bll&&bll.length)setBills(bll);}catch{}
@@ -5327,14 +5376,14 @@ function AppInner(){
         try{if(an)setAppName(an);}catch{}
         try{if(gn)setGreetName(gn);}catch{}
         try{if(mc)window._merchantCats=mc;}catch{}
-        try{const ar=await sg("fv6:accountRates");if(ar)setAccountRates(prev=>({...prev,...ar}));}catch{}
-        try{const ob=await sg("fv6:onboarded");if(ob){localStorage.setItem("fv_onboarded","1");setOnboarded(true);}}catch{}
+        try{const ar=_bulkMap["accountRates"]||(await sg("fv6:accountRates"));if(ar)setAccountRates(prev=>({...prev,...ar}));}catch{}
+        try{const ob=_bulkMap["onboarded"]||(await sg("fv6:onboarded"));if(ob){localStorage.setItem("fv_onboarded","1");setOnboarded(true);}}catch{}
       }catch(e){console.error("Load error",e);}
       setReady(true);
     })();
   },[]);
 
-  useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;return[...prev,{date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),total:parseFloat(accounts.checking||0)+parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0)+parseFloat(accounts.investments||0)}].slice(-104);});},[accounts,ready]);
+  useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);return[...prev,_bh].slice(-104);});},[accounts,ready]);
   useEffect(()=>{if(ready)ss("fv6:income",income);},[income,ready]);
   useEffect(()=>{if(ready)ss("fv6:expenses",expenses);},[expenses,ready]);
   useEffect(()=>{if(ready)ss("fv6:bills",bills);},[bills,ready]);
@@ -6091,7 +6140,7 @@ function AppInner(){
                 <button onClick={()=>navTo("spend")} style={{fontSize:12,color:C.accent,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>See all</button>
               </div>
               {(()=>{const days=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);const ds=d.toISOString().split("T")[0];const amt=expenses.filter(e=>e.date===ds).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);return{d:ds,amt,day:["Su","Mo","Tu","We","Th","Fr","Sa"][d.getDay()]};});const mx=Math.max(...days.map(d=>d.amt))||1;const today3=new Date().toISOString().split("T")[0];return(<div style={{display:"flex",gap:3,alignItems:"flex-end",height:28,marginBottom:12}}>{days.map(({d,amt,day})=>{const h=Math.max(3,Math.round((amt/mx)*24));const isToday=d===today3;return(<div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><div style={{width:"100%",height:h,background:isToday?C.accent:amt>0?C.accentBg:C.borderLight,borderRadius:"2px 2px 0 0"}}/><div style={{fontSize:8,color:isToday?C.accent:C.textFaint,fontWeight:isToday?700:400}}>{day}</div></div>);})}</div>);})()}
-              {expenses.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,4).map(e=>{
+              {[...expenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,4).map(e=>{
                 const cat=categories.find(c=>c.name===e.category);
                 return(<div key={e.id} onClick={()=>setEditItem({type:"expense",data:e})} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
                   <div style={{width:34,height:34,borderRadius:9,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{cat?.icon||"💸"}</div>
@@ -6302,7 +6351,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings. This cannot be undone.",onConfirm:()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
