@@ -1323,6 +1323,9 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
     const spentG=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(_pvEnvMs)).reduce((a,e)=>a+(parseFloat(e.amount)||0),0);
     return s+(Math.max(0,lim-spentG)*Math.min(1,daysUntilPay/30));
   },0);
+  const[editSched,setEditSched]=useState(false);
+  const[localFreq,setLocalFreq]=useState(()=>income.payFrequency||"Biweekly");
+  const[localDate,setLocalDate]=useState(()=>income.lastPayDate||"");
   const safeToSpend=Math.max(0,checking+_pvOtherProRated-beforeTotal-projectedSpend-_pvEnvReserve-200);
   return(
     <div className="fu">
@@ -1331,9 +1334,6 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
         <button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Log Spending</button>
       </div>
       {(()=>{
-        const[editSched,setEditSched]=React.useState(false);
-        const[localFreq,setLocalFreq]=React.useState(payFreq);
-        const[localDate,setLocalDate]=React.useState(income.lastPayDate||"");
         return(<>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:editSched?10:16}}>
             <div style={{fontSize:13,color:C.textLight}}>
@@ -1878,6 +1878,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
     </div>
   );
 }function BillsView({bills,setBills,setEditItem,onAdd,showToast,household}){
+  const[billTab,setBillTab]=useState("upcoming");
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
   const unpaid=bills.filter(b=>!b.paid);
   const paid=bills.filter(b=>b.paid);
@@ -1908,7 +1909,6 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       {soonAmt>0&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"11px 15px",marginBottom:14,fontSize:13,color:C.amber,fontWeight:500}}>⚠️ <strong>{fmt(soonAmt)}</strong> due in the next 7 days</div>}
       {bills.length===0&&<Empty text='No bills yet. Use AI Logger — type "rent 1200 due 28th"' icon={CalendarClock}/>}
       {bills.length>0&&(()=>{
-        const[billTab,setBillTab]=React.useState("upcoming");
         const upcomingBills=[...bills.filter(b=>!b.paid)].sort((a,b2)=>new Date(a.dueDate)-new Date(b2.dueDate));
         const paidBills=[...bills.filter(b=>b.paid)].sort((a,b2)=>(b2.paidDate||b2.dueDate||"").localeCompare(a.paidDate||a.dueDate||""));
         return(
@@ -3086,6 +3086,11 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
 function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo}){
   const[nm,setNm]=useState(appName||"");
   const[showPIN,setShowPIN]=useState(false);
+  const[showEmailChange,setShowEmailChange]=useState(false);
+  const[showPwChange,setShowPwChange]=useState(false);
+  const[newEmail,setNewEmail]=useState("");
+  const[newPw1,setNewPw1]=useState("");const[newPw2,setNewPw2]=useState("");
+  const[acctMsg,setAcctMsg]=useState("");const[acctLoading,setAcctLoading]=useState(false);
 
   function exportData(){const d={exportedAt:new Date().toISOString(),appName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,version:"2.0"};const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;a.click();URL.revokeObjectURL(u);}
   async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(d.accounts)setAccounts(d.accounts);if(d.income)setIncome(d.income);if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);showToast&&showToast("✅ Data imported!");} catch(e){showToast&&showToast("❌ "+e.message,"error");}}
@@ -3217,11 +3222,6 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
     {/* ── Account ────────────────────────────────── */}
     <div style={{paddingTop:4,borderTop:`1px solid ${C.border}`}}>
       {userEmail&&(()=>{
-        const[showEmailChange,setShowEmailChange]=React.useState(false);
-        const[showPwChange,setShowPwChange]=React.useState(false);
-        const[newEmail,setNewEmail]=React.useState("");
-        const[newPw1,setNewPw1]=React.useState("");const[newPw2,setNewPw2]=React.useState("");
-        const[acctMsg,setAcctMsg]=React.useState("");const[acctLoading,setAcctLoading]=React.useState(false);
         return(
           <div style={{marginBottom:8}}>
             {/* Account actions row */}
@@ -5220,6 +5220,8 @@ function AppInner(){
   const canGoBack=tabHistory.length>0;
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
+  const[pwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
+  const[newPw,setNewPw]=useState("");const[pwMsg,setPwMsg]=useState("");const[pwLoading,setPwLoading]=useState(false);
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const authToken=authSession?.access_token||null;
   // Background token refresh — Supabase tokens expire after 1hr, refresh every 45min
@@ -5831,8 +5833,6 @@ function AppInner(){
   if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
 
   // Password reset flow — show set-new-password screen
-  const[pwResetMode]=React.useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
-  const[newPw,setNewPw]=React.useState("");const[pwMsg,setPwMsg]=React.useState("");const[pwLoading,setPwLoading]=React.useState(false);
   if(pwResetMode&&authSession){return(
     <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 55%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <style>{CSS}</style>
