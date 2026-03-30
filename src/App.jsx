@@ -1928,7 +1928,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         return(
           <div key={b.id} style={{marginBottom:8}}>
             <div className="rw" style={{display:"flex",alignItems:"center",gap:12,padding:"14px 14px",background:C.surface,border:`1.5px solid ${b.paid?C.border:d<0?C.redMid:d<=7?C.amberMid:C.border}`,borderRadius:14}}>
-              <button onClick={()=>{setBills(p=>p.map(x=>{if(x.id!==b.id)return x;const nowPaid=!x.paid;if(nowPaid)setTimeout(()=>showToast&&showToast("✓ Paid — "+x.name),0);if(nowPaid&&x.recurring&&x.recurring!=="One-time"){return{...x,paid:false,dueDate:(()=>{const d=new Date((x.dueDate||todayStr())+"T00:00:00");if(x.recurring==="Weekly"){d.setDate(d.getDate()+7);}else if(x.recurring==="Bi-weekly"){d.setDate(d.getDate()+14);}else if(x.recurring==="Quarterly"){d.setMonth(d.getMonth()+3);}else if(x.recurring==="Annual"){d.setFullYear(d.getFullYear()+1);}else{d.setMonth(d.getMonth()+1);}return d.toISOString().split("T")[0];})(),paidDate:todayStr()};}return{...x,paid:nowPaid};}));}} style={{background:"none",border:"none",cursor:"pointer",color:b.paid?C.green:C.border,padding:0,display:"flex",flexShrink:0}}>{b.paid?<CheckCircle2 size={22}/>:<Circle size={22}/>}</button>
+              <button onClick={()=>{setBills(p=>p.map(x=>{if(x.id!==b.id)return x;const nowPaid=!x.paid;if(nowPaid){setTimeout(()=>showToast&&showToast("✓ Paid — "+x.name),0);try{navigator.vibrate&&navigator.vibrate([30,10,30]);}catch{}}if(nowPaid&&x.recurring&&x.recurring!=="One-time"){return{...x,paid:false,dueDate:(()=>{const d=new Date((x.dueDate||todayStr())+"T00:00:00");if(x.recurring==="Weekly"){d.setDate(d.getDate()+7);}else if(x.recurring==="Bi-weekly"){d.setDate(d.getDate()+14);}else if(x.recurring==="Quarterly"){d.setMonth(d.getMonth()+3);}else if(x.recurring==="Annual"){d.setFullYear(d.getFullYear()+1);}else{d.setMonth(d.getMonth()+1);}return d.toISOString().split("T")[0];})(),paidDate:todayStr()};}return{...x,paid:nowPaid};}));}} style={{background:"none",border:"none",cursor:"pointer",color:b.paid?C.green:C.border,padding:0,display:"flex",flexShrink:0}}>{b.paid?<CheckCircle2 size={22}/>:<Circle size={22}/>}</button>
               <div style={{flex:1}}>
                 <div style={{fontSize:14,fontWeight:600,color:b.paid?C.textLight:C.text,textDecoration:b.paid?"line-through":"none"}}>{b.name}</div>
                 <div style={{fontSize:12,marginTop:2,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -5515,24 +5515,26 @@ function AppInner(){
   },[]);
 
   useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);return[...prev,_bh].slice(-104);});},[accounts,ready]);
-  useEffect(()=>{if(ready)ss("fv6:income",income);},[income,ready]);
-  useEffect(()=>{if(ready)ss("fv6:expenses",expenses);},[expenses,ready]);
-  useEffect(()=>{if(ready)ss("fv6:bills",bills);},[bills,ready]);
-  useEffect(()=>{if(ready)ss("fv6:debts",debts);},[debts,ready]);
-  useEffect(()=>{if(ready)ss("fv6:bgoals",budgetGoals);},[budgetGoals,ready]);
-  useEffect(()=>{if(ready)ss("fv6:sgoals",savingsGoals);},[savingsGoals,ready]);
-  useEffect(()=>{if(ready)ss("fv6:cats",categories);},[categories,ready]);
-  useEffect(()=>{if(ready)ss("fv6:trades",trades);},[trades,ready]);
-  useEffect(()=>{if(ready)ss("fv6:notifs",notifs);},[notifs,ready]);
-  useEffect(()=>{if(ready)ss("fv6:balHist",balHist);},[balHist,ready]);
-  useEffect(()=>{if(ready)ss("fv6:shifts",shifts);},[shifts,ready]);
-  useEffect(()=>{if(ready)ss("fv6:prof",profCategory);},[profCategory,ready]);
-  useEffect(()=>{if(ready)ss("fv6:profSub",profSub);},[profSub,ready]);
-  useEffect(()=>{if(ready)ss("fv6:dashConfig",dashConfig);},[dashConfig,ready]);
-  useEffect(()=>{if(ready)ss("fv6:appName",appName);},[appName,ready]);
-  useEffect(()=>{if(ready)ss("fv6:greetName",greetName);},[greetName,ready]);
-  useEffect(()=>{if(ready)ss("fv6:settings",settings);},[settings,ready]);
-  useEffect(()=>{if(ready)ss("fv6:household",household);},[household,ready]);
+  // Batched persistence — grouped by change frequency to reduce effect overhead
+  useEffect(()=>{if(!ready)return;ss("fv6:expenses",expenses);},[expenses,ready]);
+  useEffect(()=>{if(!ready)return;ss("fv6:bills",bills);},[bills,ready]);
+  useEffect(()=>{if(!ready)return;ss("fv6:debts",debts);},[debts,ready]);
+  useEffect(()=>{if(!ready)return;ss("fv6:trades",trades);},[trades,ready]);
+  useEffect(()=>{if(!ready)return;ss("fv6:notifs",notifs);},[notifs,ready]);
+  useEffect(()=>{if(!ready)return;ss("fv6:shifts",shifts);},[shifts,ready]);
+  // Settings & config (change infrequently)
+  useEffect(()=>{
+    if(!ready)return;
+    ss("fv6:income",income);ss("fv6:bgoals",budgetGoals);ss("fv6:sgoals",savingsGoals);
+    ss("fv6:cats",categories);ss("fv6:settings",settings);
+  },[income,budgetGoals,savingsGoals,categories,settings,ready]);
+  // Profile & display (change rarely)
+  useEffect(()=>{
+    if(!ready)return;
+    ss("fv6:prof",profCategory);ss("fv6:profSub",profSub);
+    ss("fv6:appName",appName);ss("fv6:greetName",greetName);
+    ss("fv6:dashConfig",dashConfig);ss("fv6:household",household);
+  },[profCategory,profSub,appName,greetName,dashConfig,household,ready]);
   useEffect(()=>{try{localStorage.setItem("fv_account_rates",JSON.stringify(accountRates));}catch{};if(ready)ss("fv6:accountRates",accountRates);},[accountRates,ready]);
   const pushNotif=(id,title,body,type)=>{
     setNotifs(p=>{if(p.find(n=>n.id===id))return p;return[{id,title,body,type,time:Date.now(),read:false},...p.slice(0,49)];});
@@ -5743,14 +5745,14 @@ function AppInner(){
       const isDupe=expenses.some(e=>e.name?.toLowerCase()===form.name.toLowerCase()&&parseFloat(e.amount)===amt&&e.id>now60);
       if(isDupe&&!form.forceAdd){ff("forceAdd",true);showToast("Already logged — tap again to add anyway","error");return;}
       setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:String(amt),category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[]}]);try{const mc=window._merchantCats||{};mc[form.name.toLowerCase().trim()]=form.category||"Misc";window._merchantCats=mc;ss("fv6:merchantCats",mc);}catch{}
-      showToast("✓ "+form.name+" — "+fmt(amt));
+      showToast("✓ "+form.name+" — "+fmt(amt));try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
     }else if(modal==="bill"){
       if(!form.name||!form.amount)return;
       const billAmt=parseFloat(form.amount)||0;
       if(billAmt<=0){showToast("Enter a valid amount","error");return;}
       setBills(p=>[...p,{id:Date.now(),name:form.name,amount:String(billAmt),dueDate:form.dueDate||"",recurring:form.recurring||"Monthly",paid:false,autoPay:false}]);
-      showToast("✓ "+form.name+" bill added");
+      showToast("✓ "+form.name+" bill added");try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
     }else if(modal==="debt"){
       if(!form.name||!form.balance)return;
@@ -6596,7 +6598,7 @@ function AppInner(){
           <button onClick={()=>setMonthlySummary(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.teal})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer"}}>Got it 👍</button>
         </div>
       </div>}
-      {toast&&<div style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 20px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:8,maxWidth:300,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1}}>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</div>}
+      {toast&&<div onClick={()=>setToast(null)} style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 20px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:8,maxWidth:300,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}}>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</div>}
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px 8px max(14px,env(safe-area-inset-bottom))",zIndex:100,boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)"}}>
         {NAV.map(n=>{const active=n.id==="more"?isMoreTab||tab==="more":tab===n.id;return(
           <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",background:active?"rgba(99,102,241,.08)":"transparent",transition:"all .18s"}}>
