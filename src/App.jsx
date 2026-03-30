@@ -70,9 +70,10 @@ async function supaFetch(path, opts={}) {
 }
 async function signUp(email, password) {
   try {
+    const redirectTo = window.location.origin + window.location.pathname;
     const res = await fetch(SUPA_URL+"/auth/v1/signup", {
       method:"POST", headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
-      body: JSON.stringify({email, password})
+      body: JSON.stringify({email, password, options:{emailRedirectTo: redirectTo}})
     });
     if(!res.ok && res.status===0) return {error:"network"};
     const r = await res.json();
@@ -223,6 +224,7 @@ async function ss(k, v) {
         },
         body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: new Date().toISOString() })
       });
+      localStorage.setItem("fv_last_sync", String(Date.now()));
     } catch {}
   }
 }
@@ -5110,7 +5112,58 @@ function AppInner(){
   const[authLoading,setAuthLoading]=useState(true);
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const authToken=authSession?.access_token||null;
-  useEffect(()=>{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(!s?.access_token){setAuthLoading(false);return;}supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+s.access_token}}).then(u=>{if(u?.data?.id||u?.id){setAuthSession(s);}else{localStorage.removeItem("fv_session");}setAuthLoading(false);}).catch(()=>setAuthLoading(false));},[]);
+  // Auto-sync when user returns to the app (tab focus, phone unlock, etc.)
+  useEffect(()=>{
+    function onFocus(){
+      if(authSession){
+        const lastSync=parseInt(localStorage.getItem("fv_last_sync")||"0");
+        const now=Date.now();
+        if(now-lastSync>30000){ // only sync if 30+ seconds since last sync
+          localStorage.setItem("fv_last_sync",String(now));
+          loadFromSupabase(authSession);
+        }
+      }
+    }
+    window.addEventListener("focus",onFocus);
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)onFocus();});
+    return()=>{
+      window.removeEventListener("focus",onFocus);
+    };
+  },[authSession]);
+
+  useEffect(()=>{
+    // Handle email confirmation callback — Supabase puts tokens in the URL hash
+    const hash = window.location.hash;
+    if(hash && hash.includes("access_token=")) {
+      const params = new URLSearchParams(hash.replace("#",""));
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      const type = params.get("type"); // "signup" or "recovery"
+      if(accessToken) {
+        const sess = {access_token: accessToken, refresh_token: refreshToken, token_type:"bearer"};
+        // Fetch user info to complete the session
+        supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+accessToken}}).then(u=>{
+          const user = u?.data || u;
+          if(user?.id) {
+            const fullSess = {...sess, user};
+            localStorage.setItem("fv_session", JSON.stringify(fullSess));
+            handleAuth(fullSess);
+          }
+          // Clean up the URL so tokens don't stay in the address bar
+          window.history.replaceState(null,"",window.location.pathname);
+          setAuthLoading(false);
+        }).catch(()=>{window.history.replaceState(null,"",window.location.pathname);setAuthLoading(false);});
+        return;
+      }
+    }
+    // Normal boot: validate existing session
+    const s=JSON.parse(localStorage.getItem("fv_session")||"null");
+    if(!s?.access_token){setAuthLoading(false);return;}
+    supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+s.access_token}}).then(u=>{
+      if(u?.data?.id||u?.id){setAuthSession(s);}else{localStorage.removeItem("fv_session");}
+      setAuthLoading(false);
+    }).catch(()=>setAuthLoading(false));
+  },[]);
   function handleAuth(sess){
     setAuthSession(sess);
     localStorage.setItem("fv_session",JSON.stringify(sess));
@@ -5163,6 +5216,7 @@ function AppInner(){
       res.data.forEach(row => {
         try { localStorage.setItem(scope + row.key, JSON.stringify(row.value)); } catch {}
       });
+      localStorage.setItem("fv_last_sync", String(Date.now()));
     } catch(e) { console.error("loadFromSupabase error", e); }
   }
   function handleSkip(){localStorage.setItem("fv_skip_auth","1");setSkipAuth(true);}
@@ -6043,8 +6097,8 @@ function AppInner(){
             {authSession?(
               <div style={{background:C.navy,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MF,fontWeight:800,fontSize:16,color:"#fff",flexShrink:0}}>{(authSession?.user?.email||"?")[0].toUpperCase()}</div>
-                <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{authSession?.user?.email}</div><div style={{fontSize:11,color:"rgba(255,255,255,.5)",marginTop:2}}>Signed in · data synced</div></div>
-                <button onClick={()=>loadFromSupabase(authSession)} style={{background:"rgba(255,255,255,.08)",border:"none",borderRadius:6,padding:"5px 10px",color:"rgba(255,255,255,.5)",fontSize:11,fontWeight:600,cursor:"pointer"}}>↻ Sync</button>
+                <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{authSession?.user?.email}</div><div style={{fontSize:11,color:"rgba(255,255,255,.5)",marginTop:2}}>{(()=>{const t=parseInt(localStorage.getItem("fv_last_sync")||"0");const ago=t?Math.floor((Date.now()-t)/1000):null;return ago===null?"Signed in":ago<10?"✓ Just synced":ago<60?"✓ Synced "+ago+"s ago":ago<3600?"✓ Synced "+Math.floor(ago/60)+"m ago":"Signed in";})()}</div></div>
+                <button onClick={()=>{if(authSession)loadFromSupabase(authSession);}} style={{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,.8)",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>↻ Sync now</button>
                 <button onClick={()=>setConfirm({title:"Sign Out",message:"You'll stay in offline mode. Your local data is safe.",onConfirm:()=>{handleSignOut();setConfirm(null);},danger:false})} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,.7)",fontSize:12,fontWeight:600,cursor:"pointer"}}>Sign Out</button>
               </div>
             ):(
