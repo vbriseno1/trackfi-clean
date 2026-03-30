@@ -56,8 +56,8 @@ function launchConfetti(){
 }
 
 // 🔑 Replace with your Supabase project URL when ready
-const SUPA_URL = "https://lkxznfbcnvsbugffvobw.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxreHpuZmJjbnZzYnVnZmZ2b2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwODQ5MzAsImV4cCI6MjA4OTY2MDkzMH0.Fb1R7H5ltCRSnzTZpgAndrnDXUEPxKfqsy0fZ5ZtAuU";
+const SUPA_URL = "https://hlipxjbhksyyvrehedis.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhsaXB4amJoa3N5eXZyZWhlZGlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NTI3OTQsImV4cCI6MjA5MDQyODc5NH0.Q0MWnpmmpPg4fkwYuD2dAF28XT9Cab0h3Ywy-aN8Fvg";
 
 async function supaFetch(path, opts={}) {
   const session = JSON.parse(localStorage.getItem("fv_session")||"null");
@@ -182,8 +182,51 @@ const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),
 const dayOfMonth  = () => new Date().getDate();
 const fmtDate = s => { if(!s)return""; const d=new Date(s+"T00:00:00"); return FULL_MOS[d.getMonth()]+" "+d.getDate(); };
 const getScope=()=>{try{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(s?.user?.id)return"fv6_"+s.user.id.slice(0,8)+":";let d=localStorage.getItem("fv_device_id");if(!d){d="d_"+Math.random().toString(36).slice(2,10);localStorage.setItem("fv_device_id",d);}return"fv6_"+d+":";}catch{return"fv6_local:";}};
-const sg = async k => { try { const r=localStorage.getItem(getScope()+k.replace("fv6:","")); if(r!==null)return JSON.parse(r); const legacy=localStorage.getItem(k); return legacy?JSON.parse(legacy):null; } catch { return null; } };
-const ss = async (k,v) => { try { localStorage.setItem(getScope()+k.replace("fv6:",""),JSON.stringify(v)); } catch {} };
+// ── Supabase-aware storage helpers ──────────────────────────────────────────
+// sg(): read from Supabase when logged in, fall back to localStorage
+// ss(): write to Supabase when logged in AND to localStorage (offline fallback)
+const _getSession = () => { try { return JSON.parse(localStorage.getItem("fv_session")||"null"); } catch { return null; } };
+const _getUserId  = () => _getSession()?.user?.id || null;
+
+async function sg(k) {
+  const uid = _getUserId();
+  const bare = k.replace("fv6:","");
+  if (uid) {
+    try {
+      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&key=eq.${bare}&select=value`, {
+        headers: {"Accept":"application/vnd.pgrst.object+json"}
+      });
+      if (res?.data?.value !== undefined) return res.data.value;
+    } catch {}
+  }
+  // localStorage fallback
+  try {
+    const scoped = localStorage.getItem(getScope()+bare);
+    if (scoped !== null) return JSON.parse(scoped);
+    const legacy = localStorage.getItem(k);
+    return legacy ? JSON.parse(legacy) : null;
+  } catch { return null; }
+}
+
+async function ss(k, v) {
+  const uid = _getUserId();
+  const bare = k.replace("fv6:","");
+  // Always write localStorage (offline / fast reads)
+  try { localStorage.setItem(getScope()+bare, JSON.stringify(v)); } catch {}
+  // Also write to Supabase when logged in
+  if (uid) {
+    try {
+      await supaFetch("/rest/v1/user_data", {
+        method: "POST",
+        headers: {
+          "Prefer": "resolution=merge-duplicates",
+        },
+        body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: new Date().toISOString() })
+      });
+    } catch {}
+  }
+}
+
 const notifSupported  = () => typeof window!=="undefined"&&"Notification" in window;
 const notifPermission = () => notifSupported()?window.Notification.permission:"denied";
 async function hashPIN(p) {
@@ -4346,7 +4389,7 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
 
           {/* Shared login info */}
           <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:"14px 16px",marginTop:16,fontSize:13,color:C.accent,lineHeight:1.6}}>
-            💡 <strong>Shared access coming soon.</strong> Currently one person logs expenses for the household. Real-time sync between devices is on the roadmap — use the same account and device for now.
+            💡 <strong>Live household sync is active.</strong> Both Victor and Erin can log in from their own phones using the same Trackfi account — expenses, bills, and goals stay in sync automatically.
           </div>
         </div>
       )}
@@ -5068,7 +5111,60 @@ function AppInner(){
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const authToken=authSession?.access_token||null;
   useEffect(()=>{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(!s?.access_token){setAuthLoading(false);return;}supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+s.access_token}}).then(u=>{if(u?.data?.id||u?.id){setAuthSession(s);}else{localStorage.removeItem("fv_session");}setAuthLoading(false);}).catch(()=>setAuthLoading(false));},[]);
-  function handleAuth(sess){setAuthSession(sess);localStorage.setItem("fv_session",JSON.stringify(sess));try{const uid=sess?.user?.id?.slice(0,8);if(uid){const scope="fv6_"+uid+":";["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName"].forEach(k=>{const legacy=localStorage.getItem("fv6:"+k);const scoped=localStorage.getItem(scope+k);if(legacy&&!scoped)localStorage.setItem(scope+k,legacy);});}}catch{}}
+  function handleAuth(sess){
+    setAuthSession(sess);
+    localStorage.setItem("fv_session",JSON.stringify(sess));
+    // Migrate legacy unscoped keys to scoped keys
+    try{const uid=sess?.user?.id?.slice(0,8);if(uid){const scope="fv6_"+uid+":";["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName"].forEach(k=>{const legacy=localStorage.getItem("fv6:"+k);const scoped=localStorage.getItem(scope+k);if(legacy&&!scoped)localStorage.setItem(scope+k,legacy);});}}catch{}
+    // Pull fresh data from Supabase after login
+    loadFromSupabase(sess);
+  }
+  async function loadFromSupabase(sess) {
+    const uid = sess?.user?.id;
+    if (!uid) return;
+    try {
+      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&select=key,value`);
+      if (!res?.data || !Array.isArray(res.data)) return;
+      const map = {};
+      res.data.forEach(row => { map[row.key] = row.value; });
+      // Apply each piece of data to state (same as boot load)
+      const apply = (key, setter, merge=false) => {
+        if (map[key] === undefined) return;
+        const v = map[key];
+        if (!v) return;
+        if (merge) setter(prev => ({...prev, ...v}));
+        else setter(v);
+      };
+      try { apply("expenses",  setExpenses); } catch {}
+      try { apply("bills",     setBills); } catch {}
+      try { apply("debts",     setDebts); } catch {}
+      try { apply("bgoals",    setBGoals); } catch {}
+      try { apply("sgoals",    setSGoals); } catch {}
+      try { apply("cats",      setCats); } catch {}
+      try { apply("trades",    setTrades); } catch {}
+      try { apply("balHist",   setBalHist); } catch {}
+      try { apply("shifts",    setShifts); } catch {}
+      try { apply("notifs",    setNotifs); } catch {}
+      try { apply("accounts",  setAccounts, true); } catch {}
+      try { apply("income",    setIncome,   true); } catch {}
+      try { apply("settings",  setSettings, true); } catch {}
+      try { apply("calColors", setCalColors,true); } catch {}
+      try { apply("dashConfig",setDashConfig,true); } catch {}
+      try { apply("household", setHousehold,true); } catch {}
+      try { apply("taccount",  setTradingAccount); } catch {}
+      try { if (map["appName"])  setAppName(map["appName"]); } catch {}
+      try { if (map["greetName"]) setGreetName(map["greetName"]); } catch {}
+      try { if (map["prof"])     setProfCategory(map["prof"]); } catch {}
+      try { if (map["profSub"])  setProfSub(map["profSub"]); } catch {}
+      try { if (map["merchantCats"]) window._merchantCats = map["merchantCats"]; } catch {}
+      try { if (map["accountRates"]) setAccountRates(prev => ({...prev,...map["accountRates"]})); } catch {}
+      // Mirror Supabase data into scoped localStorage for offline use
+      const scope = "fv6_" + uid.slice(0,8) + ":";
+      res.data.forEach(row => {
+        try { localStorage.setItem(scope + row.key, JSON.stringify(row.value)); } catch {}
+      });
+    } catch(e) { console.error("loadFromSupabase error", e); }
+  }
   function handleSkip(){localStorage.setItem("fv_skip_auth","1");setSkipAuth(true);}
   function handleSignOut(){if(authToken)supaFetch("/auth/v1/logout",{method:"POST"});setAuthSession(null);localStorage.removeItem("fv_session");localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}
   const[ready,setReady]=useState(false);
@@ -5151,6 +5247,7 @@ function AppInner(){
         try{if(an)setAppName(an);}catch{}
         try{if(gn)setGreetName(gn);}catch{}
         try{if(mc)window._merchantCats=mc;}catch{}
+        try{const ar=await sg("fv6:accountRates");if(ar)setAccountRates(prev=>({...prev,...ar}));}catch{}
       }catch(e){console.error("Load error",e);}
       setReady(true);
     })();
@@ -5175,7 +5272,7 @@ function AppInner(){
   useEffect(()=>{if(ready)ss("fv6:greetName",greetName);},[greetName,ready]);
   useEffect(()=>{if(ready)ss("fv6:settings",settings);},[settings,ready]);
   useEffect(()=>{if(ready)ss("fv6:household",household);},[household,ready]);
-  useEffect(()=>{try{localStorage.setItem("fv_account_rates",JSON.stringify(accountRates));}catch{}},[accountRates]);
+  useEffect(()=>{try{localStorage.setItem("fv_account_rates",JSON.stringify(accountRates));}catch{};if(ready)ss("fv6:accountRates",accountRates);},[accountRates,ready]);
   const pushNotif=(id,title,body,type)=>{
     setNotifs(p=>{if(p.find(n=>n.id===id))return p;return[{id,title,body,type,time:Date.now(),read:false},...p.slice(0,49)];});
     // Fire real OS notification if permission granted
@@ -5947,6 +6044,7 @@ function AppInner(){
               <div style={{background:C.navy,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MF,fontWeight:800,fontSize:16,color:"#fff",flexShrink:0}}>{(authSession?.user?.email||"?")[0].toUpperCase()}</div>
                 <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{authSession?.user?.email}</div><div style={{fontSize:11,color:"rgba(255,255,255,.5)",marginTop:2}}>Signed in · data synced</div></div>
+                <button onClick={()=>loadFromSupabase(authSession)} style={{background:"rgba(255,255,255,.08)",border:"none",borderRadius:6,padding:"5px 10px",color:"rgba(255,255,255,.5)",fontSize:11,fontWeight:600,cursor:"pointer"}}>↻ Sync</button>
                 <button onClick={()=>setConfirm({title:"Sign Out",message:"You'll stay in offline mode. Your local data is safe.",onConfirm:()=>{handleSignOut();setConfirm(null);},danger:false})} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,.7)",fontSize:12,fontWeight:600,cursor:"pointer"}}>Sign Out</button>
               </div>
             ):(
