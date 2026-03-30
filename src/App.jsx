@@ -844,8 +844,7 @@ Ask me anything:\
     if(t.includes("biggest")||t.includes("largest")||t.includes("most spent")){
       const top=_thisExp.slice().sort((a,b)=>parseFloat(b.amount)-parseFloat(a.amount))[0];
       const topCat=_topCats[0];
-      return(top?"💸 Biggest: "+top.name+" "+fmt(top.amount)+" on "+top.date+"
-":"")+(topCat?"📦 Top category: "+topCat[0]+" "+fmt(topCat[1]):"");
+      return(top?"💸 Biggest: "+top.name+" "+fmt(top.amount)+" on "+top.date+"\n":"")+(topCat?"📦 Top category: "+topCat[0]+" "+fmt(topCat[1]):"");
     }
     if(t.includes("last week")||t.includes("this week")){
       const now2=new Date();const day=now2.getDay();
