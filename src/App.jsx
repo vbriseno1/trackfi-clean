@@ -10,13 +10,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, BarChart, Bar, Cell, PieChart, Pie, ComposedChart } from "recharts";
 
 // ── PWA: Register service worker ─────────────────────────────────────────────
-if(typeof window!=="undefined"&&"serviceWorker" in navigator){
-  window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("/sw.js",{scope:"/"})
-      .then(r=>console.log("[SW] registered",r.scope))
-      .catch(e=>console.log("[SW] failed",e));
-  });
-}
+// Service worker registered in index.html
 
 // ── Confetti burst — pure canvas, no library ──────────────────────────────────
 function launchConfetti(){
@@ -56,8 +50,11 @@ function launchConfetti(){
 }
 
 // 🔑 Replace with your Supabase project URL when ready
-const SUPA_URL = "https://hlipxjbhksyyvrehedis.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhsaXB4amJoa3N5eXZyZWhlZGlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NTI3OTQsImV4cCI6MjA5MDQyODc5NH0.Q0MWnpmmpPg4fkwYuD2dAF28XT9Cab0h3Ywy-aN8Fvg";
+// Supabase config — set these in your .env file (VITE_ prefix exposes to browser)
+// VITE_SUPA_URL=https://your-project.supabase.co
+// VITE_SUPA_KEY=your-anon-key
+const SUPA_URL = import.meta.env.VITE_SUPA_URL || "https://hlipxjbhksyyvrehedis.supabase.co";
+const SUPA_KEY = import.meta.env.VITE_SUPA_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhsaXB4amJoa3N5eXZyZWhlZGlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NTI3OTQsImV4cCI6MjA5MDQyODc5NH0.Q0MWnpmmpPg4fkwYuD2dAF28XT9Cab0h3Ywy-aN8Fvg";
 
 async function supaFetch(path, opts={}) {
   const session = JSON.parse(localStorage.getItem("fv_session")||"null");
@@ -112,7 +109,7 @@ const MF="'Manrope',sans-serif";
 const IF="'Inter',sans-serif";
 const MOS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const FULL_MOS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const TODAY = new Date();
+const getToday = () => new Date(); // Computed fresh each use, not frozen at load
 
 const PROFESSIONS = [
   { id:"healthcare", icon:"🏥", label:"Healthcare",
@@ -237,8 +234,17 @@ async function ss(k, v) {
 const notifSupported  = () => typeof window!=="undefined"&&"Notification" in window;
 const notifPermission = () => notifSupported()?window.Notification.permission:"denied";
 async function hashPIN(p) {
-  try { const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(p+"fv_salt_2025")); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
-  catch { return p; }
+  try {
+    if(!crypto?.subtle) throw new Error("no subtle");
+    const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(p+"fv_salt_2025"));
+    return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("");
+  } catch {
+    // Fallback: simple deterministic hash that doesn't expose the raw PIN
+    // Not cryptographic but better than storing the PIN itself
+    let h=0x811c9dc5;
+    for(let i=0;i<p.length;i++){h^=p.charCodeAt(i);h=(h*0x01000193)>>>0;}
+    return"fb_"+h.toString(16).padStart(8,"0")+"_"+(p.length);
+  }
 }
 function advanceDueDate(dateStr, months=1) {
   if(!dateStr) return dateStr;
@@ -1499,7 +1505,7 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
   const[nwGoal,setNwGoal]=useState(()=>{try{const v=localStorage.getItem("fv_nwgoal");return v?JSON.parse(v):null;}catch{return null;}});
   const[showGoalInput,setShowGoalInput]=useState(false);
   const[goalInput,setGoalInput]=useState("");
-  function saveGoal(){const v=parseFloat(goalInput);if(v>0){const g={target:v,date:goalInput+"",created:Date.now()};localStorage.setItem("fv_nwgoal",JSON.stringify(g));setNwGoal(g);setShowGoalInput(false);}}
+  function saveGoal(){const v=parseFloat(goalInput);if(v>0){const g={target:v,created:Date.now()};localStorage.setItem("fv_nwgoal",JSON.stringify(g));setNwGoal(g);setShowGoalInput(false);}}
 
   const totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
   const totalOriginal=debts.reduce((s,d)=>s+(parseFloat(d.original||d.balance||0)),0);
@@ -1507,6 +1513,8 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
   const overallPct=totalOriginal>0?Math.round(totalPaidDown/totalOriginal*100):0;
   const totalAssets=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
   const currentNW=totalAssets-totalDebt;
+  // Note: historical net worth uses current debt (we don't snapshot past debt).
+  // Assets line is accurate; net worth is an estimate for periods when debt was different.
   const chartData=balHist.map(h=>({date:h.date,assets:(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0),netWorth:((h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0))-totalDebt})).slice(-52);
   const firstNW=chartData[0]?.netWorth||currentNW;
   const change=currentNW-firstNW;
@@ -1536,7 +1544,7 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
             <YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={50}/>
             <Tooltip content={<TT/>}/>
             <Area type="monotone" dataKey="assets" name="Assets" stroke={C.accent} strokeWidth={2} fill="url(#aGrad)" dot={false}/>
-            <Area type="monotone" dataKey="netWorth" name="Net Worth" stroke={C.green} strokeWidth={2.5} fill="url(#nwGrad)" dot={false}/>
+            <Area type="monotone" dataKey="netWorth" name="Net Worth*" stroke={C.green} strokeWidth={2.5} fill="url(#nwGrad)" dot={false}/>
           </AreaChart>
         </ResponsiveContainer>
       </div>:<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:32,textAlign:"center",marginBottom:14}}><div style={{fontSize:32,marginBottom:10}}>📈</div><div style={{fontSize:14,fontWeight:600,color:C.text,marginBottom:4}}>Building your trend</div><div style={{fontSize:13,color:C.textLight}}>Update your balances regularly to see your net worth grow over time.</div></div>}
@@ -2842,7 +2850,7 @@ function TradingView({trades,setTrades,account,setAccount,showToast}){
 }
 
 function CalendarView({expenses,bills,calColors,setCalColors,setExpenses,onAdd}){
-  const[viewDate,setViewDate]=useState(new Date(TODAY.getFullYear(),TODAY.getMonth(),1));
+  const[viewDate,setViewDate]=useState(()=>{const t=new Date();return new Date(t.getFullYear(),t.getMonth(),1);});
   const[selected,setSelected]=useState(null);
   const yr=viewDate.getFullYear(),mo=viewDate.getMonth();
   const ms=yr+'-'+String(mo+1).padStart(2,'0');
