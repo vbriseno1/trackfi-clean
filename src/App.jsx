@@ -888,8 +888,7 @@ Ask me anything:\
       if(!_prevTotal)return"No data from last month yet.";
       const diff=_thisTotal-_prevTotal;const pct=Math.abs(diff/_prevTotal*100).toFixed(0);
       const top=_topCats[0];
-      return(diff>0?"📈 Up "+pct+"% vs last month — spending "+fmt(diff)+" more.":"📉 Down "+pct+"% vs last month — "+fmt(Math.abs(diff))+" less. Nice!")+(top?"
-Biggest category: "+top[0]+" "+fmt(top[1]):"");
+      return(diff>0?"📈 Up "+pct+"% vs last month — spending "+fmt(diff)+" more.":"📉 Down "+pct+"% vs last month — "+fmt(Math.abs(diff))+" less. Nice!")+(top?"\nBiggest category: "+top[0]+" "+fmt(top[1]):"");
     }
     if(t.includes("on track")||t.includes("pace")||t.includes("budget for")){
       const mult=chatPayFreq==="Weekly"?4.33:chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:2.17;
@@ -901,10 +900,7 @@ Biggest category: "+top[0]+" "+fmt(top[1]):"");
     }
     if((t.includes("where")&&(t.includes("spend")||t.includes("most")))||(t.includes("what")&&t.includes("most"))){
       if(!_topCats.length)return"No spending logged yet this month.";
-      return"💸 Where you're spending most:
-"+_topCats.slice(0,5).map(([c,a],i)=>(i+1)+". "+c+": "+fmt(a)).join("
-")+"
-Total: "+fmt(_thisTotal);
+      return"💸 Where you're spending most:\n"+_topCats.slice(0,5).map(([c,a],i)=>(i+1)+". "+c+": "+fmt(a)).join("\n")+"\nTotal: "+fmt(_thisTotal);
     }
     if(t.includes("help")||t.includes("what can")||t.includes("commands")||t.includes("how do")){
       return"\ud83d\udcac I can help with:\n\u2022 \"lunch 12\", \"groceries 85\" \u2192 log expense\n\u2022 \"rent 1200 due 28th\" \u2192 add bill\n\u2022 \"checking 3200\" \u2192 update balance\n\u2022 \"can I afford $200?\"\n\u2022 \"how am I doing?\"\n\u2022 \"what did I spend on groceries?\"\n\u2022 \"when\'s my next payday?\"\n\u2022 \"what are my goals?\"\n\u2022 \"my income\" or \"my debt\"\n\u2022 \"undo\" \u2192 undo last entry";
