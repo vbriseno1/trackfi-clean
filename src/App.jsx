@@ -5695,6 +5695,26 @@ function AppInner(){
       }
     }catch(e){}
   };
+  // On load: if permission already granted and user is logged in, ensure subscription is saved
+  useEffect(()=>{
+    if(!authSession?.access_token||!VAPID_PUBLIC_KEY)return;
+    if(notifPermission()!=="granted")return;
+    if(!("serviceWorker"in navigator)||!("PushManager"in window))return;
+    (async()=>{
+      try{
+        const reg=await navigator.serviceWorker.ready;
+        const b64=VAPID_PUBLIC_KEY.replace(/-/g,"+").replace(/_/g,"/");
+        const raw=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+        const existing=await reg.pushManager.getSubscription();
+        const sub=existing||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:raw});
+        await supaFetch("/rest/v1/push_subscriptions",{
+          method:"POST",
+          headers:{"Prefer":"resolution=merge-duplicates"},
+          body:JSON.stringify({user_id:authSession.user.id,subscription:sub.toJSON()})
+        });
+      }catch{}
+    })();
+  },[authSession?.access_token]);
   const requestNotifPermission=async()=>{
     if(!notifSupported())return"unsupported";
     if(notifPermission()==="default"){
