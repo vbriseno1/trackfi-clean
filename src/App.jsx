@@ -244,6 +244,24 @@ async function ss(k, v) {
     };
   }
 }
+/** Flush debounced writes to Supabase before pulling remote state — prevents stale cloud from undoing local deletes/dismissals. */
+async function flushPendingSync() {
+  const uid = _getUserId();
+  if (!uid) return;
+  const keys = Object.keys(_ssBuffer);
+  for (const bare of keys) {
+    const buf = _ssBuffer[bare];
+    if (!buf) continue;
+    if (buf.timer) clearTimeout(buf.timer);
+    let val = buf.value;
+    try {
+      const raw = localStorage.getItem(getScope() + bare);
+      if (raw !== null) val = JSON.parse(raw);
+    } catch {}
+    if (val !== undefined) await _flushKey(uid, bare, val);
+    delete _ssBuffer[bare];
+  }
+}
 
 const notifSupported  = () => typeof window!=="undefined"&&"Notification" in window;
 const notifPermission = () => notifSupported()?window.Notification.permission:"denied";
@@ -5542,6 +5560,9 @@ function AppInner(){
   async function loadFromSupabase(sess) {
     const uid = sess?.user?.id;
     if (!uid) return;
+    // Let React effects run so ss() has the latest bills/notifs in localStorage + buffer, then push to cloud before we fetch (avoids deleted items reappearing).
+    await new Promise(r => setTimeout(r, 50));
+    await flushPendingSync();
     setSyncing(true);
     try {
       const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&select=key,value`);
@@ -5555,8 +5576,9 @@ function AppInner(){
         if (v === null || v === undefined) return;
         // After a sign-out+sign-in, state was already reset to empty by resetUserState(),
         // so it's safe to apply empty arrays (they represent the new account's real state).
-        // Only skip empty arrays during background auto-syncs (cloudLoadedRef already true).
-        if (Array.isArray(v) && v.length === 0 && cloudLoadedRef.current) return;
+        // Skip empty arrays during background sync for most keys — avoids wiping local before first cloud upload.
+        // Never skip for bills/notifs: clears and dismissals must sync across devices and after delete-all.
+        if (Array.isArray(v) && v.length === 0 && cloudLoadedRef.current && key !== "bills" && key !== "notifs") return;
         if (merge) setter(prev => ({...prev, ...v}));
         else setter(v);
       };
