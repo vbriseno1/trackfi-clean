@@ -214,12 +214,14 @@ async function sg(k) {
 const _ssBuffer = {};
 async function _flushKey(uid, bare, v) {
   try {
-    await supaFetch("/rest/v1/user_data", {
+    // Explicitly specify conflict columns so PostgREST upserts on (user_id, key)
+    // rather than defaulting to the auto-generated primary key (which never conflicts).
+    const r = await supaFetch("/rest/v1/user_data?on_conflict=user_id,key", {
       method: "POST",
-      headers: { "Prefer": "resolution=merge-duplicates" },
+      headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: new Date().toISOString() })
     });
-    localStorage.setItem("fv_last_sync", String(Date.now()));
+    if (!r.error) localStorage.setItem("fv_last_sync", String(Date.now()));
   } catch {}
 }
 async function ss(k, v) {
