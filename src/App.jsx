@@ -190,6 +190,7 @@ const DEF_ACCOUNTS={checking:"",savings:"",cushion:"",investments:"",k401:"",rot
 const DEF_INCOME={primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""};
 const DEF_HOUSEHOLD={enabled:false,name:"My Finances",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"}]};
 const DEF_CALCOLORS=(C)=>({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
+const DEF_DASHCONFIG={showIncomeChart:true,showMetrics:true,showAccounts:true,showForecast:true,showBills:true,showRecent:true,showTradeCard:true};
 const getScope=()=>{try{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(s?.user?.id)return"fv6_"+s.user.id.slice(0,8)+":";let d=localStorage.getItem("fv_device_id");if(!d){d="d_"+Math.random().toString(36).slice(2,10);localStorage.setItem("fv_device_id",d);}return"fv6_"+d+":";}catch{return"fv6_local:";}};
 // ── Supabase-aware storage helpers ──────────────────────────────────────────
 // sg(): read from Supabase when logged in, fall back to localStorage
@@ -2151,7 +2152,7 @@ function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,
   function calcPayoff(d){
     const bal=parseFloat(d.balance)||0;
     const rate=(parseFloat(d.rate)||0)/100/12;
-    const minPay=d.minPayment?parseFloat(d.minPayment):Math.max(25,bal*0.02);
+    const minPay=parseFloat(d.minPayment)>0?parseFloat(d.minPayment):Math.max(25,bal*0.02);
     if(bal<=0)return{months:0,totalInterest:0,payoffDate:"Paid off"};
     if(minPay<=rate*bal)return{months:999,totalInterest:999999,payoffDate:"Never"};
     let b=bal,mo=0,interest=0;
@@ -2481,7 +2482,7 @@ function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAcc
   const ff=k=>e=>setForm(p=>({...p,[k]:e.target.value}));
   function add(){if(!form.name||!form.target)return;setGoals(p=>[...p,{id:Date.now().toString(),name:form.name,target:parseFloat(form.target),saved:parseFloat(form.saved||0),monthly:parseFloat(form.monthly||0),icon:form.icon||"🎯",color:form.color||C.teal}]);showToast&&showToast("✓ Goal added — "+form.name);setForm({});setShowAdd(false);}
   function GoalRingInner({goal}){
-    const pct=Math.min(100,(goal.saved/goal.target)*100);
+    const pct=Math.min(100,goal.target>0?(goal.saved/goal.target)*100:0);
     const r=44;const circ=2*Math.PI*r;const dash=circ*(pct/100);
     const mo=goal.monthly||0;const rem=Math.max(0,goal.target-goal.saved);
     const months=mo>0?Math.ceil(rem/mo):0;
@@ -2503,7 +2504,7 @@ function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAcc
         {months>0&&<div style={{fontSize:11,color:C.green,fontWeight:600,marginBottom:4}}>{months} mo · {targetDate}</div>}
         <div style={{display:"flex",gap:6,width:"100%"}}>
           <input type="number" placeholder="Deposit $" id={"dep-"+goal.id} onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){const amt=parseFloat(e.target.value);if(amt>0){setGoals(p=>p.map(g=>g.id===goal.id?{...g,saved:Math.min(g.target,(g.saved||0)+amt)}:g));showToast&&showToast("+" + fmt(amt)+" added to "+goal.name);e.target.value="";}}}  } style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none",background:C.surfaceAlt}}/>
-          <button onClick={()=>{const inp=document.getElementById("dep-"+goal.id);const amt=parseFloat(inp?.value||0);if(amt>0){setGoals(p=>p.map(g=>{if(g.id!==goal.id)return g;const newSaved=Math.min(g.target,(g.saved||0)+amt);const oldPct=Math.floor(((g.saved||0)/g.target)*4)*25;const newPct=Math.floor((newSaved/g.target)*4)*25;if(newPct>oldPct){setTimeout(()=>showToast&&showToast(newSaved>=g.target?"🎉 Goal complete: "+g.name+"!":"🎯 "+newPct+"% reached — "+g.name),100);}else{showToast&&showToast("+"+fmt(amt)+" → "+g.name);}return{...g,saved:newSaved};}));if(inp)inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
+          <button onClick={()=>{const inp=document.getElementById("dep-"+goal.id);const amt=parseFloat(inp?.value||0);if(amt>0){setGoals(p=>p.map(g=>{if(g.id!==goal.id)return g;const newSaved=Math.min(g.target,(g.saved||0)+amt);const oldPct=g.target>0?Math.floor(((g.saved||0)/g.target)*4)*25:0;const newPct=g.target>0?Math.floor((newSaved/g.target)*4)*25:0;if(newPct>oldPct){setTimeout(()=>showToast&&showToast(newSaved>=g.target?"🎉 Goal complete: "+g.name+"!":"🎯 "+newPct+"% reached — "+g.name),100);}else{showToast&&showToast("+"+fmt(amt)+" → "+g.name);}return{...g,saved:newSaved};}));if(inp)inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
           <button onClick={()=>setGoals(p=>p.filter(g=>g.id!==goal.id))} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.textLight}}>✕</button>
         </div>
       </div>
@@ -2885,7 +2886,7 @@ function CalendarView({expenses,bills,calColors,setCalColors,setExpenses,onAdd})
   const monthTotal=monthExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const dayMap=monthExp.reduce((a,e)=>{const d=parseInt(e.date?.split('-')[2]||0);a[d]=(a[d]||0)+(parseFloat(e.amount)||0);return a},{});
   const maxDay=Math.max(...Object.values(dayMap),1);
-  const billMap=bills.reduce((a,b)=>{const d=b.dueDate?.split('-')[2];if(d){const di=parseInt(d);if(!a[di])a[di]=[];a[di].push(b);}return a},{});
+  const billMap=bills.reduce((a,b)=>{if(!b.dueDate)return a;const[by,bm,bd]=b.dueDate.split('-');if(parseInt(by)===yr&&parseInt(bm)===mo+1){const di=parseInt(bd);if(!a[di])a[di]=[];a[di].push(b);}return a},{});
   const selExp=selected?expenses.filter(e=>e.date===`${yr}-${String(mo+1).padStart(2,'0')}-${String(selected).padStart(2,'0')}`):[];
   const selAmt=selExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -5431,6 +5432,8 @@ function AppInner(){
   },[authSession]);
 
   useEffect(()=>{
+    // Safety net: if auth hasn't resolved in 15s, unblock the UI
+    const authTimeout=setTimeout(()=>setAuthLoading(false),15000);
     // Handle email confirmation callback — Supabase puts tokens in the URL hash
     const hash = window.location.hash;
     if(hash && hash.includes("access_token=")) {
@@ -5486,6 +5489,7 @@ function AppInner(){
         setAuthLoading(false);
       });
     }).catch(()=>setAuthLoading(false));
+    return()=>clearTimeout(authTimeout);
   },[]);
   function handleAuth(sess){
     setAuthSession(sess);
@@ -5579,7 +5583,7 @@ function AppInner(){
     setAppName("Trackfi");setCats(DEF_CATS);
     setSettings(DEF_SETTINGS);
     setTradingAccount({deposit:"",balance:""});
-    setDashConfig({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
+    setDashConfig(DEF_DASHCONFIG);
     setCalColors(DEF_CALCOLORS(C));
     setAccountRates({checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0});
     setOnboarded(false);setIsDemoMode(false);setDarkMode(false);setHidden(false);
@@ -5620,7 +5624,7 @@ function AppInner(){
   const[calColors,setCalColors]=useState(()=>DEF_CALCOLORS(C));
   const[settings,setSettings]=useState(DEF_SETTINGS);
   const[monthlySummary,setMonthlySummary]=useState(null);
-  const[dashConfig,setDashConfig]=useState({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
+  const[dashConfig,setDashConfig]=useState(DEF_DASHCONFIG);
   const[appName,setAppName]=useState("Trackfi");
   const[greetName,setGreetName]=useState("");
   const[profCategory,setProfCategory]=useState("healthcare");
@@ -5717,6 +5721,7 @@ function AppInner(){
 
   useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);return[...prev,_bh].slice(-104);});},[accounts,debts,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
+  useEffect(()=>{if(!ready)return;if(!balHist.length&&!cloudLoadedRef.current)return;ss("fv6:balHist",balHist);},[balHist,ready]);
   useEffect(()=>{if(!ready)return;if(!expenses.length&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
   useEffect(()=>{if(!ready)return;if(!bills.length&&!cloudLoadedRef.current)return;ss("fv6:bills",bills);},[bills,ready]);
   useEffect(()=>{if(!ready)return;if(!debts.length&&!cloudLoadedRef.current)return;ss("fv6:debts",debts);},[debts,ready]);
@@ -5964,8 +5969,13 @@ function AppInner(){
       if(b.paid)return;
       const d=dueIn(b.dueDate);
       if(settings.notifBills!==false){
-        if(d<0)pushNotif('ov_'+b.id,'🚨 Overdue: '+b.name,fmt(b.amount)+' was due '+Math.abs(d)+'d ago','danger');
-        else if(d<=3)pushNotif('due3_'+b.id,'⚠️ Due soon: '+b.name,fmt(b.amount)+' due in '+d+' day'+(d!==1?'s':''),'warning');
+        if(d<0){
+          // Bill is now overdue — remove any stale "due soon" notification for it
+          setNotifs(prev=>prev.filter(n=>n.id!=='due3_'+b.id));
+          pushNotif('ov_'+b.id,'🚨 Overdue: '+b.name,fmt(b.amount)+' was due '+Math.abs(d)+'d ago','danger');
+        } else if(d<=3){
+          pushNotif('due3_'+b.id,'⚠️ Due soon: '+b.name,fmt(b.amount)+' due in '+d+' day'+(d!==1?'s':''),'warning');
+        }
       }
     });
     const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0');
@@ -6085,8 +6095,7 @@ function AppInner(){
     // Calendar colors
     setCalColors({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
     // Dashboard config — show everything
-    setDashConfig({showIncomeChart:true,showMetrics:true,showAccounts:true,
-      showBills:true,showDebts:true,showGoals:true,showForecast:true,showRecent:true});
+    setDashConfig(DEF_DASHCONFIG);
     // Settings — enable all features
     setSettings(p=>({...p,showTrading:true,showHealth:true,showSavings:true,showForecast:true,
       quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]}));
@@ -6373,7 +6382,7 @@ function AppInner(){
             })()}
 
             {/* ── 3. QUICK PULSE — 4 stats at a glance ──────────── */}
-            {(()=>{
+            {dashConfig.showMetrics!==false&&(()=>{
               const now_p=new Date();
               const ms_p=now_p.getFullYear()+"-"+String(now_p.getMonth()+1).padStart(2,"0");
               const mtd_p=expenses.filter(e=>e.date?.startsWith(ms_p)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
@@ -6488,7 +6497,7 @@ function AppInner(){
             {/* ── 6. UPCOMING BILLS ─────────────────────────────── */}
             {/* ── HOUSEHOLD SPLIT CARD — visible when enabled ─── */}
             {/* Month Forecast */}
-            {(()=>{
+            {dashConfig.showForecast!==false&&(()=>{
               const _now=new Date();const _ms=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
               const _dom=_now.getDate(),_dim=new Date(_now.getFullYear(),_now.getMonth()+1,0).getDate();
               const _mtd=expenses.filter(e=>e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
@@ -6556,7 +6565,7 @@ function AppInner(){
               );
             })()}
 
-            {bills.filter(b=>!b.paid).length>0&&<div style={{marginBottom:14}}>
+            {dashConfig.showBills!==false&&bills.filter(b=>!b.paid).length>0&&<div style={{marginBottom:14}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Upcoming Bills</div>
                 <button onClick={()=>navTo("bills")} style={{fontSize:12,color:C.accent,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>See all</button>
@@ -6586,7 +6595,7 @@ function AppInner(){
             </div>}
 
             {/* ── 8. RECENT TRANSACTIONS ────────────────────────── */}
-            {expenses.length>0&&<div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18}}>
+            {dashConfig.showRecent!==false&&expenses.length>0&&<div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Recent</div>
                 <button onClick={()=>navTo("spend")} style={{fontSize:12,color:C.accent,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>See all</button>
