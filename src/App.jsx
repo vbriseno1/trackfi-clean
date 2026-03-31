@@ -773,7 +773,12 @@ Ask me anything:\
   const chatPayFreq=income.payFrequency||"Biweekly";
   const chatPayDays=chatPayFreq==="Weekly"?7:chatPayFreq==="Biweekly"?14:chatPayFreq==="Twice Monthly"?15:30;
   const chatNow=new Date();const chatTod=chatNow.getDate();
-  const chatNextPay=(()=>{if(chatPayFreq==="Twice Monthly"){return chatTod<15?new Date(chatNow.getFullYear(),chatNow.getMonth(),15):new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}if(chatPayFreq==="Monthly"){return new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}const d=new Date(chatNow);d.setDate(chatNow.getDate()+chatPayDays);return d;})();
+  const chatNextPay=(()=>{
+    if(income.lastPayDate){const last=new Date(income.lastPayDate+"T00:00:00");const next=new Date(last);let safety=0;while(next<=chatNow&&safety<60){if(chatPayFreq==="Weekly")next.setDate(next.getDate()+7);else if(chatPayFreq==="Twice Monthly"){next.getDate()<15?next.setDate(15):next.setMonth(next.getMonth()+1,1);}else if(chatPayFreq==="Monthly")next.setMonth(next.getMonth()+1);else next.setDate(next.getDate()+14);safety++;}return next;}
+    if(chatPayFreq==="Twice Monthly"){return chatTod<15?new Date(chatNow.getFullYear(),chatNow.getMonth(),15):new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}
+    if(chatPayFreq==="Monthly"){return new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}
+    const d=new Date(chatNow);d.setDate(chatNow.getDate()+chatPayDays);return d;
+  })();
   const chatNextPayStr=chatNextPay.getFullYear()+"-"+String(chatNextPay.getMonth()+1).padStart(2,"0")+"-"+String(chatNextPay.getDate()).padStart(2,"0");
   const bs=bills.reduce((s,b)=>{if(b.paid)return s;const d=b.dueDate||"";return d&&d<=chatNextPayStr?s+(parseFloat(b.amount)||0):s;},0);
   const _chatMs=chatNow.getFullYear()+"-"+String(chatNow.getMonth()+1).padStart(2,"0");
@@ -1399,7 +1404,7 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
   const beforeTotal=billsBeforePay.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const spentSoFar=expenses.filter(e=>e.date?.startsWith(thisMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-  const mSpent=spentSoFar;const _pvMult=income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12);const ti2=(parseFloat(income.primary||0)*_pvMult)+(parseFloat(income.other||0));
+  const mSpent=spentSoFar;const _pvMult=income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12);const ti2=(parseFloat(income.primary||0)*_pvMult)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const dailyBurn=spentSoFar/Math.max(1,today);
   const projectedSpend=dailyBurn*daysUntilPay;
   // Match AppInner sts formula: checking + other income - bills before pay - projected - envelopes - buffer
@@ -1477,8 +1482,10 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
         const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
         const envelopes=budgetGoals.map(g=>{
           const lim=parseFloat(g.limit||0);
-          const reserve=lim*(Math.min(1,daysUntilPay/30));
-          return{...g,lim,reserve};
+          const spent=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(thisMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+          const remaining=Math.max(0,lim-spent);
+          const reserve=remaining*(Math.min(1,daysUntilPay/30));
+          return{...g,lim,spent,reserve};
         }).filter(g=>g.lim>0);
         if(!envelopes.length)return null;
         const totalReserve=envelopes.reduce((s,g)=>s+g.reserve,0);
@@ -1497,7 +1504,7 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
                 </div>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.purple}}>{fmt(g.reserve)}</div>
-                  <div style={{fontSize:10,color:C.textFaint}}>{fmt(g.lim)}/mo budget</div>
+                  <div style={{fontSize:10,color:C.textFaint}}>{fmt(g.spent)} spent · {fmt(g.lim)}/mo</div>
                 </div>
               </div>
             ))}
@@ -1512,7 +1519,7 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
   );
 }
 
-function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
+function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate}){
   const[nwGoal,setNwGoal]=useState(()=>{try{const v=localStorage.getItem("fv_nwgoal");return v?JSON.parse(v):null;}catch{return null;}});
   const[showGoalInput,setShowGoalInput]=useState(false);
   const[goalInput,setGoalInput]=useState("");
@@ -4160,17 +4167,18 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
         else if(r.frequency==="Monthly")d.setMonth(d.getMonth()+1);
         else if(r.frequency==="Quarterly")d.setMonth(d.getMonth()+3);
         else if(r.frequency==="Annual")d.setFullYear(d.getFullYear()+1);
-        return{...r,nextDate:d.toISOString().split("T")[0],lastLogged:today};
+        const _nd=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+        return{...r,nextDate:_nd,lastLogged:today};
       }
       return r;
     });
     setRecurrings(updated);
-  },[appReady]);
+  },[appReady,recurrings.length]);
   const FREQS=["Weekly","Bi-weekly","Monthly","Quarterly","Annual"];
   const ICONS=["🏠","🚗","📱","💪","🎮","📺","☕","🛒","💊","🐕","🎓","⚡","💧","🌐","🎵","🏋️","🍕","✈️","👶","🐱"];
   function add(){if(!form.name||!form.amount)return;setRecurrings(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category,frequency:form.frequency,nextDate:form.nextDate,icon:form.icon||"🔄",active:true}]);setForm({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});if(showToast)showToast("Recurring added — "+form.name);setShowAdd(false);}
   const active=recurrings.filter(r=>r.active!==false);
-  const totalMonthly=active.reduce((s,r)=>{const amt=parseFloat(r.amount||0);if(r.frequency==="Weekly")return s+amt*4.33;if(r.frequency==="Bi-weekly")return s+amt*2.17;if(r.frequency==="Monthly")return s+amt;if(r.frequency==="Quarterly")return s+amt/3;if(r.frequency==="Annual")return s+amt/12;return s+amt;},0);
+  const totalMonthly=active.reduce((s,r)=>{const amt=parseFloat(r.amount||0);if(r.frequency==="Weekly")return s+amt*(52/12);if(r.frequency==="Bi-weekly")return s+amt*(26/12);if(r.frequency==="Monthly")return s+amt;if(r.frequency==="Quarterly")return s+amt/3;if(r.frequency==="Annual")return s+amt/12;return s+amt;},0);
   const dueSoon=recurrings.filter(r=>r.active!==false&&r.nextDate&&Math.ceil((new Date(r.nextDate)-new Date(todayStr()))/86400000)<=7);
   return(
     <div className="fu">
@@ -5916,7 +5924,7 @@ function AppInner(){
     if(payFreq==="Monthly"){return new Date(_now.getFullYear(),_now.getMonth()+1,1);}
     const d=new Date(_now);d.setDate(_now.getDate()+payPeriodDays);return d;
   })();
-  const nextPayStr=nextPayDate.toISOString().split("T")[0];
+  const nextPayStr=nextPayDate.getFullYear()+"-"+String(nextPayDate.getMonth()+1).padStart(2,"0")+"-"+String(nextPayDate.getDate()).padStart(2,"0");
   const daysUntilNextPay=Math.max(1,Math.ceil((nextPayDate-_now)/86400000));
   // Bills due before next paycheck — simple filter, no hook
   const billsBeforeNextPayAmt=bills.reduce((s,b)=>{if(b.paid)return s;const d=(b.dueDate||"");return d&&d<=nextPayStr?s+(parseFloat(b.amount)||0):s;},0);
@@ -5995,25 +6003,35 @@ function AppInner(){
         fmt(parseFloat(income.primary||0))+" expected · "+nextPayDate.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"}),
         "success");
     }
-  },[ready,bills,budgetGoals,expenses]);
+  },[ready,bills,budgetGoals,expenses,settings,savingsGoals]);
   const detectedSubs=useMemo(()=>{
     if(expenses.length<2)return[];
+    // Only look at expenses from the last 6 months to avoid showing cancelled subs
+    const _sixMoAgo=new Date();_sixMoAgo.setMonth(_sixMoAgo.getMonth()-6);
+    const _sixMoStr=_sixMoAgo.getFullYear()+"-"+String(_sixMoAgo.getMonth()+1).padStart(2,"0")+"-"+String(_sixMoAgo.getDate()).padStart(2,"0");
+    const recentExp=expenses.filter(e=>e.date&&e.date>=_sixMoStr);
+    if(recentExp.length<2)return[];
     const nameMap={};
-    expenses.forEach(e=>{const key=e.name?.toLowerCase().trim();if(!key)return;if(!nameMap[key])nameMap[key]=[];nameMap[key].push(e);});
+    recentExp.forEach(e=>{const key=e.name?.toLowerCase().trim();if(!key)return;if(!nameMap[key])nameMap[key]=[];nameMap[key].push(e);});
     const subs=[];
     Object.entries(nameMap).forEach(([name,exps])=>{
       if(exps.length<2)return;
       const sorted=[...exps].sort((a,b)=>a.date?.localeCompare(b.date));
       const amounts=exps.map(e=>parseFloat(e.amount)||0);
       const avgAmt=amounts.reduce((s,a)=>s+a,0)/amounts.length;
-      if(!amounts.every(a=>Math.abs(a-avgAmt)<avgAmt*0.1))return;
+      if(!amounts.every(a=>Math.abs(a-avgAmt)<avgAmt*0.15))return;
       const gaps=[];
       for(let i=1;i<sorted.length;i++){gaps.push(Math.round((new Date(sorted[i].date+"T00:00:00")-new Date(sorted[i-1].date+"T00:00:00"))/(1000*60*60*24)));}
       const avgGap=gaps.reduce((s,g)=>s+g,0)/gaps.length;
       let interval=null;
       if(avgGap>=25&&avgGap<=35){interval="Monthly";}else if(avgGap>=6&&avgGap<=8){interval="Weekly";}else if(avgGap>=350&&avgGap<=380){interval="Annual";}
       if(!interval)return;
-      subs.push({name:exps[0].name,amount:avgAmt.toFixed(2),interval,occurrences:exps.length,lastDate:sorted[sorted.length-1].date,category:exps[0].category});
+      // Must have a charge within the last 45 days to still be "active"
+      const lastDate=sorted[sorted.length-1].date;
+      const daysSinceLast=Math.round((new Date()-new Date(lastDate+"T00:00:00"))/(1000*60*60*24));
+      if(interval==="Monthly"&&daysSinceLast>45)return;
+      if(interval==="Weekly"&&daysSinceLast>14)return;
+      subs.push({name:exps[0].name,amount:avgAmt.toFixed(2),interval,occurrences:exps.length,lastDate,category:exps[0].category});
     });
     return subs.sort((a,b)=>parseFloat(b.amount)-parseFloat(a.amount));
   },[expenses]);
@@ -6715,7 +6733,7 @@ function AppInner(){
                 <div key={a.k} style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,display:"flex",alignItems:"center",gap:14}}>
                   <div style={{width:44,height:44,borderRadius:12,background:a.c+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{a.ic}</div>
                   <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div></div>
-                  <input type="number" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>setAccounts(p=>({...p,[a.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{width:130,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",fontWeight:800,filter:hidden?"blur(8px)":"none"}}/>
+                  <input type="number" min="0" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>{const v=e.target.value;if(v===""||parseFloat(v)>=0)setAccounts(p=>({...p,[a.k]:v}));}} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{width:130,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",fontWeight:800,filter:hidden?"blur(8px)":"none"}}/>
                 </div>
               ))}
             </div>
@@ -6768,7 +6786,7 @@ function AppInner(){
                     <div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div>
                     <div style={{fontSize:11,color:C.textLight}}>{a.desc}</div>
                   </div>
-                  <input type="number" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>setAccounts(p=>({...p,[a.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{width:120,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:16,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none"}}/>
+                  <input type="number" min="0" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>{const v=e.target.value;if(v===""||parseFloat(v)>=0)setAccounts(p=>({...p,[a.k]:v}));}} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{width:120,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:16,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none"}}/>
                 </div>
               ))}
             </div>
@@ -6813,7 +6831,7 @@ function AppInner(){
         {tab==="subscriptions"&&<SubsView detectedSubs={detectedSubs} expenses={expenses} showToast={showToast}/>}
         {tab==="insights"&&<InsightsView expenses={expenses} income={income} bills={bills} debts={debts} budgetGoals={budgetGoals} savingsGoals={savingsGoals}/>}
         {tab==="paycheck"&&<PaycheckView bills={bills} income={income} setIncome={setIncome} expenses={expenses} accounts={accounts} budgetGoals={budgetGoals} onAdd={()=>om("expense")}/>}
-        {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} onNavigate={navTo}/>}
+        {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} tradingAccount={tradingAccount} onNavigate={navTo}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast}/>}
@@ -6977,8 +6995,8 @@ function AppInner(){
       {modal==="quickactions"&&(()=>{
         const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Scan Receipt",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Envelopes",ic:"📦"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📈"},{id:"insights",l:"Insights",ic:"📊"},{id:"paycheck",l:"Paycheck",ic:"💰"},{id:"health",l:"Health Score",ic:"❤️"},{id:"bills_nav",l:"View Bills",ic:"📅"},{id:"calendar_nav",l:"Calendar",ic:"📅"},{id:"recurring_nav",l:"Recurring",ic:"🔄"}];
         const active=settings.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];
-        const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];const next=cur.includes(id)?cur.filter(x=>x!==id):[...cur,id];return{...p,quickActions:next};});
-        return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Customize Quick Actions</div><div style={{fontSize:13,color:C.textLight,marginBottom:18}}>Choose up to 6 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);return(<button key={q.id} onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"#fff",cursor:"pointer",textAlign:"left"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button onClick={()=>setModal(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button></div></div>);
+        const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];const next=cur.includes(id)?cur.filter(x=>x!==id):cur.length<8?[...cur,id]:cur;return{...p,quickActions:next};});
+        return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Customize Quick Actions</div><div style={{fontSize:13,color:C.textLight,marginBottom:18}}>Choose up to 8 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);return(<button key={q.id} onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"#fff",cursor:"pointer",textAlign:"left"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button onClick={()=>setModal(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button></div></div>);
       })()}
     </div>
   );
