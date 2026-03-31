@@ -71,7 +71,8 @@ self.addEventListener('fetch', e => {
 
 // Push notifications
 self.addEventListener('push', e => {
-  const data = e.data ? e.data.json() : {};
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch { data = { title: 'Trackfi', body: e.data?.text?.() || '' }; }
   e.waitUntil(
     self.registration.showNotification(data.title || 'Trackfi', {
       body: data.body || '',
@@ -86,12 +87,16 @@ self.addEventListener('push', e => {
 // Notification click: open the app
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url || '/';
+  const targetUrl = e.notification.data?.url || '/';
+  const origin = self.location.origin;
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(wins => {
-      const existing = wins.find(w => w.url.includes(url));
-      if (existing) return existing.focus();
-      return clients.openWindow(url);
+      // Prefer exact match, fall back to same-origin app tab
+      const exact = wins.find(w => w.url === origin + targetUrl);
+      if (exact) return exact.focus();
+      const appTab = wins.find(w => w.url.startsWith(origin));
+      if (appTab) return appTab.focus();
+      return clients.openWindow(targetUrl);
     })
   );
 });
