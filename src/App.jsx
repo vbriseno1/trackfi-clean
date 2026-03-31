@@ -50,12 +50,9 @@ function launchConfetti(){
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
-function _parseSession(){
-  try { return JSON.parse(localStorage.getItem("fv_session")||"null"); } catch { return null; }
-}
 async function supaFetch(path, opts={}) {
   if (!SUPA_URL || !SUPA_KEY) return { data: null, error: { message: "Supabase is not configured (set VITE_SUPABASE_* in .env)" } };
-  const session = _parseSession();
+  const session = (()=>{try{return JSON.parse(localStorage.getItem("fv_session")||"null");}catch{return null;}})();
   const token = session?.access_token;
   const headers = {"Content-Type":"application/json","apikey":SUPA_KEY,...(token?{"Authorization":"Bearer "+token}:{}),...(opts.headers||{})};
   const res = await fetch(SUPA_URL+path, {...opts, headers});
@@ -64,31 +61,31 @@ async function supaFetch(path, opts={}) {
   return {data, error:null};
 }
 async function signUp(email, password) {
-  if (!SUPA_URL || !SUPA_KEY) return { error: "configuration", error_description: "Supabase is not configured. Add VITE_SUPABASE_* to .env or use offline mode.", msg: "Supabase is not configured." };
+  if (!SUPA_URL || !SUPA_KEY) return {error:{message:"Supabase is not configured (set VITE_SUPABASE_* in .env)"}};
   try {
     const redirectTo = window.location.origin + window.location.pathname;
     const res = await fetch(SUPA_URL+"/auth/v1/signup", {
       method:"POST", headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
       body: JSON.stringify({email, password, options:{emailRedirectTo: redirectTo}})
     });
-    if(!res.ok && res.status===0) return {error:"network"};
+    if(!res.ok) { const e=await res.json().catch(()=>({message:"Request failed"})); return {error:e}; }
     const r = await res.json();
     if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
     return r;
-  } catch(e) { return {error:"network",message:e.message}; }
+  } catch(e) { return {error:{message:e.message||"Network error"}}; }
 }
 async function signIn(email, password) {
-  if (!SUPA_URL || !SUPA_KEY) return { error: "configuration", error_description: "Supabase is not configured. Add VITE_SUPABASE_* to .env or use offline mode.", msg: "Supabase is not configured." };
+  if (!SUPA_URL || !SUPA_KEY) return {error:{message:"Supabase is not configured (set VITE_SUPABASE_* in .env)"}};
   try {
     const res = await fetch(SUPA_URL+"/auth/v1/token?grant_type=password", {
       method:"POST", headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
       body: JSON.stringify({email, password})
     });
-    if(!res.ok && res.status===0) return {error:"network"};
+    if(!res.ok) { const e=await res.json().catch(()=>({message:"Request failed"})); return {error:e}; }
     const r = await res.json();
     if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
     return r;
-  } catch(e) { return {error:"network",message:e.message}; }
+  } catch(e) { return {error:{message:e.message||"Network error"}}; }
 }
 
 const C = {
@@ -853,8 +850,8 @@ Ask me anything:\
       return(t.includes("last week")?"Last week":"This week")+": "+fmt(weekTotal)+" across "+weekExp.length+" transactions"+(weekCats.length?" · Top: "+weekCats[0][0]+" "+fmt(weekCats[0][1]):"");
     }
     if(t.includes("average")||t.includes("avg")||t.includes("typical")){
-      const dom2=now.getDate();
-      return"📊 Daily average: "+fmt(_thisTotal/Math.max(1,dom2))+" · At this pace: "+fmt((_thisTotal/Math.max(1,dom2))*new Date(now.getFullYear(),now.getMonth()+1,0).getDate())+" this month";
+      const dom2=chatNow.getDate();
+      return"📊 Daily average: "+fmt(_thisTotal/Math.max(1,dom2))+" · At this pace: "+fmt((_thisTotal/Math.max(1,dom2))*new Date(chatNow.getFullYear(),chatNow.getMonth()+1,0).getDate())+" this month";
     }
     if(t.includes("savings rate")||t.includes("saving rate")){
       const mult=chatPayFreq==="Weekly"?4.33:chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:2.17;
@@ -891,7 +888,7 @@ Ask me anything:\
       const mult=chatPayFreq==="Weekly"?4.33:chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:2.17;
       const monthly=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0));
       if(!monthly)return"Set your income first so I can check your pace.";
-      const dom=new Date().getDate();const dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+      const dom=chatNow.getDate();const dim=new Date(chatNow.getFullYear(),chatNow.getMonth()+1,0).getDate();
       const pace=(monthly/dim)*dom;const diff=_thisTotal-pace;
       return diff<=0?"✅ On track — "+fmt(Math.abs(diff))+" under pace for the month.":"⚠️ "+fmt(diff)+" over pace. Projected: "+fmt((_thisTotal/Math.max(1,dom))*dim)+" vs "+fmt(monthly)+" income.";
     }
@@ -1212,7 +1209,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
           </div>);
         })}
       </div>}
-      {catSorted.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><BarChart data={catSorted.slice(0,5)} layout="vertical" barSize={16} margin={{left:4,right:50}}><XAxis type="number" hide/><YAxis type="category" dataKey="name" tick={{fontSize:11,fill:C.textMid}} width={80} axisLine={false} tickLine={false}/><Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>}
+      {catSorted.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><BarChart data={catSorted.slice(0,5).map(([name,amt])=>({name,amt}))} layout="vertical" barSize={16} margin={{left:4,right:50}}><XAxis type="number" hide/><YAxis type="category" dataKey="name" tick={{fontSize:11,fill:C.textMid}} width={80} axisLine={false} tickLine={false}/><Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>}
 
       {/* 6-month spending trend */}
       {(()=>{
@@ -1504,7 +1501,7 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
   const overallPct=totalOriginal>0?Math.round(totalPaidDown/totalOriginal*100):0;
   const totalAssets=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
   const currentNW=totalAssets-totalDebt;
-  const chartData=balHist.map(h=>({date:h.date,assets:(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0),netWorth:((h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0))-totalDebt})).slice(-52);
+  const chartData=balHist.map(h=>{const a=(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0)+(h.hsa||0)+(h.property||0)+(h.vehicles||0);return{date:h.date,assets:a,netWorth:a-totalDebt};}).slice(-52);
   const firstNW=chartData[0]?.netWorth||currentNW;
   const change=currentNW-firstNW;
   const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return FULL_MOS[d.getMonth()]+" "+d.getDate();};
@@ -1958,7 +1955,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Bills</div><div style={{fontSize:13,color:C.textLight}}>{unpaid.length} unpaid · {overdue.length} overdue</div></div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>setBills(p=>p.map(b=>overdue.some(o=>o.id===b.id)?{...b,paid:true}:b))} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>setBills(p=>p.map(b=>{if(!overdue.some(o=>o.id===b.id))return b;if(b.recurring&&b.recurring!=="One-time"){const d=new Date((b.dueDate||todayStr())+"T00:00:00");if(b.recurring==="Weekly")d.setDate(d.getDate()+7);else if(b.recurring==="Bi-weekly")d.setDate(d.getDate()+14);else if(b.recurring==="Quarterly")d.setMonth(d.getMonth()+3);else if(b.recurring==="Annual")d.setFullYear(d.getFullYear()+1);else d.setMonth(d.getMonth()+1);return{...b,paid:false,dueDate:d.toISOString().split("T")[0],paidDate:todayStr()};}return{...b,paid:true};}))} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
       </div>
       {bills.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
@@ -3151,7 +3148,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   </div>);
 }
 
-function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,setHousehold,navTo,balHist,setBalHist,notifs,setNotifs,tradingAccount,setTradingAccount,accountRates,setAccountRates,dashConfig,setDashConfig,calColors,setCalColors,ss}){
+function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo}){
   const[nm,setNm]=useState(appName||"");
   const[showPIN,setShowPIN]=useState(false);
   const[showEmailChange,setShowEmailChange]=useState(false);
@@ -3160,63 +3157,8 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
   const[newPw1,setNewPw1]=useState("");const[newPw2,setNewPw2]=useState("");
   const[acctMsg,setAcctMsg]=useState("");const[acctLoading,setAcctLoading]=useState(false);
 
-  function _readLocal(key,fallback){
-    try{const v=localStorage.getItem(key);if(v==null)return fallback;return JSON.parse(v);}catch{return fallback;}
-  }
-  function exportData(){
-    let recurrings=[],settlements=[],hhBudgets=[],nwGoal=null,recurringLast=null;
-    try{recurrings=_readLocal("fv_recurring",[]);}catch{}
-    try{settlements=_readLocal("fv_settlements",[]);}catch{}
-    try{hhBudgets=_readLocal("fv_hh_budgets",[]);}catch{}
-    try{nwGoal=_readLocal("fv_nwgoal",null);}catch{}
-    try{recurringLast=localStorage.getItem("fv_recurring_last");}catch{}
-    const d={
-      exportedAt:new Date().toISOString(),version:"2.1",
-      appName,greetName,profCategory,profSub,
-      accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,
-      categories,balHist,notifs,settings,dashConfig,calColors,tradingAccount,household,accountRates,
-      recurrings,settlements,hhBudgets,nwGoal,recurringLast,
-      merchantCats:typeof window!=="undefined"?window._merchantCats||null:null,
-    };
-    const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;a.click();URL.revokeObjectURL(u);
-  }
-  async function importData(file){
-    if(!file){return;}
-    try{
-      const t=await file.text();const d=JSON.parse(t);
-      const v=typeof d.version==="string"?d.version:"1";
-      if(d.accounts!==undefined)setAccounts(d.accounts);
-      if(d.income!==undefined)setIncome(p=>({...p,...d.income}));
-      if(d.expenses)setExpenses(d.expenses);
-      if(d.bills)setBills(d.bills);
-      if(d.debts)setDebts(d.debts);
-      if(d.trades)setTrades(d.trades);
-      if(d.shifts)setShifts(d.shifts);
-      if(d.savingsGoals)setSGoals(d.savingsGoals);
-      if(d.budgetGoals)setBGoals(d.budgetGoals);
-      if(d.categories)setCategories(d.categories);
-      if(d.balHist)setBalHist(d.balHist);
-      if(d.notifs)setNotifs(d.notifs);
-      if(d.settings)setSettings(p=>({...p,...d.settings}));
-      if(d.dashConfig)setDashConfig(p=>({...p,...d.dashConfig}));
-      if(d.calColors)setCalColors(p=>({...p,...d.calColors}));
-      if(d.tradingAccount)setTradingAccount(d.tradingAccount);
-      if(d.household)setHousehold(p=>({...p,...d.household}));
-      if(d.accountRates)setAccountRates(p=>({...p,...d.accountRates}));
-      if(d.greetName!==undefined)setGreetName(d.greetName);
-      if(d.appName!==undefined)setAppName(d.appName);
-      if(d.profCategory!==undefined)setProfCategory(d.profCategory);
-      if(d.profSub!==undefined)setProfSub(d.profSub);
-      if(v>="2.1"||d.recurrings){try{localStorage.setItem("fv_recurring",JSON.stringify(d.recurrings||[]));}catch{}}
-      if(v>="2.1"||d.settlements){try{localStorage.setItem("fv_settlements",JSON.stringify(d.settlements||[]));}catch{}}
-      if(v>="2.1"||d.hhBudgets){try{localStorage.setItem("fv_hh_budgets",JSON.stringify(d.hhBudgets||[]));}catch{}}
-      if(d.nwGoal!=null){try{localStorage.setItem("fv_nwgoal",JSON.stringify(d.nwGoal));}catch{}}
-      else if(d.nwGoal===null&&v>="2.1"){try{localStorage.removeItem("fv_nwgoal");}catch{}}
-      if(d.recurringLast!=null){try{localStorage.setItem("fv_recurring_last",String(d.recurringLast));}catch{}}
-      if(d.merchantCats&&typeof d.merchantCats==="object"){try{window._merchantCats=d.merchantCats;if(ss)ss("fv6:merchantCats",d.merchantCats);}catch{}}
-      showToast&&showToast("✅ Data imported!");
-    }catch(e){showToast&&showToast("❌ "+(e.message||"Invalid file"),"error");}
-  }
+  function exportData(){const d={exportedAt:new Date().toISOString(),appName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,version:"2.0"};const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;a.click();URL.revokeObjectURL(u);}
+  async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(d.accounts)setAccounts(d.accounts);if(d.income)setIncome(d.income);if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);showToast&&showToast("✅ Data imported!");} catch(e){showToast&&showToast("❌ "+e.message,"error");}}
 
   const Tog=(k,l,d,ic)=>(<div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{ic}</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>{l}</div><div style={{fontSize:12,color:C.textLight}}>{d}</div></div></div><button onClick={()=>setSettings(p=>({...p,[k]:!p[k]}))} style={{background:"none",border:"none",cursor:"pointer",color:settings[k]?C.accent:C.borderLight,padding:0,flexShrink:0}}>{settings[k]?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>);
 
@@ -3336,7 +3278,7 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
       </div>
       <div style={{display:"flex",gap:8,marginBottom:10}}>
         <button className="ba" onClick={exportData} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export JSON</button>
-        <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json,.JSON,application/json" style={{display:"none"}} onChange={async e=>{const f=e.target.files?.[0];await importData(f);e.target.value="";}}/></label>
+        <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={async e=>importData(e.target.files[0])}/></label>
       </div>
       {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:8}}><RefreshCw size={13}/>Re-run Setup Wizard</button>}
       {onResetAllData&&<button className="ba" onClick={onResetAllData} style={{width:"100%",background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"11px 0",color:C.red,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:8}}><Trash2 size={13}/>Reset All Data</button>}
@@ -4003,7 +3945,6 @@ function AuthScreen({onAuth,onSkip}){
     try{
       if(mode==="login"){
         const r=await signIn(email.trim(),pass);
-        if(r.error==="configuration"){setErr("Cloud sign-in isn't configured — use Try without account or add VITE_SUPABASE_* in .env.");setLoading(false);return;}
         if(r.error==="network"||r.message?.includes("Failed to fetch")||r.message?.includes("NetworkError")){setErr("Can't reach server — tap 'Try without account' to use offline.");setLoading(false);return;}
         if(r.error_description||r.msg||r.error){
           const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
@@ -4018,7 +3959,6 @@ function AuthScreen({onAuth,onSkip}){
       }else{
         const r=await signUp(email.trim(),pass);
         if(r.access_token){onAuth(r);return;}
-        if(r.error==="configuration"){setErr("Cloud sign-up isn't configured — use Try without account or add VITE_SUPABASE_* in .env.");setLoading(false);return;}
         if(r.error==="network"||r.message?.includes("Failed to fetch")){setErr("Can't reach server — tap 'Try without account' to use offline.");setLoading(false);return;}
         if(r.error_description||r.msg||r.error){
           const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
@@ -5349,7 +5289,7 @@ function AppInner(){
   const canGoBack=tabHistory.length>0;
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
-  const[pwResetMode,setPwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
+  const[pwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
   const[newPw,setNewPw]=useState("");const[pwMsg,setPwMsg]=useState("");const[pwLoading,setPwLoading]=useState(false);
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const authToken=authSession?.access_token||null;
@@ -5357,9 +5297,8 @@ function AppInner(){
   useEffect(()=>{
     if(!authSession?.refresh_token)return;
     const doRefresh=async()=>{
-      if(!SUPA_URL||!SUPA_KEY)return;
       try{
-        const s=_parseSession();
+        const s=JSON.parse(localStorage.getItem("fv_session")||"null");
         if(!s?.refresh_token)return;
         const res=await fetch(SUPA_URL+"/auth/v1/token?grant_type=refresh_token",{
           method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
@@ -5383,7 +5322,8 @@ function AppInner(){
       if(authSession){
         const lastSync=parseInt(localStorage.getItem("fv_last_sync")||"0");
         const now=Date.now();
-        if(now-lastSync>30000){
+        if(now-lastSync>30000){ // only sync if 30+ seconds since last sync
+          localStorage.setItem("fv_last_sync",String(now));
           loadFromSupabase(authSession);
         }
       }
@@ -5408,7 +5348,7 @@ function AppInner(){
       if(accessToken) {
         const sess = {access_token: accessToken, refresh_token: refreshToken, token_type:"bearer"};
         supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+accessToken}}).then(u=>{
-          const user = u?.error ? null : u?.data;
+          const user = u?.data || u;
           if(user?.id) {
             const fullSess = {...sess, user};
             localStorage.setItem("fv_session", JSON.stringify(fullSess));
@@ -5427,12 +5367,11 @@ function AppInner(){
       }
     }
     // Normal boot: validate + refresh existing session
-    const s=_parseSession();
+    const s=JSON.parse(localStorage.getItem("fv_session")||"null");
     if(!s?.access_token){setAuthLoading(false);return;}
     // Try to refresh the token first (handles expired access tokens)
     async function tryRefresh(session){
       if(!session?.refresh_token) return session;
-      if(!SUPA_URL||!SUPA_KEY)return session;
       try{
         const res=await fetch(SUPA_URL+"/auth/v1/token?grant_type=refresh_token",{
           method:"POST",
@@ -5450,8 +5389,7 @@ function AppInner(){
     }
     tryRefresh(s).then(sess=>{
       return supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+sess.access_token}}).then(u=>{
-        const ok=u?.data?.id&&!u?.error;
-        if(ok){setAuthSession(sess);}else{localStorage.removeItem("fv_session");}
+        if(u?.data?.id||u?.id){setAuthSession(sess);}else{localStorage.removeItem("fv_session");}
         setAuthLoading(false);
       });
     }).catch(()=>setAuthLoading(false));
@@ -5590,7 +5528,6 @@ function AppInner(){
   const[extraPayDebt,setExtraPayDebt]=useState(0);
   const[confirm,setConfirm]=useState(null);
   const[syncing,setSyncing]=useState(false);
-  const deepLinkConsumed=useRef(false);
   const[syncStatus,setSyncStatus]=useState(null);
   const[toast,setToast]=useState(null);
   const showToast=(msg,type='success')=>{setToast({msg,type});const dur=msg.length>40?4000:2500;setTimeout(()=>setToast(null),dur);};
@@ -5867,22 +5804,6 @@ function AppInner(){
   const cl=()=>{setModal(null);setForm({});};
   const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
 
-  useEffect(()=>{
-    if(!ready||!onboarded||deepLinkConsumed.current)return;
-    let tabParam,actionParam;
-    try{
-      const q=new URLSearchParams(window.location.search);
-      tabParam=q.get("tab");
-      actionParam=q.get("action");
-    }catch{return;}
-    if(!tabParam&&!actionParam)return;
-    deepLinkConsumed.current=true;
-    const ALLOW=new Set(["home","spend","chat","bills","more","categories","accounts","debt","savings","recurring","cashflow","physical","health","trading","calendar","shifts","trend","statement","search","subscriptions","insights","paycheck","networthtrend","tax","dashsettings","household","export","import","settings","notifs"]);
-    if(tabParam&&ALLOW.has(tabParam))navTo(tabParam);
-    if(actionParam==="expense")requestAnimationFrame(()=>requestAnimationFrame(()=>om("expense")));
-    try{window.history.replaceState(null,"",window.location.pathname+window.location.hash);}catch{}
-  },[ready,onboarded]);
-
   // ── THE FIX: submit function ──────────────────────────────────────────────
   function submit(){
     if(modal==="expense"){
@@ -5974,7 +5895,7 @@ function AppInner(){
     setExpenses([]);setBills([]);setDebts([]);setTrades([]);setShifts([]);
     setSGoals([]);setBGoals([]);setBalHist([]);setNotifs([]);
     setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});
-    setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""});
+    setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});
     setTradingAccount({deposit:"",balance:""});setAppName("Trackfi");
     setIsDemoMode(false);try{localStorage.removeItem("fv_demo");}catch{}
     navTo("home");
@@ -6674,7 +6595,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} setHousehold={setHousehold} navTo={navTo} balHist={balHist} setBalHist={setBalHist} notifs={notifs} setNotifs={setNotifs} tradingAccount={tradingAccount} setTradingAccount={setTradingAccount} accountRates={accountRates} setAccountRates={setAccountRates} dashConfig={dashConfig} setDashConfig={setDashConfig} calColors={calColors} setCalColors={setCalColors} ss={ss} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});setGreetName("");setCats(DEF_CATS);setSettings({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]});setTradingAccount({deposit:"",balance:""});const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});setGreetName("");setCats(DEF_CATS);setSettings({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]});setTradingAccount({deposit:"",balance:""});const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
