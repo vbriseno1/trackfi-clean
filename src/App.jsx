@@ -180,7 +180,7 @@ const getProfSub = (pId,sId) => { const p=getProfession(pId); return p.subs.find
 
 const fmt    = n => { const v=Number(n); return "$"+(isNaN(v)?0:v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const fmtK   = n => { const v=Number(n||0); return v>=1000?"$"+(v/1000).toFixed(1)+"k":fmt(v); };
-const todayStr = () => new Date().toISOString().split("T")[0];
+const todayStr = () => { const n=new Date(); return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0"); };
 const dueIn  = d => { if(!d||typeof d!=="string")return 999; const parts=d.split('-').map(Number); if(parts.length!==3||parts.some(isNaN))return 999; const [ty,tm,tdy]=todayStr().split('-').map(Number); const [dy,dm,ddd]=parts; const today2=new Date(ty,tm-1,tdy); const due=new Date(dy,dm-1,ddd); const diff=Math.ceil((due-today2)/86400000); return isNaN(diff)?999:diff; };
 const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); };
 const dayOfMonth  = () => new Date().getDate();
@@ -249,13 +249,13 @@ const notifSupported  = () => typeof window!=="undefined"&&"Notification" in win
 const notifPermission = () => notifSupported()?window.Notification.permission:"denied";
 async function hashPIN(p) {
   try { const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(p+"fv_salt_2025")); return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join(""); }
-  catch { return p; }
+  catch { return null; }
 }
 function advanceDueDate(dateStr, months=1) {
   if(!dateStr) return dateStr;
   const d = new Date(dateStr+"T00:00:00");
   d.setMonth(d.getMonth()+months);
-  return d.toISOString().split("T")[0];
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
 
 const DEF_CATS = [
@@ -422,6 +422,7 @@ function PINLock({onUnlock,appName,darkMode}){
   const txt=darkMode?"rgba(255,255,255,.92)":C.text;const muted=darkMode?C.textLight:C.textLight;
   async function tryUnlock(){
     const h=await hashPIN(pin);
+    if(h===null){setError("PIN unavailable — check browser security settings.");return;}
     if(h===localStorage.getItem("fv_pin_hash")){onUnlock();return;}
     setTries(t=>t+1);setError(tries>=2?"Too many attempts — wait 10s":"Wrong PIN");setPin("");
     if(tries>=2)setTimeout(()=>setTries(0),10000);
@@ -678,10 +679,11 @@ function parseMsg(text,categories,debts){
   const rawAmount=am?parseFloat(am[1].replace(/,/g,"")):null;
   const amount=rawAmount!=null?String(((rawAmount*(1+tipPct))/splitBy).toFixed(2)):null;
   const dt=new Date();let date=todayStr();
-  if(t.includes("yesterday")){const d=new Date(dt);d.setDate(d.getDate()-1);date=d.toISOString().split("T")[0];}
+  const _localDs=d2=>{return d2.getFullYear()+"-"+String(d2.getMonth()+1).padStart(2,"0")+"-"+String(d2.getDate()).padStart(2,"0");};
+  if(t.includes("yesterday")){const d=new Date(dt);d.setDate(d.getDate()-1);date=_localDs(d);}
   const DAYS=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
   const lastDayM=t.match(/last\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
-  if(lastDayM){const target=DAYS.indexOf(lastDayM[1].toLowerCase());const d=new Date(dt);const curr=d.getDay();const diff=curr>=target?curr-target:curr-target+7;d.setDate(d.getDate()-Math.max(diff,1));date=d.toISOString().split("T")[0];}
+  if(lastDayM){const target=DAYS.indexOf(lastDayM[1].toLowerCase());const d=new Date(dt);const curr=d.getDay();const diff=curr>=target?curr-target:curr-target+7;d.setDate(d.getDate()-Math.max(diff,1));date=_localDs(d);}
   // Transfer detection (moved/transferred X to savings/checking)
   if((t.includes("moved")||t.includes("transferred")||t.includes("transfer"))&&amount){
     if(t.includes("saving"))return{type:"account",key:"savings",amount,text:"Moved to savings"};
@@ -765,23 +767,24 @@ Ask me anything:\
   const[input,setInput]=useState("");const[pending,setPending]=useState(null);const[history,setHistory]=useState([]);
   const botRef=useRef();
   useEffect(()=>{botRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,pending]);
-  const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
-  const te=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
+  const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
   const ck=parseFloat(accounts.checking||0);
   // Use real pay-frequency-aware safe-to-spend
   const chatPayFreq=income.payFrequency||"Biweekly";
   const chatPayDays=chatPayFreq==="Weekly"?7:chatPayFreq==="Biweekly"?14:chatPayFreq==="Twice Monthly"?15:30;
   const chatNow=new Date();const chatTod=chatNow.getDate();
   const chatNextPay=(()=>{if(chatPayFreq==="Twice Monthly"){return chatTod<15?new Date(chatNow.getFullYear(),chatNow.getMonth(),15):new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}if(chatPayFreq==="Monthly"){return new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}const d=new Date(chatNow);d.setDate(chatNow.getDate()+chatPayDays);return d;})();
-  const chatNextPayStr=chatNextPay.toISOString().split("T")[0];
+  const chatNextPayStr=chatNextPay.getFullYear()+"-"+String(chatNextPay.getMonth()+1).padStart(2,"0")+"-"+String(chatNextPay.getDate()).padStart(2,"0");
   const bs=bills.reduce((s,b)=>{if(b.paid)return s;const d=b.dueDate||"";return d&&d<=chatNextPayStr?s+(parseFloat(b.amount)||0):s;},0);
-  const burn=dayOfMonth()>0?te/dayOfMonth():0;
+  const _chatMs=chatNow.getFullYear()+"-"+String(chatNow.getMonth()+1).padStart(2,"0");
+  const _chatMtd=expenses.filter(e=>e.date?.startsWith(_chatMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const burn=dayOfMonth()>0?_chatMtd/dayOfMonth():0;
   const chatProjected=burn*Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
   const chatOtherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const chatOtherProRated=chatOtherMonthly*(Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000))/30);
   const sts=Math.max(0,ck+chatOtherProRated-bs-chatProjected-200);
   // Pre-compute reusable values for handleQ
-  const _thisMs=new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0");
+  const _thisMs=_chatMs;
   const _thisExp=expenses.filter(e=>e.date?.startsWith(_thisMs));
   const _thisTotal=_thisExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const _prevMs=(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");})();
@@ -1105,7 +1108,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
   const thisTotal=thisExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const lastTotal=lastExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const diff=lastTotal>0?((thisTotal-lastTotal)/lastTotal*100):0;
-  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const catMap=thisExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
   const catSorted=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   const lastCatMap=lastExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
@@ -1362,7 +1365,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
 
 function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],onAdd}){
   const now=new Date();
-  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const checking=parseFloat(accounts.checking||0);
   const payFreq=income.payFrequency||"Biweekly";
   // Pay per period based on frequency
@@ -1396,7 +1399,7 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
   const beforeTotal=billsBeforePay.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const spentSoFar=expenses.filter(e=>e.date?.startsWith(thisMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-  const mSpent=spentSoFar;const _pvMult=income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17;const ti2=(parseFloat(income.primary||0)*_pvMult)+(parseFloat(income.other||0));
+  const mSpent=spentSoFar;const _pvMult=income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12);const ti2=(parseFloat(income.primary||0)*_pvMult)+(parseFloat(income.other||0));
   const dailyBurn=spentSoFar/Math.max(1,today);
   const projectedSpend=dailyBurn*daysUntilPay;
   // Match AppInner sts formula: checking + other income - bills before pay - projected - envelopes - buffer
@@ -1519,7 +1522,7 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
   const totalOriginal=debts.reduce((s,d)=>s+(parseFloat(d.original||d.balance||0)),0);
   const totalPaidDown=Math.max(0,totalOriginal-totalDebt);
   const overallPct=totalOriginal>0?Math.round(totalPaidDown/totalOriginal*100):0;
-  const totalAssets=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
+  const totalAssets=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount?.balance||0));
   const currentNW=totalAssets-totalDebt;
   const chartData=balHist.map(h=>{const a=(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0)+(h.hsa||0)+(h.property||0)+(h.vehicles||0);const debtAtPoint=h.totalDebt!=null?h.totalDebt:totalDebt;return{date:h.date,assets:a,netWorth:a-debtAtPoint};}).slice(-52);
   const firstNW=chartData[0]?.netWorth||currentNW;
@@ -1931,15 +1934,16 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         const merchants=filteredExp.reduce((m,e)=>{const k=(e.name||'').toLowerCase().trim();if(!k)return m;m[k]=(m[k]||0)+(parseFloat(e.amount)||0);return m;},{});
         const top=Object.entries(merchants).sort((a,b)=>b[1]-a[1])[0];
         const dayOfMo=new Date().getDate();
-        const dailyAvg=dayOfMo>0?(totalExp/dayOfMo):0;
         const daysInMo=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
-        const forecast=totalExp+(dailyAvg*(daysInMo-dayOfMo));
+        const isMonthFilter=dateFilter==="month";
+        const dailyAvg=isMonthFilter&&dayOfMo>0?(totalExp/dayOfMo):0;
+        const forecast=isMonthFilter?totalExp+(dailyAvg*(daysInMo-dayOfMo)):null;
         if(!top)return null;
         return(<div style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:'12px 14px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div>
             <div style={{fontSize:11,color:C.textLight,fontWeight:600,marginBottom:2}}>TOP MERCHANT</div>
             <div style={{fontSize:13,fontWeight:700,color:C.text,textTransform:'capitalize'}}>{top[0]}</div>
-            <div style={{fontSize:12,color:C.textLight}}>Month forecast: <span style={{fontWeight:700,color:forecast>totalExp*1.2?C.red:C.amber}}>{fmt(forecast)}</span></div>
+            {forecast!=null&&<div style={{fontSize:12,color:C.textLight}}>Month forecast: <span style={{fontWeight:700,color:forecast>totalExp*1.2?C.red:C.amber}}>{fmt(forecast)}</span></div>}
           </div>
           <div style={{textAlign:'right'}}>
             <div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.red}}>{fmt(top[1])}</div>
@@ -1968,9 +1972,9 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
   const unpaid=bills.filter(b=>!b.paid);
   const paid=bills.filter(b=>b.paid);
-  const totalMonthly=bills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
+  const totalMonthly=unpaid.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   const totalPaid=paid.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
-  const pctPaid=totalMonthly>0?Math.round(totalPaid/totalMonthly*100):0;
+  const pctPaid=(totalMonthly+totalPaid)>0?Math.round(totalPaid/(totalMonthly+totalPaid)*100):0;
   const soonAmt=bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=7).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   return(
     <div className="fu">
@@ -1989,13 +1993,13 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Bills</div><div style={{fontSize:13,color:C.textLight}}>{unpaid.length} unpaid · {overdue.length} overdue</div></div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>setBills(p=>p.map(b=>{if(!overdue.some(o=>o.id===b.id))return b;if(b.recurring&&b.recurring!=="One-time"){const d=new Date((b.dueDate||todayStr())+"T00:00:00");if(b.recurring==="Weekly")d.setDate(d.getDate()+7);else if(b.recurring==="Bi-weekly")d.setDate(d.getDate()+14);else if(b.recurring==="Quarterly")d.setMonth(d.getMonth()+3);else if(b.recurring==="Annual")d.setFullYear(d.getFullYear()+1);else d.setMonth(d.getMonth()+1);return{...b,paid:false,dueDate:d.toISOString().split("T")[0],paidDate:todayStr()};}return{...b,paid:true};}))} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>setBills(p=>p.map(b=>{if(!overdue.some(o=>o.id===b.id))return b;if(b.recurring&&b.recurring!=="One-time"){const d=new Date((b.dueDate||todayStr())+"T00:00:00");if(b.recurring==="Weekly")d.setDate(d.getDate()+7);else if(b.recurring==="Bi-weekly")d.setDate(d.getDate()+14);else if(b.recurring==="Quarterly")d.setMonth(d.getMonth()+3);else if(b.recurring==="Annual")d.setFullYear(d.getFullYear()+1);else d.setMonth(d.getMonth()+1);const _ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");return{...b,paid:false,dueDate:_ds,paidDate:todayStr()};}return{...b,paid:true};}))} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
       </div>
       {bills.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
-          <div style={{fontSize:12,color:C.textLight,marginBottom:2}}>Monthly Total</div>
+          <div style={{fontSize:12,color:C.textLight,marginBottom:2}}>Unpaid Bills</div>
           <div style={{fontFamily:MF,fontWeight:800,fontSize:20,color:C.text}}>{fmt(totalMonthly)}</div>
-          <div style={{fontSize:12,color:C.green,marginTop:2}}>{fmt(totalPaid)} paid · {fmt(totalMonthly-totalPaid)} remaining</div>
+          <div style={{fontSize:12,color:C.green,marginTop:2}}>{fmt(totalPaid)} paid · {fmt(totalMonthly+totalPaid)} total</div>
         </div>
         <div style={{position:"relative",width:56,height:56}}>
           <svg width="56" height="56" style={{transform:"rotate(-90deg)"}}>
@@ -2422,7 +2426,7 @@ function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,
         rolling+=minPay;
         return result2;
       });
-      const maxMo=Math.max(...plan.map(p=>p.months).filter(m=>m<500));
+      const _filtMo=plan.map(p=>p.months).filter(m=>m<500);const maxMo=_filtMo.length?Math.max(..._filtMo):1;
       return(<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:'14px',marginTop:14}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
           <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Payoff Schedule</div>
@@ -2441,7 +2445,7 @@ function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,
         </div>)}
         <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between'}}>
           <div style={{fontSize:12,color:C.textLight}}>Total interest: <span style={{fontWeight:700,color:C.red}}>{fmt(plan.reduce((s,p)=>s+(p.interest<999999?p.interest:0),0))}</span></div>
-          <div style={{fontSize:12,color:C.textLight}}>Debt-free in: <span style={{fontWeight:700,color:C.green}}>{Math.max(...plan.map(p=>p.months).filter(m=>m<500))}mo</span></div>
+          <div style={{fontSize:12,color:C.textLight}}>Debt-free in: <span style={{fontWeight:700,color:C.green}}>{(plan.some(p=>p.months<500)?Math.max(...plan.map(p=>p.months).filter(m=>m<500))+"mo":"—")}</span></div>
         </div>
       </div>);
     })()}
@@ -2909,7 +2913,7 @@ function CalendarView({expenses,bills,calColors,setCalColors,setExpenses,onAdd})
       </div>
       {/* summary stats */}
       {monthTotal>0&&<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:12}}>
-        {[['Total',fmt(monthTotal),C.red],['Per Day',fmt(monthTotal/Math.max(1,new Date().getDate())),C.textMid],['Transactions',String(monthExp.length),C.accent]].map(([l,v,c])=>(
+        {(()=>{const _now2=new Date();const _isCurrentMo=yr===_now2.getFullYear()&&mo===_now2.getMonth();const _divisor=_isCurrentMo?Math.max(1,_now2.getDate()):dim;return[['Total',fmt(monthTotal),C.red],['Per Day',fmt(monthTotal/_divisor),C.textMid],['Transactions',String(monthExp.length),C.accent]];})().map(([l,v,c])=>(
           <div key={l} style={{background:C.surfaceAlt,borderRadius:10,padding:'8px',textAlign:'center'}}>
             <div style={{fontSize:9,color:C.textLight,fontWeight:600,marginBottom:2}}>{l}</div>
             <div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:c}}>{v}</div>
@@ -2977,9 +2981,9 @@ function ShiftView({shifts,setShifts,income,profCategory,profSub,showToast}){
   function add(){if(!form.hours||!form.rate)return;const mult=OT[form.type]||1;const gross=(parseFloat(form.hours)*parseFloat(form.rate)*mult).toFixed(2);setShifts(p=>[{id:Date.now(),...form,gross,mult},...p]);showToast&&showToast("✓ Shift logged — "+fmt(gross));setForm({date:todayStr(),type:"Regular",hours:"",rate:form.rate,note:""});setShowAdd(false);}
   const now2=new Date();const thisMonth=now2.getFullYear()+"-"+String(now2.getMonth()+1).padStart(2,"0");const ms=shifts.filter(s=>s.date?.startsWith(thisMonth));
   const mh=ms.reduce((s,x)=>s+(parseFloat(x.hours)||0),0),mg=ms.reduce((s,x)=>s+(parseFloat(x.gross)||0),0),mot=ms.filter(s=>s.type!=="Regular").reduce((s,x)=>s+(parseFloat(x.gross)||0),0);
-  const ytd=shifts.reduce((s,x)=>s+(parseFloat(x.gross)||0),0);
+  const _ytdPrefix=String(now2.getFullYear());const ytd=shifts.filter(s=>(s.date||"").startsWith(_ytdPrefix)).reduce((s,x)=>s+(parseFloat(x.gross)||0),0);
   const subRole=getProfSub(profCategory,profSub);
-  const weeklyData=useMemo(()=>{const wk={};shifts.forEach(s=>{const d=new Date((s.date||todayStr())+"T00:00:00");d.setDate(d.getDate()-d.getDay());const k=d.toISOString().split("T")[0];if(!wk[k])wk[k]={week:k,gross:0};wk[k].gross+=parseFloat(s.gross||0);});return Object.values(wk).sort((a,b)=>a.week.localeCompare(b.week)).slice(-8).map(w=>({...w,label:w.week.slice(5)}));},[shifts]);
+  const weeklyData=useMemo(()=>{const wk={};shifts.forEach(s=>{const d=new Date((s.date||todayStr())+"T00:00:00");d.setDate(d.getDate()-d.getDay());const k=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");if(!wk[k])wk[k]={week:k,gross:0};wk[k].gross+=parseFloat(s.gross||0);});return Object.values(wk).sort((a,b)=>a.week.localeCompare(b.week)).slice(-8).map(w=>({...w,label:w.week.slice(5)}));},[shifts]);
   return(<div className="fu">
     <SH title={prof.icon+" "+prof.shiftLabel+" Tracker"} sub={subRole.label+" · Log hours & calculate pay"} onAdd={()=>setShowAdd(true)} addLabel={"Log "+prof.shiftLabel}/>
     <div style={{background:`linear-gradient(135deg,${C.navy} 0%,#1a3a6e 100%)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>This Month</div><div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:"#fff",marginBottom:14}}>{fmt(mg)}</div><div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>{[["Shifts",String(ms.length)],["Hours",mh.toFixed(1)],["OT Pay",fmtK(mot)],["YTD",fmtK(ytd)]].map(([l,v])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l}</div><div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:"#fff"}}>{v}</div></div>)}</div></div>
@@ -3092,7 +3096,7 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
   const totE=mExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const totB=mBills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   const tradePnl=mTrades.reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
-  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const catMap=mExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
   function exportHTML(){const rows=mExp.map(e=>"<tr><td>"+e.date+"</td><td>"+e.name+"</td><td>"+e.category+"</td><td>$"+parseFloat(e.amount).toFixed(2)+"</td></tr>").join("");const html="<html><head><title>"+FULL_MOS[mo]+" "+yr+" Statement</title></head><body><h1>"+(appName||"Finances")+" — "+FULL_MOS[mo]+" "+yr+"</h1><table border='1'><tr><th>Date</th><th>Name</th><th>Category</th><th>Amount</th></tr>"+rows+"<tr><td colspan='3'><b>Total</b></td><td><b>$"+totE.toFixed(2)+"</b></td></tr></table></body></html>";const b=new Blob([html],{type:"text/html"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"finances")+"-"+FULL_MOS[mo]+"-"+yr+".html";a.click();URL.revokeObjectURL(u);}
   function exportCSV(){const hdr=["Date","Name","Category","Amount"];const rowData=mExp.map(e=>[e.date,e.name.replace(/,/g," "),e.category,parseFloat(e.amount).toFixed(2)]);const csv=[hdr,...rowData].map(r=>r.join(",")).join("\r\n");const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"trackfi")+"-"+FULL_MOS[mo]+"-"+yr+".csv";a.click();URL.revokeObjectURL(u);}
@@ -3133,7 +3137,7 @@ function StatementView({expenses,bills,income,accounts,debts,trades,appName,cate
 }
 
 function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoals}){
-  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const annualIncome=ti*12;
   const te=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
@@ -3618,7 +3622,7 @@ function generateDemoData(){
 }
 
 function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
-  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const _hsAllMs=new Set(expenses.map(e=>e.date?.slice(0,7)).filter(Boolean));
   const te=_hsAllMs.size>0?expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)/Math.max(1,_hsAllMs.size):0;
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
@@ -3738,7 +3742,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
 function IncomeSpendingView({expenses,income,trades,bills=[]}){
   const[range,setRange]=useState("1M");
   const now=new Date();
-  const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
+  const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
   const months=range==="1M"?1:range==="3M"?3:range==="6M"?6:12;
   const data=useMemo(()=>Array.from({length:months},(_,i)=>{
     const d=new Date(now.getFullYear(),now.getMonth()-months+1+i,1);
@@ -3860,7 +3864,7 @@ function ConfirmDialog({title,message,onConfirm,onCancel,danger=false}){
 
 function TaxView({expenses,income,trades,shifts,appName}){
   const now=new Date();const yr=now.getFullYear();
-  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const annualIncome=ti*12;
   const tradePnl=trades.filter(t=>t.date?.startsWith(String(yr))).reduce((s,t)=>s+(parseFloat(t.pnl)||0),0);
   const shiftEarnings=shifts.filter(s=>s.date?.startsWith(String(yr))).reduce((s,x)=>s+(parseFloat(x.gross)||0),0);
@@ -3916,7 +3920,7 @@ function SubsView({detectedSubs,expenses,showToast}){
   const other=active.filter(s=>s.interval!=="Monthly");
   const totalMo=monthly.reduce((s,x)=>s+(parseFloat(x.amount)||0),0);
   const totalAll=active.reduce((s,x)=>{const a=parseFloat(x.amount)||0;if(x.interval==="Monthly")return s+a;if(x.interval==="Weekly")return s+a*4.33;if(x.interval==="Annual")return s+a/12;return s+a;},0);
-  const catMap=active.reduce((a,s)=>{a[s.category]=(a[s.category]||0)+(parseFloat(s.amount)||0);return a},{});
+  const catMap=active.reduce((a,s)=>{const raw=parseFloat(s.amount)||0;const mo=s.interval==="Weekly"?raw*4.33:s.interval==="Annual"?raw/12:raw;a[s.category]=(a[s.category]||0)+mo;return a},{});
   const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   const maxCat=cats[0]?.[1]||1;
   return(
@@ -4937,7 +4941,7 @@ function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGo
   const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)),0);
   const nw=ta-td;
-  const mult=income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17;
+  const mult=income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12);
   const ti=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const thisMonthExp=expenses.filter(e=>e.date?.startsWith(ms));
   const mExp=thisMonthExp.reduce((s,e)=>s+(parseFloat(e.amount||0)),0);
@@ -5852,7 +5856,7 @@ function AppInner(){
   useEffect(()=>{try{localStorage.setItem("fv_dark",darkMode?"1":"0");}catch{};document.body.classList.toggle("dark-mode",!!darkMode);},[darkMode]);
 
   // paycheckMultiplier converts per-paycheck primary income → monthly
-  const paycheckMultiplier=income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17;
+  const paycheckMultiplier=income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12);
   // monthlyIncome = what actually comes in per month (all sources)
   const monthlyIncome=useMemo(()=>(parseFloat(income.primary||0)*paycheckMultiplier)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income,paycheckMultiplier]);
   // totalIncome = alias for monthlyIncome (keeps all existing references working)
@@ -5860,7 +5864,7 @@ function AppInner(){
   const totalAssets=useMemo(()=>(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount.balance||0)),[accounts,tradingAccount]);
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const totalDebt=useMemo(()=>debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0),[debts]);
-  const thisMonthExp=useMemo(()=>{const ms=new Date().toISOString().slice(0,7);return expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);},[expenses]);
+  const thisMonthExp=useMemo(()=>{const n=new Date();const ms=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");return expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);},[expenses]);
   const cashflow=totalIncome-thisMonthExp;
   const netWorth=totalAssets-totalDebt;
   // Net Worth milestone checker — fire when assets cross thresholds
@@ -5883,7 +5887,7 @@ function AppInner(){
   const overdue=useMemo(()=>bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0),[bills]);
   const dueSoon=useMemo(()=>bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=7),[bills]);
   const billsSoonAmt=useMemo(()=>dueSoon.reduce((s,b)=>s+(parseFloat(b.amount)||0),0),[dueSoon]);
-  const burnRate=dayOfMonth()>0?totalExp/dayOfMonth():0;
+  const burnRate=dayOfMonth()>0?thisMonthExp/dayOfMonth():0;
   const projected=burnRate*daysInMonth();
   // Pay frequency helpers — all plain computed values, no hooks needed
   const payFreq=income.payFrequency||"Biweekly";
@@ -5944,7 +5948,7 @@ function AppInner(){
     const today2=new Date();
     for(let i=0;i<30;i++){
       const d=new Date(today2);d.setDate(d.getDate()-i);
-      const ds=d.toISOString().split("T")[0];
+      const ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
       const dayTotal=expenses.filter(e=>e.date===ds).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
       if(i===0&&dayTotal===0){continue;}
       if(dayTotal<dailyAvgBase){streak++;}else{break;}
@@ -6036,7 +6040,7 @@ function AppInner(){
       if(!form.amount){setFormError("Please enter an amount.");return;}
       const billAmt=parseFloat(form.amount)||0;
       if(billAmt<=0){setFormError("Amount must be greater than $0.");return;}
-      setBills(p=>[...p,{id:Date.now(),name:form.name,amount:String(billAmt),dueDate:form.dueDate||"",recurring:form.recurring||"Monthly",paid:false,autoPay:false,paidBy:form.paidBy||"me"}]);
+      setBills(p=>[...p,{id:Date.now(),name:form.name,amount:String(billAmt),dueDate:form.dueDate||todayStr(),recurring:form.recurring||"Monthly",paid:false,autoPay:false,paidBy:form.paidBy||"me"}]);
       showToast("✓ "+form.name+" bill added");try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
     }else if(modal==="debt"){
@@ -6191,8 +6195,10 @@ function AppInner(){
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 {(()=>{
-                  const sr2=totalIncome>0?Math.max(0,(totalIncome-totalExp)/totalIncome*100):0;
-                  const sc=Math.round(Math.min(10,Math.max(1,((sr2>20?100:sr2>10?75:sr2>5?50:25)*.25+(parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0))>=(totalExp*3)?100:(parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0))>=(totalExp)?70:40)*.2+(totalDebt===0?100:Math.max(20,100-Math.round(totalDebt/Math.max(1,totalIncome)*100)))*.2+100*.35)/10));
+                  const sr2=totalIncome>0?Math.max(0,(totalIncome-thisMonthExp)/totalIncome*100):0;
+                  const _liq2=parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0);
+                  const _ef2=totalIncome>0?_liq2/totalIncome:0;
+                  const sc=Math.round(Math.min(10,Math.max(1,((sr2>20?100:sr2>10?75:sr2>5?50:25)*.25+(_ef2>=3?100:_ef2>=1?70:40))*.2+(totalDebt===0?100:Math.max(20,100-Math.round(totalDebt/Math.max(1,totalIncome)*100)))*.2+100*.35)/10));
                   const col=sc>=8?C.green:sc>=6?C.accent:sc>=4?C.amber:C.red;
                   return(<button onClick={()=>navTo("health")} style={{background:col+"18",border:`1px solid ${col}44`,borderRadius:99,padding:"5px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
                     <div style={{fontFamily:MF,fontWeight:800,fontSize:12,color:col}}>{sc}/10</div>
@@ -6310,7 +6316,7 @@ function AppInner(){
                     <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>MONEY FLOW</div>
                     <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontSize:38,fontWeight:900,color:cashflow>=0?C.greenMid:"#fca5a5",lineHeight:1,letterSpacing:-1,marginBottom:4}}>{cashflow>=0?"+":""}{fmt(cashflow)}</div>
                     <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginBottom:14}}>{payFreq==="Biweekly"?"biweekly":"per "+payFreq.toLowerCase()} paycheck · {savingsRate.toFixed(1)}% saved</div>
-                    {[["Income/pay",fmt(payPerPeriod),C.greenMid,100],["Expenses",fmt(burnRate*30),C.redMid,totalIncome>0?Math.min(100,(burnRate*30/totalIncome)*100):0],["Bills",fmt(bills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0)),"rgba(255,255,255,.6)",totalIncome>0?Math.min(100,(bills.reduce((s,b)=>s+(parseFloat(b.amount)||0),0)/totalIncome)*100):0],["Debt Min",fmt(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)),"rgba(255,255,255,.4)",totalIncome>0?Math.min(100,(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/totalIncome)*100):0]].map(([l,v,c,pct])=>(
+                    {[["Income/pay",fmt(payPerPeriod),C.greenMid,100],["This Month",fmt(thisMonthExp),C.redMid,totalIncome>0?Math.min(100,(thisMonthExp/totalIncome)*100):0],["Bills",fmt(bills.filter(b=>!b.paid).reduce((s,b)=>s+(parseFloat(b.amount)||0),0)),"rgba(255,255,255,.6)",totalIncome>0?Math.min(100,(bills.filter(b=>!b.paid).reduce((s,b)=>s+(parseFloat(b.amount)||0),0)/totalIncome)*100):0],["Debt Min",fmt(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)),"rgba(255,255,255,.4)",totalIncome>0?Math.min(100,(debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0)/totalIncome)*100):0]].map(([l,v,c,pct])=>(
                       <div key={l} style={{marginBottom:7}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
                           <span style={{fontSize:11,color:"rgba(255,255,255,.6)"}}>{l}</span>
@@ -6386,14 +6392,13 @@ function AppInner(){
             {/* ── 3. QUICK PULSE — 4 stats at a glance ──────────── */}
             {dashConfig.showMetrics!==false&&(()=>{
               const now_p=new Date();
-              const ms_p=now_p.getFullYear()+"-"+String(now_p.getMonth()+1).padStart(2,"0");
-              const mtd_p=expenses.filter(e=>e.date?.startsWith(ms_p)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-              const todayAmt=expenses.filter(e=>e.date===now_p.toISOString().split("T")[0]).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+              const _todayLocal=now_p.getFullYear()+"-"+String(now_p.getMonth()+1).padStart(2,"0")+"-"+String(now_p.getDate()).padStart(2,"0");
+              const todayAmt=expenses.filter(e=>e.date===_todayLocal).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
               const nextBill=bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0).sort((a,b2)=>dueIn(a.dueDate)-dueIn(b2.dueDate))[0];
               const subCount=detectedSubs?.filter(s=>s.interval==="Monthly").length||0;
               const subTotal=detectedSubs?.filter(s=>s.interval==="Monthly").reduce((s,x)=>s+(parseFloat(x.amount)||0),0)||0;
               const pulseItems=[
-                {label:"Today",val:todayAmt>0?fmt(todayAmt):"—",color:todayAmt>0?C.red:C.textFaint,sub:todayAmt>0?expenses.filter(e=>e.date===now_p.toISOString().split("T")[0]).length+" items":"nothing yet",tap:()=>navTo("calendar")},
+                {label:"Today",val:todayAmt>0?fmt(todayAmt):"—",color:todayAmt>0?C.red:C.textFaint,sub:todayAmt>0?expenses.filter(e=>e.date===_todayLocal).length+" items":"nothing yet",tap:()=>navTo("calendar")},
                 {label:"Safe to Spend",val:fmt(sts),color:sts>500?C.green:sts>0?C.amber:C.red,sub:"until next pay",tap:()=>navTo("paycheck")},
                 {label:"Next Bill",val:nextBill?fmt(nextBill.amount):"—",color:nextBill&&dueIn(nextBill.dueDate)<=3?C.red:C.amber,sub:nextBill?nextBill.name+" · "+dueIn(nextBill.dueDate)+"d":"all clear",tap:()=>navTo("bills")},
                 {label:"Subscriptions",val:subCount>0?fmt(subTotal)+"/mo":"—",color:C.textMid,sub:subCount>0?subCount+" detected":"none found",tap:()=>navTo("subscriptions")},
