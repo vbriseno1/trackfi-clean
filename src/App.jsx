@@ -281,6 +281,7 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#F0F2F8;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior:none}
+body.dark-mode{background:#0A1628}
 ::-webkit-scrollbar{display:none}
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 input,select,button,textarea{font-family:'Inter',sans-serif}
@@ -355,11 +356,12 @@ function FS({label,options,...p}){
   );
 }
 
-function Modal({title,icon:Icon,onClose,onSubmit,submitLabel="Save",accent=C.accent,children,wide}){
+function Modal({title,icon:Icon,onClose,onSubmit,submitLabel="Save",accent=C.accent,children,wide,error}){
   return(
     <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(10,22,40,.5)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",animation:"fadeIn .2s ease"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:wide?640:480,maxHeight:"94vh",overflowY:"auto",padding:"0 0 40px",animation:"slideUp .26s cubic-bezier(.22,1,.36,1)",boxShadow:"0 -4px 60px rgba(10,22,40,.22)"}}>
+      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:wide?640:480,maxHeight:"94vh",overflowY:"auto",padding:"0 0 40px",animation:"slideUp .26s cubic-bezier(.22,1,.36,1)",boxShadow:"0 -4px 60px rgba(10,22,40,.22)"}}
+        onKeyDown={e=>{if(e.key==="Enter"&&e.target.tagName==="INPUT"&&!e.shiftKey&&onSubmit){e.preventDefault();onSubmit();}}}>
         <div style={{width:40,height:4,background:C.border,borderRadius:99,margin:"14px auto 4px"}}/>
         <div style={{padding:"16px 24px 20px",borderBottom:`1px solid ${C.borderLight}`,marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -370,6 +372,7 @@ function Modal({title,icon:Icon,onClose,onSubmit,submitLabel="Save",accent=C.acc
         </div>
         <div style={{padding:"0 24px"}}>
           {children}
+          {error&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"9px 13px",marginTop:10,fontSize:13,color:C.red,fontWeight:500}}>{error}</div>}
           {onSubmit&&<button className="ba" onClick={onSubmit} style={{width:"100%",background:`linear-gradient(135deg,${accent},${accent}dd)`,border:"none",borderRadius:14,padding:"16px 0",color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",marginTop:16,boxShadow:`0 4px 20px ${accent}40`,letterSpacing:.4}}>{submitLabel}</button>}
         </div>
       </div>
@@ -1770,7 +1773,7 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
     </div>
   );
 }
-function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast,household}){
+function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast,showUndoToast,household}){
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
   const[showChart,setShowChart]=useState(true);
@@ -1949,7 +1952,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         const cat=categories.find(c=>c.name===e.category);
         if(selectMode){const isSel=selected.has(e.id);return(<div key={e.id} onClick={()=>setSelected(p=>{const n=new Set(p);if(n.has(e.id))n.delete(e.id);else n.add(e.id);return n;})} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:isSel?C.accentBg:C.surface,border:`1.5px solid ${isSel?C.accent:C.border}`,borderRadius:16,marginBottom:8,cursor:"pointer"}}><div style={{width:22,height:22,borderRadius:"50%",background:isSel?C.accent:C.bg,border:`2px solid ${isSel?C.accent:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{isSel&&<Check size={12} color="#fff"/>}</div><div style={{width:34,height:34,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{cat?.icon||"💸"}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{e.name}</div><div style={{fontSize:11,color:C.textLight}}>{e.date} · {e.category}</div></div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red,flexShrink:0}}>-{fmt(e.amount)}</div></div>);}
         return(
-          <ExpenseRow key={e.id} e={e} cat={cat} onEdit={()=>setEditItem({type:"expense",data:e})} onDelete={()=>{setExpenses(p=>p.filter(x=>x.id!==e.id));showToast&&showToast("Deleted — "+e.name,"error");}}/>
+          <ExpenseRow key={e.id} e={e} cat={cat} onEdit={()=>setEditItem({type:"expense",data:e})} onDelete={()=>{const snap=e;setExpenses(p=>p.filter(x=>x.id!==snap.id));(showUndoToast||showToast)&&(showUndoToast?showUndoToast("Deleted — "+snap.name,()=>setExpenses(p=>[...p,snap])):showToast("Deleted","error"));}}/>
         );
       })}
       {showAdd&&<Modal title="Spending Envelope" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Add Envelope" accent={C.purple}><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.accent,lineHeight:1.5}}>
@@ -1958,7 +1961,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       <FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Note (optional)" placeholder="e.g. haircuts ~2x/month, gas varies" value={bForm.note||""} onChange={e=>setBForm(p=>({...p,note:e.target.value}))}/><FI label="Monthly Budget ($)" type="number" placeholder="e.g. 150" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
     </div>
   );
-}function BillsView({bills,setBills,setEditItem,onAdd,showToast,household,requestNotifPermission}){
+}function BillsView({bills,setBills,setEditItem,onAdd,showToast,showUndoToast,household,requestNotifPermission}){
   const[billTab,setBillTab]=useState("upcoming");
   const[notifPerm,setNotifPerm]=useState(()=>notifPermission());
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
@@ -2034,7 +2037,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
               </div>
               <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:b.paid?C.textLight:C.text}}>{fmt(b.amount)}</div>
               <button className="ba" onClick={()=>setEditItem({type:"bill",data:b})} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,fontSize:11,fontWeight:600,padding:"4px 6px"}}>Edit</button>
-              <button className="ba" onClick={()=>{setBills(p=>p.filter(x=>x.id!==b.id));showToast&&showToast("Bill removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
+              <button className="ba" onClick={()=>{const snap=b;setBills(p=>p.filter(x=>x.id!==snap.id));(showUndoToast||showToast)&&(showUndoToast?showUndoToast("Bill removed — "+snap.name,()=>setBills(p=>[...p,snap])):showToast("Bill removed","error"));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
             </div>
           </div>
         );
@@ -5550,7 +5553,7 @@ function AppInner(){
         try { localStorage.setItem(scope + row.key, JSON.stringify(row.value)); } catch {}
       });
       try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
-    } catch(e) { console.error("loadFromSupabase error", e); }
+    } catch(e) { console.error("loadFromSupabase error", e); showToast("Sync failed — check your connection","error"); }
     finally { setSyncing(false); }
   }
   function handleSkip(){try{localStorage.setItem("fv_skip_auth","1");}catch{}setSkipAuth(true);}
@@ -5633,6 +5636,7 @@ function AppInner(){
   const[locked,setLocked]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[onboarded,setOnboarded]=useState(()=>{try{return localStorage.getItem("fv_onboarded")==="1";}catch{return false;}});
   const[modal,setModal]=useState(null);
+  const[formError,setFormError]=useState("");
   const[showExport,setShowExport]=useState(false);
   const[showImport,setShowImport]=useState(false);
   const[form,setForm]=useState({});
@@ -5642,7 +5646,8 @@ function AppInner(){
   const[syncing,setSyncing]=useState(false);
   const[syncStatus,setSyncStatus]=useState(null);
   const[toast,setToast]=useState(null);
-  const showToast=(msg,type='success')=>{setToast({msg,type});const dur=msg.length>40?4000:2500;setTimeout(()=>setToast(null),dur);};
+  const showToast=(msg,type='success',action=null)=>{setToast({msg,type,action});const dur=type==='error'?4000:type==='info'?3000:action?4000:2500;setTimeout(()=>setToast(t=>t?.msg===msg?null:t),dur);};
+  const showUndoToast=(msg,undoFn)=>showToast(msg,"error",{label:"Undo",fn:undoFn});
 
   const[isDemoMode,setIsDemoMode]=useState(()=>{try{return localStorage.getItem("fv_demo")==="1";}catch{return false;}});
   const[demoBannerVisible,setDemoBannerVisible]=useState(true);
@@ -5724,6 +5729,23 @@ function AppInner(){
     ss("fv6:dashConfig",dashConfig);ss("fv6:household",household);
   },[profCategory,profSub,appName,greetName,dashConfig,household,ready]);
   useEffect(()=>{try{localStorage.setItem("fv_account_rates",JSON.stringify(accountRates));}catch{};if(ready)ss("fv6:accountRates",accountRates);},[accountRates,ready]);
+  // Auto-unpay One-time bills at the start of each new calendar month.
+  // We store the last month we ran this check so it only fires once per month.
+  useEffect(()=>{
+    if(!ready||!bills.length)return;
+    const currentMonth=new Date().toISOString().slice(0,7);
+    let lastMonth="";
+    try{lastMonth=localStorage.getItem("fv_bills_reset_month")||"";}catch{}
+    if(lastMonth===currentMonth)return;
+    const needsReset=bills.some(b=>b.paid&&(!b.recurring||b.recurring==="One-time"));
+    if(!needsReset)return;
+    setBills(p=>p.map(b=>{
+      if(!b.paid)return b;
+      if(b.recurring&&b.recurring!=="One-time")return b;
+      return{...b,paid:false,paidDate:null};
+    }));
+    try{localStorage.setItem("fv_bills_reset_month",currentMonth);}catch{}
+  },[ready,bills.length]);
   const pushNotif=(id,title,body,type)=>{
     setNotifs(p=>{if(p.find(n=>n.id===id))return p;return[{id,title,body,type,time:Date.now(),read:false},...p.slice(0,49)];});
     if(!notifSupported()||notifPermission()!=="granted")return;
@@ -5810,7 +5832,7 @@ function AppInner(){
   },[ready]);
   useEffect(()=>{if(ready)ss("fv6:calColors",calColors);},[calColors,ready]);
   useEffect(()=>{if(ready)ss("fv6:taccount",tradingAccount);},[tradingAccount,ready]);
-  useEffect(()=>{try{localStorage.setItem("fv_dark",darkMode?"1":"0");}catch{}},[darkMode]);
+  useEffect(()=>{try{localStorage.setItem("fv_dark",darkMode?"1":"0");}catch{};document.body.classList.toggle("dark-mode",!!darkMode);},[darkMode]);
 
   // paycheckMultiplier converts per-paycheck primary income → monthly
   const paycheckMultiplier=income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17;
@@ -5969,31 +5991,34 @@ function AppInner(){
     return subs.sort((a,b)=>parseFloat(b.amount)-parseFloat(a.amount));
   },[expenses]);
 
-  const om=(t,d={})=>{setModal(t);setForm(d);};
-  const cl=()=>{setModal(null);setForm({});};
-  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const om=(t,d={})=>{setModal(t);setForm(d);setFormError("");};
+  const cl=()=>{setModal(null);setForm({});setFormError("");};
+  const ff=(k,v)=>{setFormError("");setForm(p=>({...p,[k]:v}));}
 
   // ── THE FIX: submit function ──────────────────────────────────────────────
   function submit(){
     if(modal==="expense"){
-      if(!form.name||!form.amount)return;
+      if(!form.name){setFormError("Please enter a name.");return;}
+      if(!form.amount){setFormError("Please enter an amount.");return;}
       const amt=parseFloat(form.amount)||0;
-      if(amt<=0){showToast("Enter a valid amount","error");return;}
+      if(amt<=0){setFormError("Amount must be greater than $0.");return;}
       const now60=Date.now()-60000;
       const isDupe=expenses.some(e=>e.name?.toLowerCase()===form.name.toLowerCase()&&parseFloat(e.amount)===amt&&e.id>now60);
-      if(isDupe&&!form.forceAdd){ff("forceAdd",true);showToast("Already logged — tap again to add anyway","error");return;}
+      if(isDupe&&!form.forceAdd){ff("forceAdd",true);setFormError("Already logged just now — tap Save again to add anyway.");return;}
       setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:String(amt),category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[],owner:form.owner||"shared"}]);try{const mc=window._merchantCats||{};mc[form.name.toLowerCase().trim()]=form.category||"Misc";window._merchantCats=mc;ss("fv6:merchantCats",mc);}catch{}
       showToast("✓ "+form.name+" — "+fmt(amt));try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
     }else if(modal==="bill"){
-      if(!form.name||!form.amount)return;
+      if(!form.name){setFormError("Please enter a bill name.");return;}
+      if(!form.amount){setFormError("Please enter an amount.");return;}
       const billAmt=parseFloat(form.amount)||0;
-      if(billAmt<=0){showToast("Enter a valid amount","error");return;}
+      if(billAmt<=0){setFormError("Amount must be greater than $0.");return;}
       setBills(p=>[...p,{id:Date.now(),name:form.name,amount:String(billAmt),dueDate:form.dueDate||"",recurring:form.recurring||"Monthly",paid:false,autoPay:false,paidBy:form.paidBy||"me"}]);
       showToast("✓ "+form.name+" bill added");try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
     }else if(modal==="debt"){
-      if(!form.name||!form.balance)return;
+      if(!form.name){setFormError("Please enter a name.");return;}
+      if(!form.balance){setFormError("Please enter the current balance.");return;}
       setDebts(p=>[...p,{id:Date.now(),name:form.name,balance:form.balance,original:form.original||form.balance,rate:form.rate||"",minPayment:form.minPayment||"",type:form.type||""}]);
       showToast("✓ "+form.name+" tracked — "+fmt(form.balance));
       cl();
@@ -6595,8 +6620,8 @@ function AppInner(){
           </div>
           <div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
         {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats} showToast={showToast}/>}
-        {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast} household={household}/>}
-        {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast} household={household} requestNotifPermission={requestNotifPermission}/>}
+        {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast} showUndoToast={showUndoToast} household={household}/>}
+        {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast} showUndoToast={showUndoToast} household={household} requestNotifPermission={requestNotifPermission}/>}
         {tab==="more"&&!isMoreTab&&(
           <div className="fu">
             {/* Account pill at top of More */}
@@ -6860,7 +6885,10 @@ function AppInner(){
         </div>
       </div>}
       {!isOnline&&<div style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,zIndex:300,background:"#1e293b",color:"#f1f5f9",fontSize:12,fontWeight:600,textAlign:"center",padding:"8px 16px",letterSpacing:.2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>📡 No internet connection — changes will sync when you're back online</div>}
-      {toast&&<div onClick={()=>setToast(null)} style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 20px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:8,maxWidth:300,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}}>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</div>}
+      {toast&&<div style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 18px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:10,maxWidth:340,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}} onClick={()=>setToast(null)}>
+        <span>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</span>
+        {toast.action&&<button onClick={e=>{e.stopPropagation();toast.action.fn();setToast(null);}} style={{background:"rgba(255,255,255,.22)",border:"none",borderRadius:8,padding:"3px 10px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0,marginLeft:4}}>{toast.action.label}</button>}
+      </div>}
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px 8px max(14px,env(safe-area-inset-bottom))",zIndex:100,boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)"}}>
         {NAV.map(n=>{const active=n.id==="more"?isMoreTab||tab==="more":tab===n.id;return(
           <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",background:active?"rgba(99,102,241,.08)":"transparent",transition:"all .18s"}}>
@@ -6876,7 +6904,7 @@ function AppInner(){
         );})}
       </div>
 
-      {modal==="expense"&&<Modal title="Log Expense" icon={Wallet} onClose={cl} onSubmit={submit} submitLabel="Add Expense"><FI label="Name" placeholder="Coffee, groceries, gas..." value={form.name||""} onChange={e=>{ff("name",e.target.value);if(!form.category){const t=e.target.value.toLowerCase().trim();const mc=window._merchantCats||{};if(mc[t]){ff("category",mc[t]);}else{const catMap={"Groceries":["grocery","groceries","publix","kroger","walmart","costco","trader joe","aldi","whole foods","market"],"Fast Food":["mcdonald","burger","wendy","chipotle","taco bell","subway","chick","popeyes","kfc","domino","sonic"],"Restaurants":["restaurant","sushi","dinner out","doordash","ubereats","grubhub","dine"],"Coffee":["starbucks","dunkin","coffee","latte","espresso","cafe","cold brew","dutch bros"],"Gas":["gas","shell","bp","chevron","exxon","fuel","wawa","sheetz","quiktrip"],"Rideshare":["uber","lyft","taxi","ride"],"Subscriptions":["netflix","hulu","spotify","apple music","amazon prime","disney","hbo","membership","subscription"],"Health / Medical":["doctor","pharmacy","cvs","walgreens","medicine","dental","therapy","copay","clinic"],"Gym / Fitness":["gym","planet fitness","fitness","yoga","crossfit","peloton","workout"],"Grooming / Haircuts":["haircut","barber","salon","nails","manicure","wax","spa","sephora","ulta"],"Clothing":["clothes","shoes","nike","adidas","h&m","zara","nordstrom","fashion"],"Entertainment":["movie","game","steam","concert","ticket","bowling","bar","club"],"Travel":["hotel","airbnb","flight","airline","vacation","booking"],"Pets":["pet","petco","petsmart","vet","dog food","cat food"],"Shopping":["amazon","target","best buy","home depot","ikea","walmart","tj maxx"]};for(const[cat,kws]of Object.entries(catMap)){if(kws.some(k=>t.includes(k))){ff("category",cat);break;}}}}}}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)} autoFocus={!!form.name}/><FI half label="Date" type="date" value={form.date||todayStr()} onChange={e=>ff("date",e.target.value)}/></div><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Notes" placeholder="Optional" value={form.notes||""} onChange={e=>ff("notes",e.target.value)}/>
+      {modal==="expense"&&<Modal title="Log Expense" icon={Wallet} onClose={cl} onSubmit={submit} submitLabel="Add Expense" error={formError}><FI label="Name" placeholder="Coffee, groceries, gas..." value={form.name||""} onChange={e=>{ff("name",e.target.value);if(!form.category){const t=e.target.value.toLowerCase().trim();const mc=window._merchantCats||{};if(mc[t]){ff("category",mc[t]);}else{const catMap={"Groceries":["grocery","groceries","publix","kroger","walmart","costco","trader joe","aldi","whole foods","market"],"Fast Food":["mcdonald","burger","wendy","chipotle","taco bell","subway","chick","popeyes","kfc","domino","sonic"],"Restaurants":["restaurant","sushi","dinner out","doordash","ubereats","grubhub","dine"],"Coffee":["starbucks","dunkin","coffee","latte","espresso","cafe","cold brew","dutch bros"],"Gas":["gas","shell","bp","chevron","exxon","fuel","wawa","sheetz","quiktrip"],"Rideshare":["uber","lyft","taxi","ride"],"Subscriptions":["netflix","hulu","spotify","apple music","amazon prime","disney","hbo","membership","subscription"],"Health / Medical":["doctor","pharmacy","cvs","walgreens","medicine","dental","therapy","copay","clinic"],"Gym / Fitness":["gym","planet fitness","fitness","yoga","crossfit","peloton","workout"],"Grooming / Haircuts":["haircut","barber","salon","nails","manicure","wax","spa","sephora","ulta"],"Clothing":["clothes","shoes","nike","adidas","h&m","zara","nordstrom","fashion"],"Entertainment":["movie","game","steam","concert","ticket","bowling","bar","club"],"Travel":["hotel","airbnb","flight","airline","vacation","booking"],"Pets":["pet","petco","petsmart","vet","dog food","cat food"],"Shopping":["amazon","target","best buy","home depot","ikea","walmart","tj maxx"]};for(const[cat,kws]of Object.entries(catMap)){if(kws.some(k=>t.includes(k))){ff("category",cat);break;}}}}}}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)} autoFocus={!!form.name}/><FI half label="Date" type="date" value={form.date||todayStr()} onChange={e=>ff("date",e.target.value)}/></div><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Notes" placeholder="Optional" value={form.notes||""} onChange={e=>ff("notes",e.target.value)}/>
         {household.enabled&&household.members.length>1&&<div style={{marginBottom:8}}>
           <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Assign to</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -6887,8 +6915,8 @@ function AppInner(){
             ))}
           </div>
         </div>}<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Recurring</div><div style={{fontSize:12,color:C.textLight}}>Auto-log this monthly</div></div><button onClick={()=>ff("recurring",!form.recurring)} style={{background:"none",border:"none",cursor:"pointer",color:form.recurring?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.recurring?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div></Modal>}
-      {modal==="bill"&&<Modal title="Add Bill" icon={CalendarClock} onClose={cl} onSubmit={submit} submitLabel="Add Bill" accent={C.amber}><FI label="Bill Name" placeholder="Rent, Electric, Netflix..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Monthly","Bi-weekly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/>{household.enabled&&household.members.length>1&&<div style={{marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Paid by</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{[{id:"shared",name:"Shared",emoji:"🏠"},...household.members].map(m=>(<button key={m.id} onClick={()=>ff("paidBy",m.id)} style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:99,border:`1.5px solid ${(form.paidBy||"shared")===m.id?C.amber:C.border}`,background:(form.paidBy||"shared")===m.id?"#FFFBEB":"#fff",cursor:"pointer",fontSize:12,fontWeight:(form.paidBy||"shared")===m.id?700:400,color:(form.paidBy||"shared")===m.id?C.amber:C.textMid}}><span>{m.emoji}</span><span>{m.name}</span></button>))}</div></div>}</Modal>}
-      {modal==="debt"&&<Modal title="Add Debt" icon={CreditCard} onClose={cl} onSubmit={submit} submitLabel="Track Debt" accent={C.red} wide><FI label="Name" placeholder="Car loan, student debt..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div style={{display:"flex",gap:12}}><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/></div></Modal>}
+      {modal==="bill"&&<Modal title="Add Bill" icon={CalendarClock} onClose={cl} onSubmit={submit} submitLabel="Add Bill" accent={C.amber} error={formError}><FI label="Bill Name" placeholder="Rent, Electric, Netflix..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Monthly","Bi-weekly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/>{household.enabled&&household.members.length>1&&<div style={{marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Paid by</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{[{id:"shared",name:"Shared",emoji:"🏠"},...household.members].map(m=>(<button key={m.id} onClick={()=>ff("paidBy",m.id)} style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:99,border:`1.5px solid ${(form.paidBy||"shared")===m.id?C.amber:C.border}`,background:(form.paidBy||"shared")===m.id?"#FFFBEB":"#fff",cursor:"pointer",fontSize:12,fontWeight:(form.paidBy||"shared")===m.id?700:400,color:(form.paidBy||"shared")===m.id?C.amber:C.textMid}}><span>{m.emoji}</span><span>{m.name}</span></button>))}</div></div>}</Modal>}
+      {modal==="debt"&&<Modal title="Add Debt" icon={CreditCard} onClose={cl} onSubmit={submit} submitLabel="Track Debt" accent={C.red} wide error={formError}><FI label="Name" placeholder="Car loan, student debt..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div style={{display:"flex",gap:12}}><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/></div></Modal>}
       {modal==="bgoal_home"&&<Modal title="Spending Envelope" icon={Target} onClose={cl} onSubmit={()=>{if(!form.category||!form.limit)return;setBGoals(p=>[...p,{id:Date.now(),...form}]);cl();}} submitLabel="Add Envelope" accent={C.purple}><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.accent,lineHeight:1.5}}>
         💡 Variable expenses like gas, haircuts, groceries. These reserve money in your safe-to-spend before you log them.
       </div>
