@@ -5367,6 +5367,7 @@ function AppInner(){
   function navTo(t){if(t===tab)return;setTabHistory(h=>[...h.slice(-19),tab]);setTabRaw(t);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));}
   function goBack(){setTabHistory(h=>{if(!h.length)return h;const p=h[h.length-1];setTabRaw(p);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));return h.slice(0,-1);});}
   const canGoBack=tabHistory.length>0;
+  const _startupParams=useRef((()=>{try{const sp=new URLSearchParams(window.location.search);return{action:sp.get("action"),tab:sp.get("tab")};}catch{return{};}})());
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
   const[pwResetMode,setPwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
@@ -5751,6 +5752,19 @@ function AppInner(){
       setReady(true);
     })();
   },[]);
+
+  useEffect(()=>{
+    if(!ready)return;
+    const{action,tab:startTab}=_startupParams.current;
+    if(!action&&!startTab)return;
+    const validTabs=["home","bills","spend","chat","debt","savings","accounts","insights","health","cashflow","networthtrend","paycheck","household","recurring","calendar","shifts","categories"];
+    if(startTab&&validTabs.includes(startTab))navTo(startTab);
+    if(action==="expense")om("expense");
+    else if(action==="bill")om("bill");
+    _startupParams.current={};
+    try{window.history.replaceState(null,"",window.location.pathname);}catch{}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[ready]);
 
   useEffect(()=>{if(!ready)return;if(!cloudLoadedRef.current&&!Object.values(accounts).some(v=>parseFloat(v)>0))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
