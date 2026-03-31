@@ -459,7 +459,7 @@ function PINSetup({onSave,onCancel,darkMode}){
 
 function OnboardingWizard({onComplete}){
   const[step,setStep]=useState(0);
-  const[d,setD]=useState({name:"",appName:"Trackfi",profCategory:"healthcare",profSub:"nurse_rn",useCase:"personal",income:{primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""},accounts:{checking:"",savings:"",cushion:"",investments:""}});
+  const[d,setD]=useState(()=>{const pn=localStorage.getItem("fv_pending_name")||"";return{name:pn,appName:"Trackfi",profCategory:"healthcare",profSub:"nurse_rn",useCase:"personal",income:{primary:"",other:"",trading:"",rental:"",dividends:"",freelance:""},accounts:{checking:"",savings:"",cushion:"",investments:""}};});
   const sel=getProfession(d.profCategory);
   const firstName=(d.name||"").split(" ")[0].replace(/[^a-zA-Z]/g,"")||"";
 
@@ -3156,9 +3156,10 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
   const[newEmail,setNewEmail]=useState("");
   const[newPw1,setNewPw1]=useState("");const[newPw2,setNewPw2]=useState("");
   const[acctMsg,setAcctMsg]=useState("");const[acctLoading,setAcctLoading]=useState(false);
+  const[pendingImport,setPendingImport]=useState(null);
 
   function exportData(){const d={exportedAt:new Date().toISOString(),appName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,version:"2.0"};const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;a.click();URL.revokeObjectURL(u);}
-  async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(d.accounts)setAccounts(d.accounts);if(d.income)setIncome(d.income);if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);showToast&&showToast("✅ Data imported!");} catch(e){showToast&&showToast("❌ "+e.message,"error");}}
+  async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(!d||typeof d!=="object"||(!d.expenses&&!d.bills&&!d.accounts)){showToast&&showToast("❌ Invalid backup file","error");return;}if(d.accounts)setAccounts(p=>({...p,...d.accounts}));if(d.income)setIncome(p=>({...p,...d.income}));if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);showToast&&showToast("✅ Data imported!");} catch(e){showToast&&showToast("❌ "+e.message,"error");}}
 
   const Tog=(k,l,d,ic)=>(<div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{ic}</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>{l}</div><div style={{fontSize:12,color:C.textLight}}>{d}</div></div></div><button onClick={()=>setSettings(p=>({...p,[k]:!p[k]}))} style={{background:"none",border:"none",cursor:"pointer",color:settings[k]?C.accent:C.borderLight,padding:0,flexShrink:0}}>{settings[k]?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>);
 
@@ -3278,8 +3279,16 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
       </div>
       <div style={{display:"flex",gap:8,marginBottom:10}}>
         <button className="ba" onClick={exportData} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export JSON</button>
-        <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={async e=>importData(e.target.files[0])}/></label>
+        <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)setPendingImport(f);e.target.value="";}}/></label>
       </div>
+      {pendingImport&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+        <div style={{fontSize:13,fontWeight:700,color:C.amber,marginBottom:4}}>⚠️ Replace all current data with "{pendingImport.name}"?</div>
+        <div style={{fontSize:12,color:C.textMid,marginBottom:10}}>This will overwrite your expenses, bills, debts, and goals. Export a backup first if needed.</div>
+        <div style={{display:"flex",gap:8}}>
+          <button className="ba" onClick={async()=>{await importData(pendingImport);setPendingImport(null);}} style={{flex:1,background:C.amber,border:"none",borderRadius:8,padding:"9px 0",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Yes, Import</button>
+          <button className="ba" onClick={()=>setPendingImport(null)} style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 0",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancel</button>
+        </div>
+      </div>}
       {onResetOnboarding&&<button className="ba" onClick={onResetOnboarding} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:8}}><RefreshCw size={13}/>Re-run Setup Wizard</button>}
       {onResetAllData&&<button className="ba" onClick={onResetAllData} style={{width:"100%",background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"11px 0",color:C.red,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:8}}><Trash2 size={13}/>Reset All Data</button>}
     </div>
@@ -3958,7 +3967,7 @@ function AuthScreen({onAuth,onSkip}){
         onAuth(r);
       }else{
         const r=await signUp(email.trim(),pass);
-        if(r.access_token){onAuth(r);return;}
+        if(r.access_token){if(name.trim())try{localStorage.setItem("fv_pending_name",name.trim());}catch{}onAuth(r);return;}
         if(r.error==="network"||r.message?.includes("Failed to fetch")){setErr("Can't reach server — tap 'Try without account' to use offline.");setLoading(false);return;}
         if(r.error_description||r.msg||r.error){
           const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
@@ -3966,6 +3975,7 @@ function AuthScreen({onAuth,onSkip}){
           else{setErr(r.error_description||r.msg||"Sign up failed. Try again.");}
           setLoading(false);return;
         }
+        if(name.trim())try{localStorage.setItem("fv_pending_name",name.trim());}catch{}
         setConfirmed(true);
       }
     }catch(e){setErr("Network error — check connection and try again.");}
@@ -3987,6 +3997,7 @@ function AuthScreen({onAuth,onSkip}){
         </div>
         <button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12,letterSpacing:.2}}>✓ I confirmed — Sign In</button>
         <button onClick={async()=>{
+          if(!SUPA_URL||!SUPA_KEY){setErr("Can't resend — Supabase is not configured.");return;}
           try{
             await fetch(SUPA_URL+"/auth/v1/resend",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},body:JSON.stringify({type:"signup",email:email.trim()})});
             setErr("Confirmation email resent — check your inbox.");
@@ -4041,7 +4052,7 @@ function AuthScreen({onAuth,onSkip}){
         <div style={{marginBottom:err?8:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Password</div>
-            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}const redirectTo=window.location.origin+window.location.pathname;await fetch(SUPA_URL+"/auth/v1/recover",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},body:JSON.stringify({email:email.trim(),options:{emailRedirectTo:redirectTo}})});setErr("✓ Reset link sent to "+email+" — check your inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot?</button>}
+            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}if(!SUPA_URL||!SUPA_KEY){setErr("Account features require Supabase — use offline mode instead.");return;}const redirectTo=window.location.origin+window.location.pathname;try{await fetch(SUPA_URL+"/auth/v1/recover",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},body:JSON.stringify({email:email.trim(),options:{emailRedirectTo:redirectTo}})});}catch{}setErr("✓ Reset link sent to "+email+" — check your inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot?</button>}
           </div>
           <div style={{position:"relative"}}>
             <input id="pw-inp" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder={mode==="login"?"Your password":"Min. 6 characters"} style={{width:"100%",background:"#f8f9fc",border:`1.5px solid ${err&&(err.toLowerCase().includes("password")||err.toLowerCase().includes("6 char"))?C.red:C.border}`,borderRadius:12,padding:"12px 44px 12px 14px",fontSize:15,color:C.text,outline:"none",boxSizing:"border-box"}} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/>
@@ -5289,7 +5300,7 @@ function AppInner(){
   const canGoBack=tabHistory.length>0;
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
-  const[pwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
+  const[pwResetMode,setPwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
   const[newPw,setNewPw]=useState("");const[pwMsg,setPwMsg]=useState("");const[pwLoading,setPwLoading]=useState(false);
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const authToken=authSession?.access_token||null;
@@ -5943,7 +5954,7 @@ function AppInner(){
     if(d.name)setGreetName(d.name);
     setAppName("Trackfi");
     if(d.profCategory)setProfCategory(d.profCategory);if(d.profSub)setProfSub(d.profSub);
-    if(d.income)setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...d.income});if(d.accounts)setAccounts({...d.accounts});
+    if(d.income)setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...d.income});if(d.accounts)setAccounts(p=>({...p,...d.accounts}));
     // Apply household mode based on use-case selection
     if(d.useCase==="couple"){setHousehold(h=>({...h,enabled:true,name:(d.name?d.name.split(" ")[0]+"'s Household":"Our Household"),members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10B981"}]}));}
     else if(d.useCase==="roommates"){setHousehold(h=>({...h,enabled:true,name:"Shared Household",members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"roommate",name:"Roommate",emoji:"🏠",color:"#D97706"}]}));}
@@ -5952,7 +5963,7 @@ function AppInner(){
 
     const hasTrading=parseFloat(d.income?.trading||0)>0;
     setSettings(p=>({...p,showTrading:hasTrading,showHealth:true,showSavings:true,showForecast:true}));
-    try{localStorage.setItem("fv_onboarded","1");}catch{}
+    try{localStorage.setItem("fv_onboarded","1");localStorage.removeItem("fv_pending_name");}catch{}
     ss("fv6:onboarded",true);
     setOnboarded(true);
   }}/></>);
