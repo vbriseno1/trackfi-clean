@@ -4122,7 +4122,7 @@ function AuthScreen({onAuth,onSkip}){
         <div style={{marginBottom:err?8:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Password</div>
-            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}if(!SUPA_URL||!SUPA_KEY){setErr("Account features require Supabase — use offline mode instead.");return;}const redirectTo=window.location.origin+window.location.pathname;try{await fetch(SUPA_URL+"/auth/v1/recover",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},body:JSON.stringify({email:email.trim(),options:{emailRedirectTo:redirectTo}})});}catch{}setErr("✓ Reset link sent to "+email+" — check your inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot?</button>}
+            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}if(!SUPA_URL||!SUPA_KEY){setErr("Account features require Supabase — use offline mode instead.");return;}const redirectTo=window.location.origin+window.location.pathname;try{const _r=await fetch(SUPA_URL+"/auth/v1/recover",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},body:JSON.stringify({email:email.trim(),options:{emailRedirectTo:redirectTo}})});if(!_r.ok){setErr("Couldn't send reset link — check your email and try again.");return;}}catch{setErr("Network error — check your connection.");return;}setErr("✓ Reset link sent to "+email+" — check your inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot?</button>}
           </div>
           <div style={{position:"relative"}}>
             <input id="pw-inp" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder={mode==="login"?"Your password":"Min. 6 characters"} style={{width:"100%",background:"#f8f9fc",border:`1.5px solid ${err&&(err.toLowerCase().includes("password")||err.toLowerCase().includes("6 char"))?C.red:C.border}`,borderRadius:12,padding:"12px 44px 12px 14px",fontSize:15,color:C.text,outline:"none",boxSizing:"border-box"}} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/>
@@ -4153,16 +4153,16 @@ function AuthScreen({onAuth,onSkip}){
 function RecurringView({expenses,setExpenses,categories,showToast,appReady,recurrings,setRecurrings}){
   const[showAdd,setShowAdd]=useState(false);
   const[form,setForm]=useState({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});
+  const[formErr,setFormErr]=useState("");
   useEffect(()=>{
     if(!appReady)return;
     const today=todayStr();
     const lastRun=localStorage.getItem("fv_recurring_last");
     if(lastRun===today)return; // already ran today — skip
-    try{localStorage.setItem("fv_recurring_last",today);}catch{}
+    const newExps=[];
     const updated=recurrings.map(r=>{
       if(r.nextDate<=today&&r.active!==false){
-        setExpenses(p=>[...p,{id:Date.now()+Math.random(),name:r.name,amount:r.amount,category:r.category,date:today,notes:"Auto-logged"}]);
-        if(showToast)showToast("🔄 Auto-logged: "+r.name+" "+r.amount);
+        newExps.push({id:Date.now()+Math.random(),name:r.name,amount:r.amount,category:r.category,date:today,notes:"Auto-logged"});
         const d=new Date(r.nextDate+"T00:00:00");
         if(r.frequency==="Weekly")d.setDate(d.getDate()+7);
         else if(r.frequency==="Bi-weekly")d.setDate(d.getDate()+14);
@@ -4174,11 +4174,19 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
       }
       return r;
     });
+    if(newExps.length){
+      setExpenses(p=>[...p,...newExps]);
+      if(showToast){
+        if(newExps.length===1)showToast("🔄 Auto-logged: "+newExps[0].name);
+        else showToast("🔄 Auto-logged "+newExps.length+" recurring expenses");
+      }
+    }
     setRecurrings(updated);
+    try{localStorage.setItem("fv_recurring_last",today);}catch{}
   },[appReady,recurrings.length]);
   const FREQS=["Weekly","Bi-weekly","Monthly","Quarterly","Annual"];
   const ICONS=["🏠","🚗","📱","💪","🎮","📺","☕","🛒","💊","🐕","🎓","⚡","💧","🌐","🎵","🏋️","🍕","✈️","👶","🐱"];
-  function add(){if(!form.name||!form.amount)return;setRecurrings(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category,frequency:form.frequency,nextDate:form.nextDate,icon:form.icon||"🔄",active:true}]);setForm({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});if(showToast)showToast("Recurring added — "+form.name);setShowAdd(false);}
+  function add(){if(!form.name){setFormErr("Name is required.");return;}if(!form.amount||isNaN(parseFloat(form.amount))){setFormErr("Enter a valid amount.");return;}setFormErr("");setRecurrings(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category,frequency:form.frequency,nextDate:form.nextDate,icon:form.icon||"🔄",active:true}]);setForm({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});if(showToast)showToast("Recurring added — "+form.name);setShowAdd(false);}
   const active=recurrings.filter(r=>r.active!==false);
   const totalMonthly=active.reduce((s,r)=>{const amt=parseFloat(r.amount||0);if(r.frequency==="Weekly")return s+amt*(52/12);if(r.frequency==="Bi-weekly")return s+amt*(26/12);if(r.frequency==="Monthly")return s+amt;if(r.frequency==="Quarterly")return s+amt/3;if(r.frequency==="Annual")return s+amt/12;return s+amt;},0);
   const dueSoon=recurrings.filter(r=>r.active!==false&&r.nextDate&&Math.ceil((new Date(r.nextDate)-new Date(todayStr()))/86400000)<=7);
@@ -4214,10 +4222,10 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
             <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text}}>{fmt(r.amount)}</div>
             <button onClick={()=>setRecurrings(p=>p.map(x=>x.id===r.id?{...x,active:x.active===false?true:false}:x))} style={{fontSize:11,color:r.active===false?C.green:C.textLight,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>{r.active===false?"Resume":"Pause"}</button>
           </div>
-          <button onClick={()=>{setRecurrings(p=>p.filter(x=>x.id!==r.id));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={14}/></button>
+          <button onClick={()=>{const snap=r;setRecurrings(p=>p.filter(x=>x.id!==snap.id));if(showToast)showToast(snap.name+" removed","error",{label:"Undo",fn:()=>setRecurrings(p=>[...p,snap])});}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={14}/></button>
         </div>);
       })}
-      {showAdd&&<Modal title="Add Recurring" icon={RefreshCw} onClose={()=>setShowAdd(false)} onSubmit={add} submitLabel="Add Recurring">
+      {showAdd&&<Modal title="Add Recurring" icon={RefreshCw} onClose={()=>{setShowAdd(false);setFormErr("");}} onSubmit={add} submitLabel="Add Recurring" error={formErr}>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>{ICONS.map(ic=><button key={ic} onClick={()=>setForm(p=>({...p,icon:ic}))} style={{fontSize:20,background:form.icon===ic?C.accentBg:C.surfaceAlt,border:form.icon===ic?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"4px 6px",cursor:"pointer"}}>{ic}</button>)}</div>
         <FI label="Name" placeholder="Rent, Netflix, Gym..." value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
         <div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" placeholder="0.00" value={form.amount} onChange={e=>setForm(p=>({...p,amount:e.target.value}))}/><FI half label="Next Due Date" type="date" value={form.nextDate} onChange={e=>setForm(p=>({...p,nextDate:e.target.value}))}/></div>
@@ -5685,7 +5693,7 @@ function AppInner(){
   const[pinEnabled,setPinEnabled]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[locked,setLocked]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[onboarded,setOnboarded]=useState(()=>{try{return localStorage.getItem("fv_onboarded")==="1";}catch{return false;}});
-  const[recurrings,setRecurrings]=useState(()=>{try{const r=localStorage.getItem("fv_recurring");return r?JSON.parse(r):[];}catch{return[];}});
+  const[recurrings,setRecurrings]=useState(()=>{try{const scoped=localStorage.getItem(getScope()+"recurrings");if(scoped)return JSON.parse(scoped);const legacy=localStorage.getItem("fv_recurring");return legacy?JSON.parse(legacy):[];}catch{return[];}});
   const[modal,setModal]=useState(null);
   const[formError,setFormError]=useState("");
   const[showExport,setShowExport]=useState(false);
@@ -5720,9 +5728,9 @@ function AppInner(){
           if(_bulkMap[bare]!==undefined)return _bulkMap[bare];
           return sg("fv6:"+bare);
         }
-        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName","fv6:merchantCats"];
+        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName","fv6:merchantCats","fv6:recurrings"];
         const vals=await Promise.all(keys.map(k=>_sg_boot(k.replace("fv6:",""))));
-        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn,mc]=vals;
+        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn,mc,rec]=vals;
         try{if(exp&&exp.length)setExpenses(exp);}catch{}
         try{if(bll&&bll.length)setBills(bll);}catch{}
         try{if(dbt&&dbt.length)setDebts(dbt);}catch{}
@@ -5739,6 +5747,7 @@ function AppInner(){
         try{if(nts&&nts.length)setNotifs(nts);}catch{}
         try{if(bh&&bh.length)setBalHist(bh);}catch{}
         try{if(sh&&sh.length)setShifts(sh);}catch{}
+        try{if(rec&&rec.length)setRecurrings(rec);}catch{}
         try{if(prof)setProfCategory(prof);}catch{}
         try{if(psub)setProfSub(psub);}catch{}
         try{if(dc)setDashConfig(a=>({...a,...dc}));}catch{}
@@ -5775,7 +5784,7 @@ function AppInner(){
   useEffect(()=>{if(!ready)return;if(!trades.length&&!cloudLoadedRef.current)return;ss("fv6:trades",trades);},[trades,ready]);
   useEffect(()=>{if(!ready)return;if(!notifs.length&&!cloudLoadedRef.current)return;ss("fv6:notifs",notifs);},[notifs,ready]);
   useEffect(()=>{if(!ready)return;if(!shifts.length&&!cloudLoadedRef.current)return;ss("fv6:shifts",shifts);},[shifts,ready]);
-  useEffect(()=>{if(!ready)return;if(!recurrings.length&&!cloudLoadedRef.current)return;ss("fv6:recurrings",recurrings);try{localStorage.setItem("fv_recurring",JSON.stringify(recurrings));}catch{};},[recurrings,ready]);
+  useEffect(()=>{if(!ready)return;if(!recurrings.length&&!cloudLoadedRef.current)return;ss("fv6:recurrings",recurrings);},[recurrings,ready]);
   // Settings & config (change infrequently)
   useEffect(()=>{
     if(!ready)return;
@@ -5797,7 +5806,7 @@ function AppInner(){
   // We store the last month we ran this check so it only fires once per month.
   useEffect(()=>{
     if(!ready||!bills.length)return;
-    const currentMonth=new Date().toISOString().slice(0,7);
+    const _now=new Date();const currentMonth=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
     let lastMonth="";
     try{lastMonth=localStorage.getItem("fv_bills_reset_month")||"";}catch{}
     if(lastMonth===currentMonth)return;
@@ -5978,7 +5987,7 @@ function AppInner(){
     return s+(remaining*dayFraction);
   },0);
   // Other income arriving before next pay (rental, dividends, freelance pro-rated to pay period)
-  const otherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const otherMonthly=(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const otherBeforeNextPay=otherMonthly*(daysUntilNextPay/30);
   // Real safe to spend: what's in checking + other income arriving soon, minus obligations
   const sts=Math.max(0,(parseFloat(accounts.checking||0))+otherBeforeNextPay-billsBeforeNextPayAmt-projectedUntilPay-envelopeReserve-200);
