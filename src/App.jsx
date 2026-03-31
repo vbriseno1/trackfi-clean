@@ -3619,9 +3619,10 @@ function generateDemoData(){
 
 function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
   const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
-  const te=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const _hsAllMs=new Set(expenses.map(e=>e.date?.slice(0,7)).filter(Boolean));
+  const te=_hsAllMs.size>0?expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)/Math.max(1,_hsAllMs.size):0;
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
-  const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0));
+  const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
   const liquid=(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));
   const _hsNow=new Date();const _hsMs=_hsNow.getFullYear()+"-"+String(_hsNow.getMonth()+1).padStart(2,"0");
   const moExpActual=expenses.filter(e=>e.date?.startsWith(_hsMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
@@ -4136,11 +4137,9 @@ function AuthScreen({onAuth,onSkip}){
   );
 }
 
-function RecurringView({expenses,setExpenses,categories,showToast,appReady}){
+function RecurringView({expenses,setExpenses,categories,showToast,appReady,recurrings,setRecurrings}){
   const[showAdd,setShowAdd]=useState(false);
   const[form,setForm]=useState({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});
-  const[recurrings,setRecurrings]=useState(()=>{try{const r=localStorage.getItem("fv_recurring");return r?JSON.parse(r):[];}catch{return[];}});
-  useEffect(()=>{try{localStorage.setItem("fv_recurring",JSON.stringify(recurrings));}catch{}},[recurrings]);
   useEffect(()=>{
     if(!appReady)return;
     const today=todayStr();
@@ -5506,7 +5505,7 @@ function AppInner(){
         // Only migrate if: had a previous session OR has scoped data already
         // Don't migrate raw device data into a fresh account
         if((prevSession||hasScoped)&&hasLocalExpenses&&!hasScoped){
-          ["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName"].forEach(k=>{
+          ["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","recurrings","household","accountRates","prof","profSub","dashConfig","appName","greetName"].forEach(k=>{
             const legacy=localStorage.getItem("fv6:"+k);
             const scoped=localStorage.getItem(scope+k);
             if(legacy&&!scoped)localStorage.setItem(scope+k,legacy);
@@ -5547,6 +5546,7 @@ function AppInner(){
       try { apply("trades",    setTrades); } catch {}
       try { apply("balHist",   setBalHist); } catch {}
       try { apply("shifts",    setShifts); } catch {}
+      try { apply("recurrings",setRecurrings); } catch {}
       try { apply("notifs",    setNotifs); } catch {}
       try { apply("accounts",  setAccounts, true); } catch {}
       try { apply("income",    setIncome,   true); } catch {}
@@ -5575,7 +5575,7 @@ function AppInner(){
   function handleSkip(){try{localStorage.setItem("fv_skip_auth","1");}catch{}setSkipAuth(true);}
   function resetUserState(){
     setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);
-    setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);
+    setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setRecurrings([]);
     setAccounts(DEF_ACCOUNTS);
     setIncome(DEF_INCOME);
     setHousehold(DEF_HOUSEHOLD);
@@ -5651,6 +5651,7 @@ function AppInner(){
   const[pinEnabled,setPinEnabled]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[locked,setLocked]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[onboarded,setOnboarded]=useState(()=>{try{return localStorage.getItem("fv_onboarded")==="1";}catch{return false;}});
+  const[recurrings,setRecurrings]=useState(()=>{try{const r=localStorage.getItem("fv_recurring");return r?JSON.parse(r):[];}catch{return[];}});
   const[modal,setModal]=useState(null);
   const[formError,setFormError]=useState("");
   const[showExport,setShowExport]=useState(false);
@@ -5672,8 +5673,7 @@ function AppInner(){
   useEffect(()=>{
     (async()=>{
       try{
-        // Bulk fetch all keys in one query when logged in (1 read vs 21)
-        const BOOT_KEYS=["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName","merchantCats","onboarded","accountRates"];
+        // Bulk fetch all keys in one query when logged in (1 read vs N)
         const uid_boot=_getUserId();
         let _bulkMap={};
         if(uid_boot){
@@ -5719,7 +5719,7 @@ function AppInner(){
     })();
   },[]);
 
-  useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);return[...prev,_bh].slice(-104);});},[accounts,debts,ready]);
+  useEffect(()=>{if(!ready)return;if(!cloudLoadedRef.current&&!Object.values(accounts).some(v=>parseFloat(v)>0))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);return[...prev,_bh].slice(-104);});},[accounts,debts,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
   useEffect(()=>{if(!ready)return;if(!balHist.length&&!cloudLoadedRef.current)return;ss("fv6:balHist",balHist);},[balHist,ready]);
   useEffect(()=>{if(!ready)return;if(!expenses.length&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
@@ -5728,6 +5728,7 @@ function AppInner(){
   useEffect(()=>{if(!ready)return;if(!trades.length&&!cloudLoadedRef.current)return;ss("fv6:trades",trades);},[trades,ready]);
   useEffect(()=>{if(!ready)return;if(!notifs.length&&!cloudLoadedRef.current)return;ss("fv6:notifs",notifs);},[notifs,ready]);
   useEffect(()=>{if(!ready)return;if(!shifts.length&&!cloudLoadedRef.current)return;ss("fv6:shifts",shifts);},[shifts,ready]);
+  useEffect(()=>{if(!ready)return;if(!recurrings.length&&!cloudLoadedRef.current)return;ss("fv6:recurrings",recurrings);try{localStorage.setItem("fv_recurring",JSON.stringify(recurrings));}catch{};},[recurrings,ready]);
   // Settings & config (change infrequently)
   useEffect(()=>{
     if(!ready)return;
@@ -5739,7 +5740,7 @@ function AppInner(){
   },[income,budgetGoals,savingsGoals,categories,settings,ready]);
   // Profile & display (change rarely)
   useEffect(()=>{
-    if(!ready)return;
+    if(!ready||!cloudLoadedRef.current)return;
     ss("fv6:prof",profCategory);ss("fv6:profSub",profSub);
     ss("fv6:appName",appName);ss("fv6:greetName",greetName);
     ss("fv6:dashConfig",dashConfig);ss("fv6:household",household);
@@ -5859,7 +5860,8 @@ function AppInner(){
   const totalAssets=useMemo(()=>(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount.balance||0)),[accounts,tradingAccount]);
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const totalDebt=useMemo(()=>debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0),[debts]);
-  const cashflow=totalIncome-totalExp;
+  const thisMonthExp=useMemo(()=>{const ms=new Date().toISOString().slice(0,7);return expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);},[expenses]);
+  const cashflow=totalIncome-thisMonthExp;
   const netWorth=totalAssets-totalDebt;
   // Net Worth milestone checker — fire when assets cross thresholds
   const NW_MILESTONES=[1000,5000,10000,25000,50000,100000,250000,500000,1000000];
@@ -5934,7 +5936,7 @@ function AppInner(){
   // Real safe to spend: what's in checking + other income arriving soon, minus obligations
   const sts=Math.max(0,(parseFloat(accounts.checking||0))+otherBeforeNextPay-billsBeforeNextPayAmt-projectedUntilPay-envelopeReserve-200);
   const liquid=(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));
-  const savingsRate=totalIncome>0?Math.max(0,cashflow/totalIncome*100):0;
+  const savingsRate=totalIncome>0?Math.min(100,Math.max(0,cashflow/totalIncome*100)):0;
   const spendingStreak=useMemo(()=>{
     if(expenses.length<3)return 0;
     const dailyAvgBase=burnRate||50;
@@ -6793,7 +6795,7 @@ function AppInner(){
 
         {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem} showToast={showToast} extraPayDebt={extraPayDebt} setExtraPayDebt={setExtraPayDebt}/>}
         {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} accounts={accounts} accountRates={accountRates} setAccountRates={setAccountRates} showToast={showToast}/>}
-        {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready}/>}
+        {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready} recurrings={recurrings} setRecurrings={setRecurrings}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
         {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals}/>}
         {tab==="health"&&<HealthScoreView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} onNavigate={navTo}/>}
