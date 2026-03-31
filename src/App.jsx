@@ -3945,9 +3945,19 @@ function AuthScreen({onAuth,onSkip}){
   const[email,setEmail]=useState("");const[pass,setPass]=useState("");const[name,setName]=useState("");
   const[err,setErr]=useState("");const[loading,setLoading]=useState(false);
   const[confirmed,setConfirmed]=useState(false);const[showPass,setShowPass]=useState(false);
+  const[failCount,setFailCount]=useState(0);
+  const[cooldown,setCooldown]=useState(0);
+  const cooldownRef=useRef(null);
+  function startCooldown(secs){
+    setCooldown(secs);
+    clearInterval(cooldownRef.current);
+    cooldownRef.current=setInterval(()=>setCooldown(c=>{if(c<=1){clearInterval(cooldownRef.current);return 0;}return c-1;}),1000);
+  }
+  useEffect(()=>()=>clearInterval(cooldownRef.current),[]);
   const passStrength=pass.length===0?0:pass.length<6?1:pass.length<10&&!/[^a-zA-Z0-9]/.test(pass)?2:3;
   const strengthLabel=["","Weak","Fair","Strong"];const strengthColor=["",C.red,C.amber,C.green];
   async function submit(){
+    if(cooldown>0){return;}
     if(!email.trim()||!pass.trim()){setErr("Please fill in all fields.");return;}
     if(mode==="signup"&&pass.length<6){setErr("Password must be at least 6 characters.");return;}
     setLoading(true);setErr("");
@@ -3957,12 +3967,18 @@ function AuthScreen({onAuth,onSkip}){
         if(r.error==="network"||r.message?.includes("Failed to fetch")||r.message?.includes("NetworkError")){setErr("Can't reach server — tap 'Try without account' to use offline.");setLoading(false);return;}
         if(r.error_description||r.msg||r.error){
           const msg=(r.error_description||r.msg||r.error||"").toLowerCase();
-          if(msg.includes("invalid")||msg.includes("credentials")||msg.includes("password")){setErr("Wrong password. Try again or use 'Forgot password' below.");}
+          if(msg.includes("invalid")||msg.includes("credentials")||msg.includes("password")){
+            const next=failCount+1;setFailCount(next);
+            const wait=next>=5?30:next>=3?10:0;
+            if(wait>0)startCooldown(wait);
+            setErr("Wrong password."+(wait>0?` Wait ${wait}s before trying again.`:" Try again or use 'Forgot password' below."));
+          }
           else if(msg.includes("confirm")||msg.includes("email")){setErr("Please confirm your email first — check your inbox.");}
           else if(msg.includes("not found")||msg.includes("user")){setErr("No account found for that email. Sign up or continue without account.");}
           else{setErr("Sign in failed. Check your email and password.");}
           setLoading(false);return;
         }
+        setFailCount(0);
         if(!r.access_token){setErr("Sign in failed — try again.");setLoading(false);return;}
         onAuth(r);
       }else{
@@ -4069,7 +4085,7 @@ function AuthScreen({onAuth,onSkip}){
         {/* Error */}
         {err&&<div style={{background:err.includes("found")||err.includes("sent")?C.accentBg:C.redBg,border:`1px solid ${err.includes("found")||err.includes("sent")?C.accentMid:C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:err.includes("found")||err.includes("sent")?C.accent:C.red,marginBottom:14,lineHeight:1.5}}>{err}</div>}
         {/* Submit */}
-        <button onClick={submit} disabled={loading||!email.trim()||!pass.trim()} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:loading||!email.trim()||!pass.trim()?C.borderLight:`linear-gradient(135deg,${C.accent},${C.teal})`,color:loading||!email.trim()||!pass.trim()?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading||!email.trim()||!pass.trim()?"default":"pointer",marginBottom:14,letterSpacing:.2,transition:"all .2s",boxShadow:loading||!email.trim()||!pass.trim()?"none":`0 4px 16px ${C.accent}50`}}>{loading?"Just a sec...":(mode==="login"?"Sign In →":"Create Account →")}</button>
+        <button onClick={submit} disabled={loading||cooldown>0||!email.trim()||!pass.trim()} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:loading||cooldown>0||!email.trim()||!pass.trim()?C.borderLight:`linear-gradient(135deg,${C.accent},${C.teal})`,color:loading||cooldown>0||!email.trim()||!pass.trim()?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading||cooldown>0||!email.trim()||!pass.trim()?"default":"pointer",marginBottom:14,letterSpacing:.2,transition:"all .2s",boxShadow:loading||cooldown>0||!email.trim()||!pass.trim()?"none":`0 4px 16px ${C.accent}50`}}>{loading?"Just a sec...":cooldown>0?`Wait ${cooldown}s...`:(mode==="login"?"Sign In →":"Create Account →")}</button>
         {/* Skip */}
         {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}>
           <button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,fontWeight:600,cursor:"pointer",padding:"6px 0"}}>Try without account →</button>
@@ -5544,6 +5560,9 @@ function AppInner(){
   const showToast=(msg,type='success')=>{setToast({msg,type});const dur=msg.length>40?4000:2500;setTimeout(()=>setToast(null),dur);};
 
   const[isDemoMode,setIsDemoMode]=useState(()=>{try{return localStorage.getItem("fv_demo")==="1";}catch{return false;}});
+  const[demoBannerVisible,setDemoBannerVisible]=useState(true);
+  // Auto-hide demo banner after 6 seconds, but it can be re-shown by scrolling back to top
+  useEffect(()=>{if(!isDemoMode)return;const t=setTimeout(()=>setDemoBannerVisible(false),6000);return()=>clearTimeout(t);},[isDemoMode]);
 
   useEffect(()=>{
     (async()=>{
@@ -6003,14 +6022,16 @@ function AppInner(){
               </div>
             </div>
 
-            {isDemoMode&&expenses.length>0&&(
-              <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(217,119,6,.1)",border:"1px solid rgba(217,119,6,.25)",borderRadius:99,padding:"4px 10px 4px 8px",marginBottom:10,width:"fit-content"}}>
-                <span style={{fontSize:10}}>🧪</span>
-                <span style={{fontSize:10,fontWeight:600,color:C.amber,letterSpacing:.1}}>Demo</span>
+            {isDemoMode&&expenses.length>0&&demoBannerVisible&&(
+              <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(217,119,6,.08)",border:"1px solid rgba(217,119,6,.2)",borderRadius:99,padding:"3px 6px 3px 8px",marginBottom:8,width:"fit-content",animation:"fadeIn .3s ease"}}>
+                <span style={{fontSize:9}}>🧪</span>
+                <span style={{fontSize:9,fontWeight:600,color:C.amber,letterSpacing:.1}}>Demo mode</span>
                 <button onClick={()=>setConfirm({title:"Exit Demo",message:"Clear all demo data and start fresh.",onConfirm:()=>{exitDemo();setConfirm(null);},danger:false})}
-                  style={{background:"rgba(217,119,6,.15)",border:"none",borderRadius:99,padding:"1px 7px",color:C.amber,fontWeight:700,fontSize:9,cursor:"pointer",lineHeight:1.6}}>
+                  style={{background:"rgba(217,119,6,.12)",border:"none",borderRadius:99,padding:"1px 6px",color:C.amber,fontWeight:700,fontSize:8,cursor:"pointer",lineHeight:1.6}}>
                   Exit
                 </button>
+                <button onClick={()=>setDemoBannerVisible(false)}
+                  style={{background:"none",border:"none",cursor:"pointer",color:C.amber,padding:"0 2px",fontSize:10,lineHeight:1,opacity:.6}}>×</button>
               </div>
             )}
 
@@ -6380,12 +6401,12 @@ function AppInner(){
               </div>
             </div>}
 
-            {/* ── 7. DEMO CARD (no data) ─────────────────────────── */}
-            {expenses.length===0&&<div style={{background:`linear-gradient(135deg,${C.navy} 0%,${C.accent} 100%)`,borderRadius:18,padding:24,marginBottom:14,textAlign:"center"}}>
-              <div style={{fontSize:32,marginBottom:10}}>🧪</div>
-              <div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:"#fff",marginBottom:6}}>See it in action</div>
-              <div style={{fontSize:13,color:"rgba(255,255,255,.8)",marginBottom:18}}>Load a year of realistic data to explore every feature</div>
-              <button onClick={()=>setConfirm({title:"Load Demo Data",message:"Replace current data with 1 year of sample data?",onConfirm:()=>{loadDemo();setConfirm(null);},danger:false})} style={{background:"#fff",border:"none",borderRadius:12,padding:"12px 28px",color:C.accent,fontWeight:800,fontSize:15,cursor:"pointer",fontFamily:MF}}>Load Demo Data</button>
+            {/* ── 7. DEMO HINT (no data yet) ──────────────────────── */}
+            {expenses.length===0&&<div style={{textAlign:"center",marginBottom:10}}>
+              <button className="ba" onClick={()=>setConfirm({title:"Load Demo Data",message:"Load a year of realistic sample data to explore every feature?",onConfirm:()=>{loadDemo();setConfirm(null);},danger:false})}
+                style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.textFaint,fontWeight:500,padding:"4px 8px",textDecoration:"underline",textDecorationColor:"rgba(0,0,0,.15)"}}>
+                or try demo data →
+              </button>
             </div>}
 
             {/* ── 8. RECENT TRANSACTIONS ────────────────────────── */}
