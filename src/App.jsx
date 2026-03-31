@@ -5525,6 +5525,7 @@ function AppInner(){
       try { if (map["merchantCats"]) window._merchantCats = map["merchantCats"]; } catch {}
       try { if (map["accountRates"]) setAccountRates(prev => ({...prev,...map["accountRates"]})); } catch {}
       try { if (map["onboarded"]) { localStorage.setItem("fv_onboarded","1"); setOnboarded(true); } } catch {}
+      cloudLoadedRef.current=true;
       // Mirror Supabase data into scoped localStorage for offline use
       const scope = "fv6_" + uid.slice(0,8) + ":";
       res.data.forEach(row => {
@@ -5547,6 +5548,9 @@ function AppInner(){
     setSkipAuth(false);
   }
   const[ready,setReady]=useState(false);
+  // True once we've successfully loaded at least one round of cloud data.
+  // Prevents empty boot state from overwriting real Supabase data on other devices.
+  const cloudLoadedRef=useRef(false);
   const[accounts,setAccounts]=useState({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});
   const[income,setIncome]=useState({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});
   const[expenses,setExpenses]=useState([]);
@@ -5652,6 +5656,7 @@ function AppInner(){
         try{if(gn)setGreetName(gn);}catch{}
         try{if(mc)window._merchantCats=mc;}catch{}
         try{const ar=_bulkMap["accountRates"]||(await sg("fv6:accountRates"));if(ar)setAccountRates(prev=>({...prev,...ar}));}catch{}
+        if(Object.keys(_bulkMap).length>0)cloudLoadedRef.current=true;
         try{const ob=_bulkMap["onboarded"]||(await sg("fv6:onboarded"));if(ob){localStorage.setItem("fv_onboarded","1");setOnboarded(true);}}catch{}
       }catch(e){console.error("Load error",e);}
       setReady(true);
@@ -5660,12 +5665,12 @@ function AppInner(){
 
   useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);return[...prev,_bh].slice(-104);});},[accounts,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
-  useEffect(()=>{if(!ready)return;ss("fv6:expenses",expenses);},[expenses,ready]);
-  useEffect(()=>{if(!ready)return;ss("fv6:bills",bills);},[bills,ready]);
-  useEffect(()=>{if(!ready)return;ss("fv6:debts",debts);},[debts,ready]);
-  useEffect(()=>{if(!ready)return;ss("fv6:trades",trades);},[trades,ready]);
-  useEffect(()=>{if(!ready)return;ss("fv6:notifs",notifs);},[notifs,ready]);
-  useEffect(()=>{if(!ready)return;ss("fv6:shifts",shifts);},[shifts,ready]);
+  useEffect(()=>{if(!ready)return;if(!expenses.length&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
+  useEffect(()=>{if(!ready)return;if(!bills.length&&!cloudLoadedRef.current)return;ss("fv6:bills",bills);},[bills,ready]);
+  useEffect(()=>{if(!ready)return;if(!debts.length&&!cloudLoadedRef.current)return;ss("fv6:debts",debts);},[debts,ready]);
+  useEffect(()=>{if(!ready)return;if(!trades.length&&!cloudLoadedRef.current)return;ss("fv6:trades",trades);},[trades,ready]);
+  useEffect(()=>{if(!ready)return;if(!notifs.length&&!cloudLoadedRef.current)return;ss("fv6:notifs",notifs);},[notifs,ready]);
+  useEffect(()=>{if(!ready)return;if(!shifts.length&&!cloudLoadedRef.current)return;ss("fv6:shifts",shifts);},[shifts,ready]);
   // Settings & config (change infrequently)
   useEffect(()=>{
     if(!ready)return;
