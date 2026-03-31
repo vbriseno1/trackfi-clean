@@ -5498,6 +5498,9 @@ function AppInner(){
         if (map[key] === undefined) return;
         const v = map[key];
         if (!v) return;
+        // Don't overwrite a non-empty local array with an empty one from Supabase.
+        // This prevents a device with stale empty data from wiping another device's work.
+        if (Array.isArray(v) && v.length === 0) return;
         if (merge) setter(prev => ({...prev, ...v}));
         else setter(v);
       };
