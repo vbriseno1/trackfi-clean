@@ -1,6 +1,18 @@
 -- Trackfi — Supabase Schema
 -- Run this once in your Supabase project: Dashboard → SQL Editor → New query → paste → Run
 -- ─────────────────────────────────────────────────────────────────────────────
+--
+-- RLS audit (2026-03)
+-- - user_data: SELECT/INSERT/UPDATE/DELETE all scoped with auth.uid() = user_id — OK.
+-- - push_subscriptions: SELECT/INSERT/DELETE scoped; UPDATE added below for PostgREST
+--   upserts (Prefer: resolution=merge-duplicates) which can UPDATE on conflict.
+-- - No service_role policies here; app uses anon + user JWT only.
+-- Verification (run as a test user after sign-in; expect only your rows):
+--   select count(*) from user_data where user_id = auth.uid();
+--   select count(*) from push_subscriptions where user_id = auth.uid();
+-- Cross-user isolation spot-check (should return 0 rows for other users' UUIDs):
+--   select * from user_data where user_id <> auth.uid() limit 1;
+-- ─────────────────────────────────────────────────────────────────────────────
 
 -- 1. user_data — key/value store for all app data per user
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -59,6 +71,11 @@ create policy "Users can insert their own push subscriptions"
   on public.push_subscriptions for insert
   with check (auth.uid() = user_id);
 
+create policy "Users can update their own push subscriptions"
+  on public.push_subscriptions for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 create policy "Users can delete their own push subscriptions"
   on public.push_subscriptions for delete
   using (auth.uid() = user_id);
@@ -69,3 +86,11 @@ create policy "Users can delete their own push subscriptions"
 -- 1. Copy .env.example → .env and fill in your Supabase URL + anon key
 -- 2. Deploy / run locally — sync will work immediately for all signed-in users
 -- ─────────────────────────────────────────────────────────────────────────────
+--
+-- Existing projects only: if push_subscriptions already exists without the UPDATE
+-- policy above, run the following once (skip if you get "already exists"):
+--
+-- create policy "Users can update their own push subscriptions"
+--   on public.push_subscriptions for update
+--   using (auth.uid() = user_id)
+--   with check (auth.uid() = user_id);

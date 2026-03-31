@@ -8,6 +8,21 @@ import { LayoutDashboard, Wallet, CalendarClock, CreditCard, Target, PiggyBank,
   Filter, Database, RefreshCw, ChevronDown } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, BarChart, Bar, Cell, PieChart, Pie, ComposedChart } from "recharts";
+import {
+  SUPA_URL,
+  SUPA_KEY,
+  VAPID_PUBLIC_KEY,
+  setSessionExpiredHandler,
+  triggerSessionExpired,
+  supaFetch,
+  signUp,
+  signIn,
+  getScope,
+  _getUserId,
+  sg,
+  ss,
+  flushPendingSync,
+} from "./lib/supabase.js";
 
 // ── Confetti burst — pure canvas, no library ──────────────────────────────────
 function launchConfetti(){
@@ -44,57 +59,6 @@ function launchConfetti(){
     }
     draw();
   }catch(e){}
-}
-
-// 🔑 Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env (see .env.example)
-const SUPA_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
-
-// Called whenever any Supabase call gets a 401 or refresh token fails.
-// Set by the main App component so the UI can react without prop-drilling.
-let _onSessionExpired = null;
-
-async function supaFetch(path, opts={}) {
-  if (!SUPA_URL || !SUPA_KEY) return { data: null, error: { message: "Supabase is not configured (set VITE_SUPABASE_* in .env)" } };
-  const session = (()=>{try{return JSON.parse(localStorage.getItem("fv_session")||"null");}catch{return null;}})();
-  const token = session?.access_token;
-  const headers = {"Content-Type":"application/json","apikey":SUPA_KEY,...(token?{"Authorization":"Bearer "+token}:{}),...(opts.headers||{})};
-  const res = await fetch(SUPA_URL+path, {...opts, headers});
-  if(!res.ok){
-    const e=await res.json().catch(()=>({message:"Request failed"}));
-    if(res.status===401) _onSessionExpired?.();
-    return {data:null,error:e};
-  }
-  const data = await res.json().catch(()=>({}));
-  return {data, error:null};
-}
-async function signUp(email, password) {
-  if (!SUPA_URL || !SUPA_KEY) return {error:{message:"Supabase is not configured (set VITE_SUPABASE_* in .env)"}};
-  try {
-    const redirectTo = window.location.origin + window.location.pathname;
-    const res = await fetch(SUPA_URL+"/auth/v1/signup", {
-      method:"POST", headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
-      body: JSON.stringify({email, password, options:{emailRedirectTo: redirectTo}})
-    });
-    if(!res.ok) { const e=await res.json().catch(()=>({message:"Request failed"})); return {error:e}; }
-    const r = await res.json();
-    if(r.access_token) try{localStorage.setItem("fv_session", JSON.stringify(r));}catch{}
-    return r;
-  } catch(e) { return {error:{message:e.message||"Network error"}}; }
-}
-async function signIn(email, password) {
-  if (!SUPA_URL || !SUPA_KEY) return {error:{message:"Supabase is not configured (set VITE_SUPABASE_* in .env)"}};
-  try {
-    const res = await fetch(SUPA_URL+"/auth/v1/token?grant_type=password", {
-      method:"POST", headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
-      body: JSON.stringify({email, password})
-    });
-    if(!res.ok) { const e=await res.json().catch(()=>({message:"Request failed"})); return {error:e}; }
-    const r = await res.json();
-    if(r.access_token) try{localStorage.setItem("fv_session", JSON.stringify(r));}catch{}
-    return r;
-  } catch(e) { return {error:{message:e.message||"Network error"}}; }
 }
 
 const C = {
@@ -191,77 +155,6 @@ const DEF_INCOME={primary:"",other:"",trading:"",rental:"",dividends:"",freelanc
 const DEF_HOUSEHOLD={enabled:false,name:"My Finances",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"}]};
 const DEF_CALCOLORS=(C)=>({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
 const DEF_DASHCONFIG={showIncomeChart:true,showMetrics:true,showAccounts:true,showForecast:true,showBills:true,showRecent:true,showTradeCard:true};
-const getScope=()=>{try{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(s?.user?.id)return"fv6_"+s.user.id.slice(0,8)+":";let d=localStorage.getItem("fv_device_id");if(!d){d="d_"+Math.random().toString(36).slice(2,10);localStorage.setItem("fv_device_id",d);}return"fv6_"+d+":";}catch{return"fv6_local:";}};
-// ── Supabase-aware storage helpers ──────────────────────────────────────────
-// sg(): read from Supabase when logged in, fall back to localStorage
-// ss(): write to Supabase when logged in AND to localStorage (offline fallback)
-const _getSession = () => { try { return JSON.parse(localStorage.getItem("fv_session")||"null"); } catch { return null; } };
-const _getUserId  = () => _getSession()?.user?.id || null;
-
-async function sg(k) {
-  const uid = _getUserId();
-  const bare = k.replace("fv6:","");
-  if (uid) {
-    try {
-      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&key=eq.${bare}&select=value`);
-      if (Array.isArray(res?.data) && res.data.length > 0) return res.data[0].value;
-    } catch {}
-  }
-  // localStorage fallback
-  try {
-    const scoped = localStorage.getItem(getScope()+bare);
-    if (scoped !== null) return JSON.parse(scoped);
-    const legacy = localStorage.getItem(k);
-    return legacy ? JSON.parse(legacy) : null;
-  } catch { return null; }
-}
-
-// Debounce buffer: {key -> {value, timer}}
-const _ssBuffer = {};
-async function _flushKey(uid, bare, v) {
-  try {
-    // Explicitly specify conflict columns so PostgREST upserts on (user_id, key)
-    // rather than defaulting to the auto-generated primary key (which never conflicts).
-    const r = await supaFetch("/rest/v1/user_data?on_conflict=user_id,key", {
-      method: "POST",
-      headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: new Date().toISOString() })
-    });
-    if (!r.error) try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
-  } catch {}
-}
-async function ss(k, v) {
-  const uid = _getUserId();
-  const bare = k.replace("fv6:","");
-  // Always write localStorage immediately (instant, works offline)
-  try { localStorage.setItem(getScope()+bare, JSON.stringify(v)); } catch {}
-  // Debounce Supabase writes: wait 1.5s after last change before posting
-  if (uid) {
-    if (_ssBuffer[bare]?.timer) clearTimeout(_ssBuffer[bare].timer);
-    _ssBuffer[bare] = {
-      value: v,
-      timer: setTimeout(() => _flushKey(uid, bare, _ssBuffer[bare].value), 1500)
-    };
-  }
-}
-/** Flush debounced writes to Supabase before pulling remote state — prevents stale cloud from undoing local deletes/dismissals. */
-async function flushPendingSync() {
-  const uid = _getUserId();
-  if (!uid) return;
-  const keys = Object.keys(_ssBuffer);
-  for (const bare of keys) {
-    const buf = _ssBuffer[bare];
-    if (!buf) continue;
-    if (buf.timer) clearTimeout(buf.timer);
-    let val = buf.value;
-    try {
-      const raw = localStorage.getItem(getScope() + bare);
-      if (raw !== null) val = JSON.parse(raw);
-    } catch {}
-    if (val !== undefined) await _flushKey(uid, bare, val);
-    delete _ssBuffer[bare];
-  }
-}
 
 const notifSupported  = () => typeof window!=="undefined"&&"Notification" in window;
 const notifPermission = () => notifSupported()?window.Notification.permission:"denied";
@@ -5390,15 +5283,17 @@ function AppInner(){
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
   const[sessionExpired,setSessionExpired]=useState(false);
   useEffect(()=>{
-    _onSessionExpired=()=>{
-      // Only fire once and only when a real logged-in session exists
-      if(!authSession?.access_token)return;
+    setSessionExpiredHandler(()=>{
+      try{
+        const s=JSON.parse(localStorage.getItem("fv_session")||"null");
+        if(!s?.access_token)return;
+      }catch{return;}
       try{localStorage.removeItem("fv_session");}catch{}
       setAuthSession(null);
       setSessionExpired(true);
-    };
-    return()=>{_onSessionExpired=null;};
-  },[authSession?.access_token]);
+    });
+    return()=>setSessionExpiredHandler(null);
+  },[]);
   const authToken=authSession?.access_token||null;
   // Background token refresh — Supabase tokens expire after 1hr, refresh every 45min
   useEffect(()=>{
@@ -5418,7 +5313,7 @@ function AppInner(){
           setAuthSession(newSess);
         } else {
           // Refresh token is expired or revoked — session is gone
-          _onSessionExpired?.();
+          triggerSessionExpired();
         }
       }catch{}
     };
@@ -5634,11 +5529,8 @@ function AppInner(){
     try{localStorage.removeItem("fv_onboarded");}catch{}
     cloudLoadedRef.current=false;
   }
-  function handleSignOut(){
-    // Flush any pending debounced writes before signing out
-    Object.entries(_ssBuffer).forEach(([bare,buf])=>{
-      if(buf.timer){clearTimeout(buf.timer);const uid=_getUserId();if(uid)_flushKey(uid,bare,buf.value);}
-    });
+  async function handleSignOut(){
+    await flushPendingSync();
     // Unsubscribe push notifications so this device stops receiving alerts after sign-out
     try{
       if("serviceWorker" in navigator){
@@ -5703,8 +5595,7 @@ function AppInner(){
     const goOnline=()=>{
       setIsOnline(true);
       showToast("Back online — syncing...","success");
-      // Re-flush any writes buffered while offline
-      try{const uid=_getUserId();if(uid){Object.entries(_ssBuffer).forEach(([bare,buf])=>{if(buf.value!==undefined)_flushKey(uid,bare,buf.value);});}}catch{}
+      void flushPendingSync();
     };
     const goOffline=()=>{setIsOnline(false);};
     window.addEventListener("online",goOnline);
