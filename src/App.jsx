@@ -185,6 +185,11 @@ const dueIn  = d => { if(!d||typeof d!=="string")return 999; const parts=d.split
 const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); };
 const dayOfMonth  = () => new Date().getDate();
 const fmtDate = s => { if(!s)return""; const d=new Date(s+"T00:00:00"); return FULL_MOS[d.getMonth()]+" "+d.getDate(); };
+const DEF_SETTINGS={showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"],notifBills:true,notifBudget:true,notifSavings:true,notifPayday:true,notifMilestones:true};
+const DEF_ACCOUNTS={checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""};
+const DEF_INCOME={primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""};
+const DEF_HOUSEHOLD={enabled:false,name:"My Finances",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"}]};
+const DEF_CALCOLORS=(C)=>({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
 const getScope=()=>{try{const s=JSON.parse(localStorage.getItem("fv_session")||"null");if(s?.user?.id)return"fv6_"+s.user.id.slice(0,8)+":";let d=localStorage.getItem("fv_device_id");if(!d){d="d_"+Math.random().toString(36).slice(2,10);localStorage.setItem("fv_device_id",d);}return"fv6_"+d+":";}catch{return"fv6_local:";}};
 // ── Supabase-aware storage helpers ──────────────────────────────────────────
 // sg(): read from Supabase when logged in, fall back to localStorage
@@ -5549,10 +5554,6 @@ function AppInner(){
     finally { setSyncing(false); }
   }
   function handleSkip(){try{localStorage.setItem("fv_skip_auth","1");}catch{}setSkipAuth(true);}
-  const DEF_SETTINGS={showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"],notifBills:true,notifBudget:true,notifSavings:true,notifPayday:true,notifMilestones:true};
-  const DEF_ACCOUNTS={checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""};
-  const DEF_INCOME={primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""};
-  const DEF_HOUSEHOLD={enabled:false,name:"My Finances",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"}]};
   function resetUserState(){
     setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);
     setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);
@@ -5564,8 +5565,10 @@ function AppInner(){
     setSettings(DEF_SETTINGS);
     setTradingAccount({deposit:"",balance:""});
     setDashConfig({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
-    setCalColors({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
+    setCalColors(DEF_CALCOLORS(C));
     setAccountRates({checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0});
+    setOnboarded(false);setIsDemoMode(false);setDarkMode(false);setHidden(false);
+    try{localStorage.removeItem("fv_onboarded");}catch{}
     cloudLoadedRef.current=false;
   }
   function handleSignOut(){
@@ -5584,8 +5587,8 @@ function AppInner(){
   // True once we've successfully loaded at least one round of cloud data.
   // Prevents empty boot state from overwriting real Supabase data on other devices.
   const cloudLoadedRef=useRef(false);
-  const[accounts,setAccounts]=useState({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});
-  const[income,setIncome]=useState({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});
+  const[accounts,setAccounts]=useState(DEF_ACCOUNTS);
+  const[income,setIncome]=useState(DEF_INCOME);
   const[expenses,setExpenses]=useState([]);
   const[bills,setBills]=useState([]);
   const[debts,setDebts]=useState([]);
@@ -5593,14 +5596,14 @@ function AppInner(){
   const[savingsGoals,setSGoals]=useState([]);
   const[categories,setCats]=useState(DEF_CATS);
   const[accountRates,setAccountRates]=useState(()=>{try{const r=localStorage.getItem("fv_account_rates");return r?JSON.parse(r):{checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0};}catch{return{checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0};}});
-  const[household,setHousehold]=useState({enabled:false,name:"My Finances",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"}]});
+  const[household,setHousehold]=useState(DEF_HOUSEHOLD);
   const[trades,setTrades]=useState([]);
   const[tradingAccount,setTradingAccount]=useState({deposit:"",balance:""});
   const[shifts,setShifts]=useState([]);
   const[balHist,setBalHist]=useState([]);
   const[notifs,setNotifs]=useState([]);
-  const[calColors,setCalColors]=useState({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
-  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"],notifBills:true,notifBudget:true,notifSavings:true,notifPayday:true,notifMilestones:true});
+  const[calColors,setCalColors]=useState(()=>DEF_CALCOLORS(C));
+  const[settings,setSettings]=useState(DEF_SETTINGS);
   const[monthlySummary,setMonthlySummary]=useState(null);
   const[dashConfig,setDashConfig]=useState({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
   const[appName,setAppName]=useState("Trackfi");
@@ -5707,6 +5710,9 @@ function AppInner(){
   // Settings & config (change infrequently)
   useEffect(()=>{
     if(!ready)return;
+    // Only write goals to Supabase once cloud data has been confirmed loaded,
+    // so a fresh boot with empty default state doesn't erase real data.
+    if((!budgetGoals.length||!savingsGoals.length)&&!cloudLoadedRef.current)return;
     ss("fv6:income",income);ss("fv6:bgoals",budgetGoals);ss("fv6:sgoals",savingsGoals);
     ss("fv6:cats",categories);ss("fv6:settings",settings);
   },[income,budgetGoals,savingsGoals,categories,settings,ready]);
@@ -5930,8 +5936,8 @@ function AppInner(){
       }
     });
     const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0');
-    if(settings.notifBudget!==false)budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
-    if(settings.notifSavings!==false)savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100){const alreadyNotified=notifs.some(n=>n.id==='goal_done_'+g.id);pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');if(!alreadyNotified)launchConfetti();}else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
+    if(settings.notifBudget!==false&&Array.isArray(budgetGoals)&&Array.isArray(expenses))budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
+    if(settings.notifSavings!==false&&Array.isArray(savingsGoals))savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100){const alreadyNotified=notifs.some(n=>n.id==='goal_done_'+g.id);pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');if(!alreadyNotified)launchConfetti();}else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
     // Payday reminder: notify when payday is tomorrow or today
     const payReminderKey="payremind_"+nextPayStr;
     const daysUntil=Math.ceil((nextPayDate-new Date())/86400000);
