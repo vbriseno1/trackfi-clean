@@ -4872,7 +4872,7 @@ function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGo
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)),0);
   const nw=ta-td;
   const mult=income.payFrequency==="Weekly"?4.33:income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:2.17;
-  const ti=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const ti=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const thisMonthExp=expenses.filter(e=>e.date?.startsWith(ms));
   const mExp=thisMonthExp.reduce((s,e)=>s+(parseFloat(e.amount||0)),0);
   const sr=ti>0?Math.max(0,(ti-mExp)/ti*100):0;
@@ -5367,7 +5367,7 @@ function AppInner(){
       }
     }
     // Normal boot: validate + refresh existing session
-    const s=JSON.parse(localStorage.getItem("fv_session")||"null");
+    const s=(()=>{try{return JSON.parse(localStorage.getItem("fv_session")||"null");}catch{return null;}})();
     if(!s?.access_token){setAuthLoading(false);return;}
     // Try to refresh the token first (handles expired access tokens)
     async function tryRefresh(session){
@@ -5583,7 +5583,7 @@ function AppInner(){
     })();
   },[]);
 
-  useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);return[...prev,_bh].slice(-104);});},[accounts,ready]);
+  useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);return[...prev,_bh].slice(-104);});},[accounts,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
   useEffect(()=>{if(!ready)return;ss("fv6:expenses",expenses);},[expenses,ready]);
   useEffect(()=>{if(!ready)return;ss("fv6:bills",bills);},[bills,ready]);
@@ -5768,7 +5768,7 @@ function AppInner(){
     bills.forEach(b=>{if(b.paid)return;const d=dueIn(b.dueDate);if(d<0)pushNotif('ov_'+b.id,'🚨 Overdue: '+b.name,fmt(b.amount)+' was due '+Math.abs(d)+'d ago','danger');else if(d<=3)pushNotif('due3_'+b.id,'⚠️ Due soon: '+b.name,fmt(b.amount)+' due in '+d+' day'+(d!==1?'s':''),'warning');});
     const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0');
     budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
-    savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100){pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');launchConfetti();}else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
+    savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100){const alreadyNotified=notifs.some(n=>n.id==='goal_done_'+g.id);pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');if(!alreadyNotified)launchConfetti();}else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
     // Payday reminder: notify when payday is tomorrow or today
     const payReminderKey="payremind_"+nextPayStr;
     const daysUntil=Math.ceil((nextPayDate-new Date())/86400000);
