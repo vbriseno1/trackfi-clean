@@ -774,7 +774,7 @@ Ask me anything:\
   const chatPayDays=chatPayFreq==="Weekly"?7:chatPayFreq==="Biweekly"?14:chatPayFreq==="Twice Monthly"?15:30;
   const chatNow=new Date();const chatTod=chatNow.getDate();
   const chatNextPay=(()=>{
-    if(income.lastPayDate){const last=new Date(income.lastPayDate+"T00:00:00");const next=new Date(last);let safety=0;while(next<=chatNow&&safety<60){if(chatPayFreq==="Weekly")next.setDate(next.getDate()+7);else if(chatPayFreq==="Twice Monthly"){next.getDate()<15?next.setDate(15):next.setMonth(next.getMonth()+1,1);}else if(chatPayFreq==="Monthly")next.setMonth(next.getMonth()+1);else next.setDate(next.getDate()+14);safety++;}return next;}
+    if(income.lastPayDate){const last=new Date(income.lastPayDate+"T00:00:00");const next=new Date(last);let safety=0;while(next<=chatNow&&safety<60){if(chatPayFreq==="Weekly")next.setDate(next.getDate()+7);else if(chatPayFreq==="Twice Monthly"){if(next.getDate()<15)next.setDate(15);else next.setMonth(next.getMonth()+1,1);}else if(chatPayFreq==="Monthly")next.setMonth(next.getMonth()+1);else next.setDate(next.getDate()+14);safety++;}return next;}
     if(chatPayFreq==="Twice Monthly"){return chatTod<15?new Date(chatNow.getFullYear(),chatNow.getMonth(),15):new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}
     if(chatPayFreq==="Monthly"){return new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}
     const d=new Date(chatNow);d.setDate(chatNow.getDate()+chatPayDays);return d;
@@ -1386,7 +1386,7 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
     const nxt=new Date(last);let safety=0;
     while(nxt<=now&&safety<60){
       if(payFreq==="Weekly")nxt.setDate(nxt.getDate()+7);
-      else if(payFreq==="Twice Monthly"){nxt.getDate()<15?nxt.setDate(15):nxt.setMonth(nxt.getMonth()+1,1);}
+      else if(payFreq==="Twice Monthly"){if(nxt.getDate()<15)nxt.setDate(15);else nxt.setMonth(nxt.getMonth()+1,1);}
       else if(payFreq==="Monthly")nxt.setMonth(nxt.getMonth()+1);
       else nxt.setDate(nxt.getDate()+14);
       safety++;
@@ -3630,12 +3630,12 @@ function generateDemoData(){
   return{expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,balHist,merchantCats};
 }
 
-function HealthScoreView({income,expenses,debts,accounts,bills,onNavigate}){
+function HealthScoreView({income,expenses,debts,accounts,bills,tradingAccount,onNavigate}){
   const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const _hsAllMs=new Set(expenses.map(e=>e.date?.slice(0,7)).filter(Boolean));
   const te=_hsAllMs.size>0?expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)/Math.max(1,_hsAllMs.size):0;
   const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
-  const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
+  const ta=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount?.balance||0));
   const liquid=(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0));
   const _hsNow=new Date();const _hsMs=_hsNow.getFullYear()+"-"+String(_hsNow.getMonth()+1).padStart(2,"0");
   const moExpActual=expenses.filter(e=>e.date?.startsWith(_hsMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
@@ -5752,7 +5752,7 @@ function AppInner(){
     })();
   },[]);
 
-  useEffect(()=>{if(!ready)return;if(!cloudLoadedRef.current&&!Object.values(accounts).some(v=>parseFloat(v)>0))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);return[...prev,_bh].slice(-104);});},[accounts,debts,ready]);
+  useEffect(()=>{if(!ready)return;if(!cloudLoadedRef.current&&!Object.values(accounts).some(v=>parseFloat(v)>0))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
   useEffect(()=>{if(!ready)return;if(!balHist.length&&!cloudLoadedRef.current)return;ss("fv6:balHist",balHist);},[balHist,ready]);
   useEffect(()=>{if(!ready)return;if(!expenses.length&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
@@ -5934,7 +5934,7 @@ function AppInner(){
       let safety=0;
       while(next<=_now&&safety<60){
         if(payFreq==="Weekly")next.setDate(next.getDate()+7);
-        else if(payFreq==="Twice Monthly"){next.getDate()<15?next.setDate(15):next.setMonth(next.getMonth()+1,1);}
+        else if(payFreq==="Twice Monthly"){if(next.getDate()<15)next.setDate(15);else next.setMonth(next.getMonth()+1,1);}
         else if(payFreq==="Monthly")next.setMonth(next.getMonth()+1);
         else next.setDate(next.getDate()+14);
         safety++;
@@ -6842,7 +6842,7 @@ function AppInner(){
         {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready} recurrings={recurrings} setRecurrings={setRecurrings}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
         {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals}/>}
-        {tab==="health"&&<HealthScoreView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} onNavigate={navTo}/>}
+        {tab==="health"&&<HealthScoreView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} tradingAccount={tradingAccount} onNavigate={navTo}/>}
         {tab==="trading"&&settings.showTrading&&<TradingView trades={trades} setTrades={setTrades} account={tradingAccount} setAccount={setTradingAccount} showToast={showToast}/>}
         {tab==="calendar"&&<CalendarView expenses={expenses} bills={bills} calColors={calColors} setCalColors={setCalColors} setExpenses={setExpenses} onAdd={()=>om("expense")}/>}
         {tab==="shifts"&&<ShiftView shifts={shifts} setShifts={setShifts} income={income} profCategory={profCategory} profSub={profSub} showToast={showToast}/>}
