@@ -3766,7 +3766,7 @@ function SwipeRow({children,onDelete}){
 
 function ConfirmDialog({title,message,onConfirm,onCancel,danger=false}){
   return(
-    <div style={{position:"fixed",inset:0,zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(10,22,40,.55)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",backdropFilter:"blur(4px)",padding:20,animation:"fadeIn .15s ease"}} onClick={e=>e.target===e.currentTarget&&onCancel()}>
+    <div style={{position:"fixed",inset:0,zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(10,22,40,.55)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",padding:20,animation:"fadeIn .15s ease"}} onClick={e=>e.target===e.currentTarget&&onCancel()}>
       <div style={{background:C.surface,borderRadius:20,padding:24,width:"100%",maxWidth:340,boxShadow:"0 8px 40px rgba(0,0,0,.2)",animation:"slideUp .2s ease"}}>
         <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>{title}</div>
         <div style={{fontSize:14,color:C.textLight,lineHeight:1.5,marginBottom:20}}>{message}</div>
@@ -6223,7 +6223,7 @@ function AppInner(){
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
 
   return(
-    <div style={{minHeight:"100vh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",maxWidth:640,margin:"0 auto",minHeight:"100vh",position:"relative"}}>
+    <div style={{minHeight:"100vh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",maxWidth:640,margin:"0 auto",position:"relative"}}>
       <style>{CSS}</style>
       <div id="fv-scroll" style={{flex:1,overflowY:"auto",padding:"16px 16px 110px"}}>
         {["spend","home","chat","bills"].includes(tab)&&<button className="ba" onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:16,bottom:90,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
@@ -6762,7 +6762,7 @@ function AppInner(){
                 <div key={a.k} style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,display:"flex",alignItems:"center",gap:14}}>
                   <div style={{width:44,height:44,borderRadius:12,background:a.c+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{a.ic}</div>
                   <div style={{flex:1}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div></div>
-                  <input type="number" min="0" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>{const v=e.target.value;if(v===""||parseFloat(v)>=0)setAccounts(p=>({...p,[a.k]:v}));}} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{width:130,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",fontWeight:800,filter:hidden?"blur(8px)":"none"}}/>
+                  <input type="number" min="0" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>{const v=e.target.value;if(v===""||parseFloat(v)>=0)setAccounts(p=>({...p,[a.k]:v}));}} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{width:130,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:800,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none"}}/>
                 </div>
               ))}
             </div>
@@ -6965,7 +6965,7 @@ function AppInner(){
       </div>}
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px 8px max(14px,env(safe-area-inset-bottom))",zIndex:100,boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)"}}>
         {NAV.map(n=>{const active=n.id==="more"?isMoreTab||tab==="more":tab===n.id;return(
-          <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",background:active?"rgba(99,102,241,.08)":"transparent",transition:"all .18s"}}>
+          <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:active?"rgba(99,102,241,.08)":"transparent",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",transition:"all .18s"}}>
             {n.id==="chat"?(
               <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,display:"flex",alignItems:"center",justifyContent:"center",marginTop:-10,boxShadow:`0 4px 12px ${C.accent}55`,marginBottom:2}}>
                 <n.icon size={18} color="#fff" strokeWidth={2.2}/>
