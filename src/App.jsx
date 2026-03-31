@@ -181,7 +181,7 @@ const getProfSub = (pId,sId) => { const p=getProfession(pId); return p.subs.find
 const fmt    = n => { const v=Number(n); return "$"+(isNaN(v)?0:v).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const fmtK   = n => { const v=Number(n||0); return v>=1000?"$"+(v/1000).toFixed(1)+"k":fmt(v); };
 const todayStr = () => new Date().toISOString().split("T")[0];
-const dueIn  = d => { if(!d)return 999; const [ty,tm,tdy]=todayStr().split('-').map(Number); const [dy,dm,ddd]=d.split('-').map(Number); const today2=new Date(ty,tm-1,tdy); const due=new Date(dy,dm-1,ddd); return Math.ceil((due-today2)/86400000); };
+const dueIn  = d => { if(!d||typeof d!=="string")return 999; const parts=d.split('-').map(Number); if(parts.length!==3||parts.some(isNaN))return 999; const [ty,tm,tdy]=todayStr().split('-').map(Number); const [dy,dm,ddd]=parts; const today2=new Date(ty,tm-1,tdy); const due=new Date(dy,dm-1,ddd); const diff=Math.ceil((due-today2)/86400000); return isNaN(diff)?999:diff; };
 const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); };
 const dayOfMonth  = () => new Date().getDate();
 const fmtDate = s => { if(!s)return""; const d=new Date(s+"T00:00:00"); return FULL_MOS[d.getMonth()]+" "+d.getDate(); };
@@ -221,7 +221,7 @@ async function _flushKey(uid, bare, v) {
       headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: new Date().toISOString() })
     });
-    if (!r.error) localStorage.setItem("fv_last_sync", String(Date.now()));
+    if (!r.error) try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
   } catch {}
 }
 async function ss(k, v) {
@@ -5389,7 +5389,7 @@ function AppInner(){
         const lastSync=parseInt(localStorage.getItem("fv_last_sync")||"0");
         const now=Date.now();
         if(now-lastSync>30000){ // only sync if 30+ seconds since last sync
-          localStorage.setItem("fv_last_sync",String(now));
+          try{localStorage.setItem("fv_last_sync",String(now));}catch{}
           loadFromSupabase(authSession);
         }
       }
@@ -5469,7 +5469,7 @@ function AppInner(){
   },[]);
   function handleAuth(sess){
     setAuthSession(sess);
-    localStorage.setItem("fv_session",JSON.stringify(sess));
+    try{localStorage.setItem("fv_session",JSON.stringify(sess));}catch{}
     // Only migrate legacy local data if this looks like a returning user
     // (don't pollute a brand-new account with data from a previous offline session)
     try{
@@ -5506,10 +5506,11 @@ function AppInner(){
       const apply = (key, setter, merge=false) => {
         if (map[key] === undefined) return;
         const v = map[key];
-        if (!v) return;
-        // Don't overwrite a non-empty local array with an empty one from Supabase.
-        // This prevents a device with stale empty data from wiping another device's work.
-        if (Array.isArray(v) && v.length === 0) return;
+        if (v === null || v === undefined) return;
+        // After a sign-out+sign-in, state was already reset to empty by resetUserState(),
+        // so it's safe to apply empty arrays (they represent the new account's real state).
+        // Only skip empty arrays during background auto-syncs (cloudLoadedRef already true).
+        if (Array.isArray(v) && v.length === 0 && cloudLoadedRef.current) return;
         if (merge) setter(prev => ({...prev, ...v}));
         else setter(v);
       };
@@ -5543,20 +5544,40 @@ function AppInner(){
       res.data.forEach(row => {
         try { localStorage.setItem(scope + row.key, JSON.stringify(row.value)); } catch {}
       });
-      localStorage.setItem("fv_last_sync", String(Date.now()));
+      try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
     } catch(e) { console.error("loadFromSupabase error", e); }
     finally { setSyncing(false); }
   }
-  function handleSkip(){localStorage.setItem("fv_skip_auth","1");setSkipAuth(true);}
+  function handleSkip(){try{localStorage.setItem("fv_skip_auth","1");}catch{}setSkipAuth(true);}
+  const DEF_SETTINGS={showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"],notifBills:true,notifBudget:true,notifSavings:true,notifPayday:true,notifMilestones:true};
+  const DEF_ACCOUNTS={checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""};
+  const DEF_INCOME={primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""};
+  const DEF_HOUSEHOLD={enabled:false,name:"My Finances",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"}]};
+  function resetUserState(){
+    setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);
+    setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);
+    setAccounts(DEF_ACCOUNTS);
+    setIncome(DEF_INCOME);
+    setHousehold(DEF_HOUSEHOLD);
+    setGreetName("");setProfCategory("healthcare");setProfSub("nurse_rn");
+    setAppName("Trackfi");setCats(DEF_CATS);
+    setSettings(DEF_SETTINGS);
+    setTradingAccount({deposit:"",balance:""});
+    setDashConfig({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
+    setCalColors({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
+    setAccountRates({checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0});
+    cloudLoadedRef.current=false;
+  }
   function handleSignOut(){
     // Flush any pending debounced writes before signing out
     Object.entries(_ssBuffer).forEach(([bare,buf])=>{
       if(buf.timer){clearTimeout(buf.timer);const uid=_getUserId();if(uid)_flushKey(uid,bare,buf.value);}
     });
     if(authToken)supaFetch("/auth/v1/logout",{method:"POST"});
+    resetUserState();
     setAuthSession(null);
-    localStorage.removeItem("fv_session");
-    localStorage.removeItem("fv_skip_auth");
+    try{localStorage.removeItem("fv_session");}catch{}
+    try{localStorage.removeItem("fv_skip_auth");}catch{}
     setSkipAuth(false);
   }
   const[ready,setReady]=useState(false);
@@ -5962,7 +5983,7 @@ function AppInner(){
       if(!form.name||!form.amount)return;
       const billAmt=parseFloat(form.amount)||0;
       if(billAmt<=0){showToast("Enter a valid amount","error");return;}
-      setBills(p=>[...p,{id:Date.now(),name:form.name,amount:String(billAmt),dueDate:form.dueDate||"",recurring:form.recurring||"Monthly",paid:false,autoPay:false}]);
+      setBills(p=>[...p,{id:Date.now(),name:form.name,amount:String(billAmt),dueDate:form.dueDate||"",recurring:form.recurring||"Monthly",paid:false,autoPay:false,paidBy:form.paidBy||"me"}]);
       showToast("✓ "+form.name+" bill added");try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
     }else if(modal==="debt"){
@@ -6034,11 +6055,8 @@ function AppInner(){
   useEffect(()=>{window._loadDemo=loadDemo;return()=>{delete window._loadDemo;};},[]);
 
   async function exitDemo(){
-    setExpenses([]);setBills([]);setDebts([]);setTrades([]);setShifts([]);
-    setSGoals([]);setBGoals([]);setBalHist([]);setNotifs([]);
-    setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});
-    setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});
-    setTradingAccount({deposit:"",balance:""});setAppName("Trackfi");
+    resetUserState();
+    setAppName("Trackfi");
     setIsDemoMode(false);try{localStorage.removeItem("fv_demo");}catch{}
     navTo("home");
   }
@@ -6743,7 +6761,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setAccounts({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:""});setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""});setGreetName("");setCats(DEF_CATS);setSettings({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]});setTradingAccount({deposit:"",balance:""});const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
