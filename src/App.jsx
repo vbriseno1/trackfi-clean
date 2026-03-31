@@ -79,7 +79,7 @@ async function signUp(email, password) {
     });
     if(!res.ok) { const e=await res.json().catch(()=>({message:"Request failed"})); return {error:e}; }
     const r = await res.json();
-    if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
+    if(r.access_token) try{localStorage.setItem("fv_session", JSON.stringify(r));}catch{}
     return r;
   } catch(e) { return {error:{message:e.message||"Network error"}}; }
 }
@@ -92,7 +92,7 @@ async function signIn(email, password) {
     });
     if(!res.ok) { const e=await res.json().catch(()=>({message:"Request failed"})); return {error:e}; }
     const r = await res.json();
-    if(r.access_token) localStorage.setItem("fv_session", JSON.stringify(r));
+    if(r.access_token) try{localStorage.setItem("fv_session", JSON.stringify(r));}catch{}
     return r;
   } catch(e) { return {error:{message:e.message||"Network error"}}; }
 }
@@ -453,7 +453,7 @@ function PINLock({onUnlock,appName,darkMode}){
 function PINSetup({onSave,onCancel,darkMode}){
   const[step,setStep]=useState("set");const[p1,setP1]=useState("");const[p2,setP2]=useState("");const[err,setErr]=useState("");
   const cur=step==="set"?p1:p2;const setCur=step==="set"?setP1:setP2;
-  async function confirm(){if(p1!==p2){setErr("PINs don't match");setP2("");return;}localStorage.setItem("fv_pin_hash",await hashPIN(p1));onSave();}
+  async function confirm(){if(p1!==p2){setErr("PINs don't match");setP2("");return;}const h=await hashPIN(p1);if(!h){setErr("PIN unavailable — check browser security settings.");return;}try{localStorage.setItem("fv_pin_hash",h);}catch{}onSave();}
   return(
     <div style={{background:darkMode?C.navyMid:C.surface,borderRadius:16,padding:20}}>
       <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:4}}>{step==="set"?"Set PIN":"Confirm PIN"}</div>
@@ -691,7 +691,7 @@ function parseMsg(text,categories,debts){
   }
   const dueM=t.match(/due(?:\s+the)?\s+(\d{1,2})(?:st|nd|rd|th)?/)||t.match(/on(?:\s+the)?\s+(\d{1,2})(?:st|nd|rd|th)/);
   let dueDate=null;
-  if(dueM){const d=new Date(dt.getFullYear(),dt.getMonth(),parseInt(dueM[1]));if(d<dt)d.setMonth(d.getMonth()+1);dueDate=d.toISOString().split("T")[0];}
+  if(dueM){const d=new Date(dt.getFullYear(),dt.getMonth(),parseInt(dueM[1]));if(d<dt)d.setMonth(d.getMonth()+1);dueDate=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
   if(t==="undo"||t.startsWith("undo last")||t.includes("undo that"))return{type:"undo"};
   const acctKeys={checking:["checking","check"],savings:["savings","saving"],cushion:["cushion","buffer"]};
   for(const[key,kws]of Object.entries(acctKeys)){if(kws.some(k=>t.includes(k))&&amount)return{type:"account",key,amount};}
@@ -846,7 +846,7 @@ Ask me anything:\
       if(income.rental)sources.push("\ud83c\udfe0 Rental: "+fmt(income.rental)+"/mo");
       if(income.dividends)sources.push("\ud83d\udcc8 Dividends: "+fmt(income.dividends)+"/mo");
       if(income.freelance)sources.push("\ud83d\udcbb Freelance: "+fmt(income.freelance)+"/mo");
-      const mult=chatPayFreq==="Weekly"?4.33:chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:2.17;
+      const mult=chatPayFreq==="Weekly"?(52/12):chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:(26/12);
       const monthly=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
       return(sources.length?sources.join("\n"):"No income set yet")+"\n\nMonthly total: "+fmt(monthly)+"\nAnnual est: "+fmt(monthly*12);
     }
@@ -884,7 +884,7 @@ Ask me anything:\
       return"📊 Daily average: "+fmt(_thisTotal/Math.max(1,dom2))+" · At this pace: "+fmt((_thisTotal/Math.max(1,dom2))*new Date(chatNow.getFullYear(),chatNow.getMonth()+1,0).getDate())+" this month";
     }
     if(t.includes("savings rate")||t.includes("saving rate")){
-      const mult=chatPayFreq==="Weekly"?4.33:chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:2.17;
+      const mult=chatPayFreq==="Weekly"?(52/12):chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:(26/12);
       const monthly=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0));
       const sr=monthly>0?Math.max(0,(monthly-_thisTotal)/monthly*100):0;
       return"\ud83d\udcbe Savings rate: "+sr.toFixed(1)+"%\nIncome: "+fmt(monthly)+"/mo \u00b7 Spent: "+fmt(_thisTotal)+" \u00b7 Saving: "+fmt(Math.max(0,monthly-_thisTotal));
@@ -895,7 +895,7 @@ Ask me anything:\
       return subs.length?"\ud83d\udd04 Detected "+subs.length+" recurring charges:\n"+subs.map(v=>"\u2022 "+v[0].name+": "+fmt(v[0].amount)+"/mo").join("\n")+"\nTotal: "+fmt(subs.reduce((s,v)=>s+parseFloat(v[0].amount),0))+"/mo":"No recurring charges detected yet.";
     }
     if(t.includes("health")||t.includes("score")||t.includes("grade")){
-      const mult=chatPayFreq==="Weekly"?4.33:chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:2.17;
+      const mult=chatPayFreq==="Weekly"?(52/12):chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:(26/12);
       const monthly=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0));
       const sr=monthly>0?Math.max(0,(monthly-_thisTotal)/monthly*100):0;
       const liquid=parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0);
@@ -915,7 +915,7 @@ Ask me anything:\
       return(diff>0?"📈 Up "+pct+"% vs last month — spending "+fmt(diff)+" more.":"📉 Down "+pct+"% vs last month — "+fmt(Math.abs(diff))+" less. Nice!")+(top?"\nBiggest category: "+top[0]+" "+fmt(top[1]):"");
     }
     if(t.includes("on track")||t.includes("pace")||t.includes("budget for")){
-      const mult=chatPayFreq==="Weekly"?4.33:chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:2.17;
+      const mult=chatPayFreq==="Weekly"?(52/12):chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:(26/12);
       const monthly=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0));
       if(!monthly)return"Set your income first so I can check your pace.";
       const dom=chatNow.getDate();const dim=new Date(chatNow.getFullYear(),chatNow.getMonth()+1,0).getDate();
@@ -1376,7 +1376,7 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
   const checking=parseFloat(accounts.checking||0);
   const payFreq=income.payFrequency||"Biweekly";
   // Pay per period based on frequency
-  const payPerPeriod=payFreq==="Weekly"?ti/4.33:payFreq==="Biweekly"?ti/2:payFreq==="Twice Monthly"?ti/2:ti;
+  const payPerPeriod=payFreq==="Weekly"?ti/(52/12):payFreq==="Biweekly"?ti/(26/12):payFreq==="Twice Monthly"?ti/2:ti;
   const payPeriodLabel=payFreq==="Weekly"?"weekly":payFreq==="Biweekly"?"biweekly":payFreq==="Twice Monthly"?"semi-monthly":"monthly";
   // Next payday — uses lastPayDate anchor if set, else freq-based estimate
   const today=now.getDate();
@@ -1525,7 +1525,7 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate}){
   const[nwGoal,setNwGoal]=useState(()=>{try{const v=localStorage.getItem("fv_nwgoal");return v?JSON.parse(v):null;}catch{return null;}});
   const[showGoalInput,setShowGoalInput]=useState(false);
   const[goalInput,setGoalInput]=useState("");
-  function saveGoal(){const v=parseFloat(goalInput);if(v>0){const g={target:v,created:Date.now()};localStorage.setItem("fv_nwgoal",JSON.stringify(g));setNwGoal(g);setShowGoalInput(false);}}
+  function saveGoal(){const v=parseFloat(goalInput);if(v>0){const g={target:v,created:Date.now()};try{localStorage.setItem("fv_nwgoal",JSON.stringify(g));}catch{}setNwGoal(g);setShowGoalInput(false);}}
 
   const totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
   const totalOriginal=debts.reduce((s,d)=>s+(parseFloat(d.original||d.balance||0)),0);
@@ -2516,8 +2516,8 @@ function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAcc
         <div style={{fontSize:12,color:C.textLight,marginBottom:8,textAlign:"center"}}>{fmt(goal.saved)} of {fmt(goal.target)}</div>
         {months>0&&<div style={{fontSize:11,color:C.green,fontWeight:600,marginBottom:4}}>{months} mo · {targetDate}</div>}
         <div style={{display:"flex",gap:6,width:"100%"}}>
-          <input type="number" placeholder="Deposit $" id={"dep-"+goal.id} onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){const amt=parseFloat(e.target.value);if(amt>0){setGoals(p=>p.map(g=>g.id===goal.id?{...g,saved:Math.min(g.target,(g.saved||0)+amt)}:g));showToast&&showToast("+" + fmt(amt)+" added to "+goal.name);e.target.value="";}}}  } style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none",background:C.surfaceAlt}}/>
-          <button onClick={()=>{const inp=document.getElementById("dep-"+goal.id);const amt=parseFloat(inp?.value||0);if(amt>0){setGoals(p=>p.map(g=>{if(g.id!==goal.id)return g;const newSaved=Math.min(g.target,(g.saved||0)+amt);const oldPct=g.target>0?Math.floor(((g.saved||0)/g.target)*4)*25:0;const newPct=g.target>0?Math.floor((newSaved/g.target)*4)*25:0;if(newPct>oldPct){setTimeout(()=>showToast&&showToast(newSaved>=g.target?"🎉 Goal complete: "+g.name+"!":"🎯 "+newPct+"% reached — "+g.name),100);}else{showToast&&showToast("+"+fmt(amt)+" → "+g.name);}return{...g,saved:newSaved};}));if(inp)inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
+          <input type="number" min="0" placeholder="Deposit $" id={"dep-"+goal.id} onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){const amt=parseFloat(e.target.value);if(amt>0){setGoals(p=>p.map(g=>g.id===goal.id?{...g,saved:parseFloat(Math.min(g.target,(g.saved||0)+amt).toFixed(2))}:g));showToast&&showToast("+" + fmt(amt)+" added to "+goal.name);e.target.value="";}}}  } style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none",background:C.surfaceAlt}}/>
+          <button onClick={()=>{const inp=document.getElementById("dep-"+goal.id);const amt=parseFloat(inp?.value||0);if(amt>0){setGoals(p=>p.map(g=>{if(g.id!==goal.id)return g;const newSaved=parseFloat(Math.min(g.target,(g.saved||0)+amt).toFixed(2));const oldPct=g.target>0?Math.floor(((g.saved||0)/g.target)*4)*25:0;const newPct=g.target>0?Math.floor((newSaved/g.target)*4)*25:0;if(newPct>oldPct){setTimeout(()=>showToast&&showToast(newSaved>=g.target?"🎉 Goal complete: "+g.name+"!":"🎯 "+newPct+"% reached — "+g.name),100);}else{showToast&&showToast("+"+fmt(amt)+" → "+g.name);}return{...g,saved:newSaved};}));if(inp)inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
           <button onClick={()=>setGoals(p=>p.filter(g=>g.id!==goal.id))} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.textLight}}>✕</button>
         </div>
       </div>
@@ -3017,7 +3017,7 @@ function TrendView({balHist,accounts,expenses,onNavigate}){
   const RANGES=[{id:"7D",days:7},{id:"1M",days:30},{id:"3M",days:90},{id:"6M",days:180},{id:"1Y",days:365},{id:"ALL",days:9999}];
   const days=RANGES.find(r=>r.id===range)?.days||30;
   const cutoff=new Date();cutoff.setDate(cutoff.getDate()-days);
-  const cutStr=cutoff.toISOString().split("T")[0];
+  const cutStr=cutoff.getFullYear()+"-"+String(cutoff.getMonth()+1).padStart(2,"0")+"-"+String(cutoff.getDate()).padStart(2,"0");
   const filtered=balHist.filter(s=>s.date>=cutStr);
   const cur=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0));
   const chartData=useMemo(()=>filtered.length>0?filtered:[{date:todayStr(),checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),total:cur}],[filtered.length,cur]);
@@ -3928,8 +3928,8 @@ function SubsView({detectedSubs,expenses,showToast}){
   const monthly=active.filter(s=>s.interval==="Monthly");
   const other=active.filter(s=>s.interval!=="Monthly");
   const totalMo=monthly.reduce((s,x)=>s+(parseFloat(x.amount)||0),0);
-  const totalAll=active.reduce((s,x)=>{const a=parseFloat(x.amount)||0;if(x.interval==="Monthly")return s+a;if(x.interval==="Weekly")return s+a*4.33;if(x.interval==="Annual")return s+a/12;return s+a;},0);
-  const catMap=active.reduce((a,s)=>{const raw=parseFloat(s.amount)||0;const mo=s.interval==="Weekly"?raw*4.33:s.interval==="Annual"?raw/12:raw;a[s.category]=(a[s.category]||0)+mo;return a},{});
+  const totalAll=active.reduce((s,x)=>{const a=parseFloat(x.amount)||0;if(x.interval==="Monthly")return s+a;if(x.interval==="Weekly")return s+a*(52/12);if(x.interval==="Annual")return s+a/12;return s+a;},0);
+  const catMap=active.reduce((a,s)=>{const raw=parseFloat(s.amount)||0;const mo=s.interval==="Weekly"?raw*(52/12):s.interval==="Annual"?raw/12:raw;a[s.category]=(a[s.category]||0)+mo;return a},{});
   const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   const maxCat=cats[0]?.[1]||1;
   return(
@@ -4158,7 +4158,7 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
     const today=todayStr();
     const lastRun=localStorage.getItem("fv_recurring_last");
     if(lastRun===today)return; // already ran today — skip
-    localStorage.setItem("fv_recurring_last",today);
+    try{localStorage.setItem("fv_recurring_last",today);}catch{}
     const updated=recurrings.map(r=>{
       if(r.nextDate<=today&&r.active!==false){
         setExpenses(p=>[...p,{id:Date.now()+Math.random(),name:r.name,amount:r.amount,category:r.category,date:today,notes:"Auto-logged"}]);
@@ -4196,7 +4196,7 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
         </div>
       </div>
       
-      {active.length>1&&(()=>{const catData=Object.entries(active.reduce((m,r)=>{const k=r.category||"Other";const mo=parseFloat(r.amount||0)*(r.frequency==="Weekly"?4.33:r.frequency==="Bi-weekly"?2.17:r.frequency==="Quarterly"?0.33:r.frequency==="Annual"?0.083:1);m[k]=(m[k]||0)+mo;return m;},{})).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,amt])=>({name,amt}));const mx=catData[0]?.amt||1;return(<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 8px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:10}}>Monthly by Category</div>{catData.map(({name,amt})=><div key={name} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,color:C.textMid}}>{name}</span><span style={{fontSize:12,fontFamily:MF,fontWeight:700,color:C.red}}>{fmt(amt)}/mo</span></div><div style={{height:5,background:C.borderLight,borderRadius:3}}><div style={{height:5,width:`${(amt/mx*100).toFixed(1)}%`,background:C.accent,borderRadius:3}}/></div></div>)}</div>);})()}{recurrings.length===0&&<Empty text="Add rent, subscriptions, or any regular expense — they log automatically when due." icon={RefreshCw} cta="Add First" onCta={()=>setShowAdd(true)}/>}
+      {active.length>1&&(()=>{const catData=Object.entries(active.reduce((m,r)=>{const k=r.category||"Other";const mo=parseFloat(r.amount||0)*(r.frequency==="Weekly"?(52/12):r.frequency==="Bi-weekly"?(26/12):r.frequency==="Quarterly"?0.33:r.frequency==="Annual"?0.083:1);m[k]=(m[k]||0)+mo;return m;},{})).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,amt])=>({name,amt}));const mx=catData[0]?.amt||1;return(<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 8px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:10}}>Monthly by Category</div>{catData.map(({name,amt})=><div key={name} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:12,color:C.textMid}}>{name}</span><span style={{fontSize:12,fontFamily:MF,fontWeight:700,color:C.red}}>{fmt(amt)}/mo</span></div><div style={{height:5,background:C.borderLight,borderRadius:3}}><div style={{height:5,width:`${(amt/mx*100).toFixed(1)}%`,background:C.accent,borderRadius:3}}/></div></div>)}</div>);})()}{recurrings.length===0&&<Empty text="Add rent, subscriptions, or any regular expense — they log automatically when due." icon={RefreshCw} cta="Add First" onCta={()=>setShowAdd(true)}/>}
       {recurrings.map(r=>{
         const due=r.nextDate?Math.ceil((new Date(r.nextDate)-new Date(todayStr()))/86400000):0;
         const col=due<0?C.red:due<=3?C.red:due<=7?C.amber:C.textLight;
@@ -4390,7 +4390,7 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
   // Negative balance = paid less = they owe others
 
   function markSettled(){
-    const entry={date:new Date().toISOString().split("T")[0],month:ms,
+    const entry={date:todayStr(),month:ms,
       from:balances.filter(m=>m.balance<-0.5).map(m=>m.name).join(", "),
       to:balances.filter(m=>m.balance>0.5).map(m=>m.name).join(", "),
       amount:Math.abs(balances.filter(m=>m.balance<-0.5).reduce((s,m)=>s+m.balance,0)).toFixed(2)
@@ -5219,7 +5219,7 @@ function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGo
     </div>
     <button class="print-btn" onclick="window.print()">🖨 Print / Save as PDF</button>
     </body></html>`;
-    dlBlob(html,(appName||"trackfi")+"-networth-"+now.toISOString().split("T")[0]+".html");
+    dlBlob(html,(appName||"trackfi")+"-networth-"+todayStr()+".html");
   }
 
   // ── REPORT 3: Annual Summary ──────────────────────────────────────────────
@@ -5398,7 +5398,7 @@ function AppInner(){
         const r=await res.json().catch(()=>({}));
         if(r.access_token){
           const newSess={...s,...r};
-          localStorage.setItem("fv_session",JSON.stringify(newSess));
+          try{localStorage.setItem("fv_session",JSON.stringify(newSess));}catch{}
           setAuthSession(newSess);
         } else {
           // Refresh token is expired or revoked — session is gone
@@ -5460,11 +5460,11 @@ function AppInner(){
           const user = u?.data || u;
           if(user?.id) {
             const fullSess = {...sess, user};
-            localStorage.setItem("fv_session", JSON.stringify(fullSess));
+            try{localStorage.setItem("fv_session", JSON.stringify(fullSess));}catch{}
             if(type==="recovery") {
               // Password reset flow — sign in but show change-password prompt
               setAuthSession(fullSess);
-              localStorage.setItem("fv_pw_reset","1");
+              try{localStorage.setItem("fv_pw_reset","1");}catch{}
             } else {
               handleAuth(fullSess);
             }
@@ -5490,7 +5490,7 @@ function AppInner(){
         const r=await res.json();
         if(r.access_token){
           const newSess={...session,...r};
-          localStorage.setItem("fv_session",JSON.stringify(newSess));
+          try{localStorage.setItem("fv_session",JSON.stringify(newSess));}catch{}
           return newSess;
         }
       }catch{}
@@ -5991,7 +5991,7 @@ function AppInner(){
     // Clean up stale bill notifications first — remove any notif for a bill
     // that no longer exists or has been marked as paid
     setNotifs(prev=>{
-      const billIds=new Set(bills.filter(b=>!b.paid).map(b=>b.id));
+      const billIds=new Set(bills.filter(b=>!b.paid).map(b=>String(b.id)));
       return prev.filter(n=>{
         if(n.id.startsWith('ov_')||n.id.startsWith('due3_')){
           const billId=n.id.replace('ov_','').replace('due3_','');
@@ -6014,7 +6014,7 @@ function AppInner(){
       }
     });
     const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0');
-    if(settings.notifBudget!==false&&Array.isArray(budgetGoals)&&Array.isArray(expenses))budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
+    if(settings.notifBudget!==false&&Array.isArray(budgetGoals)&&Array.isArray(expenses))budgetGoals.forEach(g=>{if(!g.category||!g.limit)return;const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
     if(settings.notifSavings!==false&&Array.isArray(savingsGoals))savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100){const alreadyNotified=notifs.some(n=>n.id==='goal_done_'+g.id);pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');if(!alreadyNotified)launchConfetti();}else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
     // Payday reminder: notify when payday is tomorrow or today
     const payReminderKey="payremind_"+nextPayStr;
@@ -6024,7 +6024,7 @@ function AppInner(){
         fmt(parseFloat(income.primary||0))+" expected · "+nextPayDate.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"}),
         "success");
     }
-  },[ready,bills,budgetGoals,expenses,settings,savingsGoals]);
+  },[ready,bills,budgetGoals,expenses,settings,savingsGoals,notifs.length]);
   const detectedSubs=useMemo(()=>{
     if(expenses.length<2)return[];
     // Only look at expenses from the last 6 months to avoid showing cancelled subs
@@ -6646,7 +6646,7 @@ function AppInner(){
                 <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Recent</div>
                 <button onClick={()=>navTo("spend")} style={{fontSize:12,color:C.accent,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>See all</button>
               </div>
-              {(()=>{const days=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);const ds=d.toISOString().split("T")[0];const amt=expenses.filter(e=>e.date===ds).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);return{d:ds,amt,day:["Su","Mo","Tu","We","Th","Fr","Sa"][d.getDay()]};});const mx=Math.max(...days.map(d=>d.amt))||1;const today3=new Date().toISOString().split("T")[0];return(<div style={{display:"flex",gap:3,alignItems:"flex-end",height:28,marginBottom:12}}>{days.map(({d,amt,day})=>{const h=Math.max(3,Math.round((amt/mx)*24));const isToday=d===today3;return(<div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><div style={{width:"100%",height:h,background:isToday?C.accent:amt>0?C.accentBg:C.borderLight,borderRadius:"2px 2px 0 0"}}/><div style={{fontSize:8,color:isToday?C.accent:C.textFaint,fontWeight:isToday?700:400}}>{day}</div></div>);})}</div>);})()}
+              {(()=>{const days=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-6+i);const ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");const amt=expenses.filter(e=>e.date===ds).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);return{d:ds,amt,day:["Su","Mo","Tu","We","Th","Fr","Sa"][d.getDay()]};});const mx=Math.max(...days.map(d=>d.amt))||1;const today3=todayStr();return(<div style={{display:"flex",gap:3,alignItems:"flex-end",height:28,marginBottom:12}}>{days.map(({d,amt,day})=>{const h=Math.max(3,Math.round((amt/mx)*24));const isToday=d===today3;return(<div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><div style={{width:"100%",height:h,background:isToday?C.accent:amt>0?C.accentBg:C.borderLight,borderRadius:"2px 2px 0 0"}}/><div style={{fontSize:8,color:isToday?C.accent:C.textFaint,fontWeight:isToday?700:400}}>{day}</div></div>);})}</div>);})()}
               {[...expenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,4).map(e=>{
                 const cat=categories.find(c=>c.name===e.category);
                 return(<div key={e.id} onClick={()=>setEditItem({type:"expense",data:e})} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
@@ -6831,7 +6831,7 @@ function AppInner(){
                 <span style={{fontSize:12,color:C.accent,fontWeight:600}}>Monthly equivalent</span>
                 <span style={{fontFamily:MF,fontSize:16,fontWeight:800,color:C.accent}}>{fmt(totalIncome)}</span>
               </div>
-              <div style={{fontSize:11,color:C.accent,opacity:.7}}>({income.payFrequency||"Biweekly"} × {income.payFrequency==="Weekly"?"4.33":income.payFrequency==="Twice Monthly"?"2":income.payFrequency==="Monthly"?"1":"2.17"} + other sources)</div>
+              <div style={{fontSize:11,color:C.accent,opacity:.7}}>({income.payFrequency||"Biweekly"} × {income.payFrequency==="Weekly"?"4.33×":income.payFrequency==="Twice Monthly"?"2×":income.payFrequency==="Monthly"?"1×":"2.17×"} + other sources)</div>
             </div>
             </div>
           </div>
