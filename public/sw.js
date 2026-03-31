@@ -1,7 +1,7 @@
 // Trackfi Service Worker — v1.0
 // Caches the app shell for offline use and fast loads
 
-const CACHE_NAME = 'trackfi-v1';
+const CACHE_NAME = 'trackfi-v2';
 const SHELL = [
   '/',
   '/index.html',
