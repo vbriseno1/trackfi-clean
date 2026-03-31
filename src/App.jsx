@@ -5579,7 +5579,7 @@ function AppInner(){
   const[balHist,setBalHist]=useState([]);
   const[notifs,setNotifs]=useState([]);
   const[calColors,setCalColors]=useState({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
-  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]});
+  const[settings,setSettings]=useState({showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"],notifBills:true,notifBudget:true,notifSavings:true,notifPayday:true,notifMilestones:true});
   const[monthlySummary,setMonthlySummary]=useState(null);
   const[dashConfig,setDashConfig]=useState({showIncomeChart:true,showMetrics:true,showAccounts:true,showBills:true,showDebts:true,showGoals:true});
   const[appName,setAppName]=useState("Trackfi");
@@ -5809,8 +5809,7 @@ function AppInner(){
     const crossed=NW_MILESTONES.filter(m=>prev<m&&nw>=m);
     crossed.forEach(m=>{
       const label=m>=1000000?"$1M 🦄":m>=500000?"$500K":"$"+m.toLocaleString();
-      pushNotif("nw_"+m,"🎉 Net Worth Milestone!","You crossed "+label+" net worth — incredible!","success");
-      showToast("🎉 "+label+" net worth milestone!","success");launchConfetti();
+      if(settings.notifMilestones!==false){pushNotif("nw_"+m,"🎉 Net Worth Milestone!","You crossed "+label+" net worth — incredible!","success");showToast("🎉 "+label+" net worth milestone!","success");launchConfetti();}
     });
   },[totalAssets,totalDebt,ready]);
 
@@ -5904,16 +5903,18 @@ function AppInner(){
     bills.forEach(b=>{
       if(b.paid)return;
       const d=dueIn(b.dueDate);
-      if(d<0)pushNotif('ov_'+b.id,'🚨 Overdue: '+b.name,fmt(b.amount)+' was due '+Math.abs(d)+'d ago','danger');
-      else if(d<=3)pushNotif('due3_'+b.id,'⚠️ Due soon: '+b.name,fmt(b.amount)+' due in '+d+' day'+(d!==1?'s':''),'warning');
+      if(settings.notifBills!==false){
+        if(d<0)pushNotif('ov_'+b.id,'🚨 Overdue: '+b.name,fmt(b.amount)+' was due '+Math.abs(d)+'d ago','danger');
+        else if(d<=3)pushNotif('due3_'+b.id,'⚠️ Due soon: '+b.name,fmt(b.amount)+' due in '+d+' day'+(d!==1?'s':''),'warning');
+      }
     });
     const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0');
-    budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
-    savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100){const alreadyNotified=notifs.some(n=>n.id==='goal_done_'+g.id);pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');if(!alreadyNotified)launchConfetti();}else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
+    if(settings.notifBudget!==false)budgetGoals.forEach(g=>{const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
+    if(settings.notifSavings!==false)savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100){const alreadyNotified=notifs.some(n=>n.id==='goal_done_'+g.id);pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');if(!alreadyNotified)launchConfetti();}else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
     // Payday reminder: notify when payday is tomorrow or today
     const payReminderKey="payremind_"+nextPayStr;
     const daysUntil=Math.ceil((nextPayDate-new Date())/86400000);
-    if(daysUntil<=1&&daysUntil>=0&&parseFloat(income.primary||0)>0){
+    if(settings.notifPayday!==false&&daysUntil<=1&&daysUntil>=0&&parseFloat(income.primary||0)>0){
       pushNotif(payReminderKey,daysUntil===0?"💰 Payday is Today!":"💰 Payday Tomorrow!",
         fmt(parseFloat(income.primary||0))+" expected · "+nextPayDate.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"}),
         "success");
@@ -6776,6 +6777,30 @@ function AppInner(){
                 </div>
               );
             })()}
+            {/* Notification preferences */}
+            <div style={{background:C.surface,borderRadius:16,padding:"4px 14px",marginBottom:14,border:`1px solid ${C.borderLight}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.textFaint,letterSpacing:.6,textTransform:"uppercase",padding:"10px 0 6px"}}>Alert Preferences</div>
+              {[
+                {k:"notifBills",    ic:"📅", label:"Bill reminders",      desc:"Overdue & due within 3 days"},
+                {k:"notifBudget",   ic:"📦", label:"Budget warnings",     desc:"At 80% and over limit"},
+                {k:"notifSavings",  ic:"🎯", label:"Savings goals",       desc:"75% reached & goal complete"},
+                {k:"notifPayday",   ic:"💰", label:"Payday reminders",    desc:"Today and tomorrow alerts"},
+                {k:"notifMilestones",ic:"🎉",label:"Net worth milestones",desc:"Celebration when you hit a new high"},
+              ].map(({k,ic,label,desc})=>(
+                <div key={k} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:`1px solid ${C.borderLight}`}}>
+                  <span style={{fontSize:18,flexShrink:0}}>{ic}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:600,color:C.text}}>{label}</div>
+                    <div style={{fontSize:11,color:C.textLight}}>{desc}</div>
+                  </div>
+                  <button onClick={()=>setSettings(p=>({...p,[k]:p[k]===false?true:false}))}
+                    style={{background:"none",border:"none",cursor:"pointer",color:settings[k]===false?C.borderLight:C.accent,padding:0,flexShrink:0}}>
+                    {settings[k]===false?<ToggleLeft size={26}/>:<ToggleRight size={26}/>}
+                  </button>
+                </div>
+              ))}
+              <div style={{height:6}}/>
+            </div>
             {notifs.length===0&&<Empty text="All clear — alerts will show here" icon={Bell}/>}
             {notifs.map(n=>{const S={danger:{bg:C.redBg,br:C.redMid,c:C.red,ic:"🚨"},warning:{bg:C.amberBg,br:C.amberMid,c:C.amber,ic:"⚠️"},success:{bg:C.greenBg,br:C.greenMid,c:C.green,ic:"✅"},info:{bg:C.accentBg,br:C.accentMid,c:C.accent,ic:"💡"}}[n.type]||{bg:C.bg,br:C.border,c:C.text,ic:"🔔"};const ago=Date.now()-n.time;const ta=ago<60000?"just now":ago<3600000?Math.floor(ago/60000)+"m ago":ago<86400000?Math.floor(ago/3600000)+"h ago":Math.floor(ago/86400000)+"d ago";return(<div key={n.id} style={{background:n.read?C.surface:S.bg,border:`1.5px solid ${n.read?C.border:S.br}`,borderRadius:14,padding:"13px 14px",marginBottom:8}}><div style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{fontSize:20,flexShrink:0}}>{S.ic}</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:n.read?C.textMid:S.c}}>{n.title}</div><div style={{fontSize:12,color:C.textLight,marginTop:3,lineHeight:1.4}}>{n.body}</div><div style={{fontSize:11,color:C.textLight,marginTop:4}}>{ta}</div></div>{!n.read&&<div style={{width:8,height:8,borderRadius:"50%",background:S.c,flexShrink:0,marginTop:4}}/>}</div><div style={{display:"flex",gap:7,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}><button className="ba" onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))} style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 0",color:C.textMid,fontWeight:600,fontSize:12,cursor:"pointer"}}>Dismiss</button><button className="ba" onClick={()=>setNotifs(p=>p.filter(x=>x.id!==n.id))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",color:C.textLight,cursor:"pointer",display:"flex",alignItems:"center"}}><X size={13}/></button></div></div>);})}
           </div>
