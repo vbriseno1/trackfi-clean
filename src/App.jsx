@@ -50,13 +50,21 @@ function launchConfetti(){
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
+// Called whenever any Supabase call gets a 401 or refresh token fails.
+// Set by the main App component so the UI can react without prop-drilling.
+let _onSessionExpired = null;
+
 async function supaFetch(path, opts={}) {
   if (!SUPA_URL || !SUPA_KEY) return { data: null, error: { message: "Supabase is not configured (set VITE_SUPABASE_* in .env)" } };
   const session = (()=>{try{return JSON.parse(localStorage.getItem("fv_session")||"null");}catch{return null;}})();
   const token = session?.access_token;
   const headers = {"Content-Type":"application/json","apikey":SUPA_KEY,...(token?{"Authorization":"Bearer "+token}:{}),...(opts.headers||{})};
   const res = await fetch(SUPA_URL+path, {...opts, headers});
-  if(!res.ok){ const e=await res.json().catch(()=>({message:"Request failed"})); return {data:null,error:e}; }
+  if(!res.ok){
+    const e=await res.json().catch(()=>({message:"Request failed"}));
+    if(res.status===401) _onSessionExpired?.();
+    return {data:null,error:e};
+  }
   const data = await res.json().catch(()=>({}));
   return {data, error:null};
 }
@@ -5319,23 +5327,37 @@ function AppInner(){
   const[pwResetMode,setPwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
   const[newPw,setNewPw]=useState("");const[pwMsg,setPwMsg]=useState("");const[pwLoading,setPwLoading]=useState(false);
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
+  const[sessionExpired,setSessionExpired]=useState(false);
+  useEffect(()=>{
+    _onSessionExpired=()=>{
+      // Only fire once and only when a real logged-in session exists
+      if(!authSession?.access_token)return;
+      try{localStorage.removeItem("fv_session");}catch{}
+      setAuthSession(null);
+      setSessionExpired(true);
+    };
+    return()=>{_onSessionExpired=null;};
+  },[authSession?.access_token]);
   const authToken=authSession?.access_token||null;
   // Background token refresh — Supabase tokens expire after 1hr, refresh every 45min
   useEffect(()=>{
     if(!authSession?.refresh_token)return;
     const doRefresh=async()=>{
       try{
-        const s=JSON.parse(localStorage.getItem("fv_session")||"null");
+        const s=(()=>{try{return JSON.parse(localStorage.getItem("fv_session")||"null");}catch{return null;}})();
         if(!s?.refresh_token)return;
         const res=await fetch(SUPA_URL+"/auth/v1/token?grant_type=refresh_token",{
           method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
           body:JSON.stringify({refresh_token:s.refresh_token})
         });
-        const r=await res.json();
+        const r=await res.json().catch(()=>({}));
         if(r.access_token){
           const newSess={...s,...r};
           localStorage.setItem("fv_session",JSON.stringify(newSess));
           setAuthSession(newSess);
+        } else {
+          // Refresh token is expired or revoked — session is gone
+          _onSessionExpired?.();
         }
       }catch{}
     };
@@ -5543,6 +5565,14 @@ function AppInner(){
     window.addEventListener("beforeinstallprompt",handler);
     window.addEventListener("appinstalled",()=>{setPwaInstalled(true);localStorage.setItem("fv_pwa_dismissed","1");});
     return()=>window.removeEventListener("beforeinstallprompt",handler);
+  },[]);
+  const[isOnline,setIsOnline]=useState(()=>navigator.onLine);
+  useEffect(()=>{
+    const goOnline=()=>{setIsOnline(true);showToast("Back online","success");};
+    const goOffline=()=>{setIsOnline(false);};
+    window.addEventListener("online",goOnline);
+    window.addEventListener("offline",goOffline);
+    return()=>{window.removeEventListener("online",goOnline);window.removeEventListener("offline",goOffline);};
   },[]);
   const[pinEnabled,setPinEnabled]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[locked,setLocked]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
@@ -6022,16 +6052,20 @@ function AppInner(){
               </div>
             </div>
 
-            {isDemoMode&&expenses.length>0&&demoBannerVisible&&(
-              <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(217,119,6,.08)",border:"1px solid rgba(217,119,6,.2)",borderRadius:99,padding:"3px 6px 3px 8px",marginBottom:8,width:"fit-content",animation:"fadeIn .3s ease"}}>
-                <span style={{fontSize:9}}>🧪</span>
-                <span style={{fontSize:9,fontWeight:600,color:C.amber,letterSpacing:.1}}>Demo mode</span>
+            {isDemoMode&&expenses.length>0&&(
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,width:"fit-content"}}>
+                {demoBannerVisible&&(
+                  <div style={{display:"flex",alignItems:"center",gap:4,background:"rgba(217,119,6,.08)",border:"1px solid rgba(217,119,6,.2)",borderRadius:99,padding:"3px 8px",animation:"fadeIn .3s ease"}}>
+                    <span style={{fontSize:9}}>🧪</span>
+                    <span style={{fontSize:9,fontWeight:600,color:C.amber,letterSpacing:.1}}>Demo mode</span>
+                    <button onClick={()=>setDemoBannerVisible(false)}
+                      style={{background:"none",border:"none",cursor:"pointer",color:C.amber,padding:"0 2px",fontSize:10,lineHeight:1,opacity:.6,marginLeft:2}}>×</button>
+                  </div>
+                )}
                 <button onClick={()=>setConfirm({title:"Exit Demo",message:"Clear all demo data and start fresh.",onConfirm:()=>{exitDemo();setConfirm(null);},danger:false})}
-                  style={{background:"rgba(217,119,6,.12)",border:"none",borderRadius:99,padding:"1px 6px",color:C.amber,fontWeight:700,fontSize:8,cursor:"pointer",lineHeight:1.6}}>
-                  Exit
+                  style={{background:"rgba(217,119,6,.12)",border:"1px solid rgba(217,119,6,.2)",borderRadius:99,padding:"2px 10px",color:C.amber,fontWeight:700,fontSize:9,cursor:"pointer",lineHeight:1.6}}>
+                  Exit Demo
                 </button>
-                <button onClick={()=>setDemoBannerVisible(false)}
-                  style={{background:"none",border:"none",cursor:"pointer",color:C.amber,padding:"0 2px",fontSize:10,lineHeight:1,opacity:.6}}>×</button>
               </div>
             )}
 
@@ -6695,6 +6729,7 @@ function AppInner(){
           <button onClick={()=>setMonthlySummary(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.teal})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer"}}>Got it 👍</button>
         </div>
       </div>}
+      {!isOnline&&<div style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,zIndex:300,background:"#1e293b",color:"#f1f5f9",fontSize:12,fontWeight:600,textAlign:"center",padding:"8px 16px",letterSpacing:.2,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>📡 No internet connection — changes will sync when you're back online</div>}
       {toast&&<div onClick={()=>setToast(null)} style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 20px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:8,maxWidth:300,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}}>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</div>}
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px 8px max(14px,env(safe-area-inset-bottom))",zIndex:100,boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)"}}>
         {NAV.map(n=>{const active=n.id==="more"?isMoreTab||tab==="more":tab===n.id;return(
@@ -6734,6 +6769,23 @@ function AppInner(){
       {showImport&&<BankImportModal categories={categories} expenses={expenses} setExpenses={setExpenses} household={household} showToast={showToast} onClose={()=>setShowImport(false)}/>}
       {showExport&&<ExportModal expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} budgetGoals={budgetGoals} trades={trades} shifts={shifts} categories={categories} appName={appName} greetName={greetName} onClose={()=>setShowExport(false)}/>}
       {confirm&&<ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)} danger={confirm.danger}/>}
+      {sessionExpired&&(
+        <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(10,22,40,.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(6px)"}}>
+          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:320,width:"100%",boxShadow:"0 24px 64px rgba(10,22,40,.3)",textAlign:"center"}}>
+            <div style={{fontSize:36,marginBottom:12}}>🔒</div>
+            <div style={{fontSize:17,fontWeight:800,color:C.text,marginBottom:8}}>Session Expired</div>
+            <div style={{fontSize:13,color:C.textMid,marginBottom:24,lineHeight:1.5}}>Your login session has expired. Sign in again to keep your data syncing — nothing has been lost.</div>
+            <button onClick={()=>{setSessionExpired(false);setSkipAuth(false);try{localStorage.removeItem("fv_skip_auth");}catch{};}}
+              style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.accent},${C.teal})`,color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",marginBottom:10}}>
+              Sign In Again
+            </button>
+            <button onClick={()=>setSessionExpired(false)}
+              style={{width:"100%",padding:"10px",borderRadius:12,border:`1px solid ${C.border}`,background:"none",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>
+              Continue Offline
+            </button>
+          </div>
+        </div>
+      )}
       {editItem&&editItem.type==="expense"&&<EditModal item={editItem} categories={categories} household={household} onSave={u=>{setExpenses(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Expense updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Expense",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setExpenses(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} onSave={u=>{setBills(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Bill updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setBills(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="debt"&&<EditModal item={editItem} categories={categories} onSave={u=>{setDebts(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setDebts(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
