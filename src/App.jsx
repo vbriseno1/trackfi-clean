@@ -1520,7 +1520,7 @@ function NetWorthTrendView({balHist,debts,accounts,onNavigate}){
   const overallPct=totalOriginal>0?Math.round(totalPaidDown/totalOriginal*100):0;
   const totalAssets=(parseFloat(accounts.checking||0))+(parseFloat(accounts.savings||0))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
   const currentNW=totalAssets-totalDebt;
-  const chartData=balHist.map(h=>{const a=(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0)+(h.hsa||0)+(h.property||0)+(h.vehicles||0);return{date:h.date,assets:a,netWorth:a-totalDebt};}).slice(-52);
+  const chartData=balHist.map(h=>{const a=(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0)+(h.hsa||0)+(h.property||0)+(h.vehicles||0);const debtAtPoint=h.totalDebt!=null?h.totalDebt:totalDebt;return{date:h.date,assets:a,netWorth:a-debtAtPoint};}).slice(-52);
   const firstNW=chartData[0]?.netWorth||currentNW;
   const change=currentNW-firstNW;
   const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return FULL_MOS[d.getMonth()]+" "+d.getDate();};
@@ -2812,14 +2812,20 @@ function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAcc
 
 function EditModal({item,categories,household,onSave,onDelete,onClose}){
   const[form,setForm]=useState({...item.data});
-  const ff=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const[editError,setEditError]=useState("");
+  const ff=(k,v)=>{setEditError("");setForm(p=>({...p,[k]:v}));};
   const type=item.type;
-  function save(){if(type==="expense"&&(!form.name||!form.amount))return;if(type==="bill"&&(!form.name||!form.amount))return;if(type==="debt"&&(!form.name||!form.balance))return;onSave(form);onClose();}
+  function save(){
+    if(type==="expense"){if(!form.name){setEditError("Name is required.");return;}if(!form.amount||parseFloat(form.amount)<=0){setEditError("Enter a valid amount.");return;}}
+    if(type==="bill"){if(!form.name){setEditError("Name is required.");return;}if(!form.amount||parseFloat(form.amount)<=0){setEditError("Enter a valid amount.");return;}}
+    if(type==="debt"){if(!form.name){setEditError("Name is required.");return;}if(!form.balance){setEditError("Balance is required.");return;}}
+    onSave(form);onClose();
+  }
   const accent=type==="expense"?C.accent:type==="bill"?C.amber:C.red;
   const title=type==="expense"?"Edit Expense":type==="bill"?"Edit Bill":"Edit Debt";
   const Icon=type==="expense"?Wallet:type==="bill"?CalendarClock:CreditCard;
   return(
-    <Modal title={title} icon={Icon} onClose={onClose} onSubmit={save} submitLabel="Save Changes" accent={accent} wide>
+    <Modal title={title} icon={Icon} onClose={onClose} onSubmit={save} submitLabel="Save Changes" accent={accent} wide error={editError}>
       {(type==="expense"||type==="bill")&&<FI label="Name" value={form.name||""} onChange={e=>ff("name",e.target.value)}/>}
       {type==="debt"&&<FI label="Debt Name" value={form.name||""} onChange={e=>ff("name",e.target.value)}/>}
       {type==="expense"&&<><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Date" type="date" value={form.date||todayStr()} onChange={e=>ff("date",e.target.value)}/></div><FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Notes" value={form.notes||""} onChange={e=>ff("notes",e.target.value)}/>
@@ -4226,7 +4232,7 @@ function EmojiPicker({value,onChange,customVal,onCustomChange}){
   );
 }
 
-function CategoriesView({categories,setCategories,showToast}){
+function CategoriesView({categories,setCategories,expenses,setExpenses,showToast}){
   const[showAdd,setShowAdd]=useState(false);
   const[customEmoji,setCustomEmoji]=useState("");
   const[form,setForm]=useState({name:"",icon:""});
@@ -4281,7 +4287,7 @@ function CategoriesView({categories,setCategories,showToast}){
                 <div style={{width:38,height:38,borderRadius:10,background:"rgba(99,102,241,.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{cat.icon}</div>
                 <div style={{flex:1,fontSize:14,fontWeight:600,color:C.text}}>{cat.name}</div>
                 <button onClick={()=>{setEditCat(cat);setEditForm({name:cat.name,icon:cat.icon||""});setEditCustomEmoji("");}} style={{background:"none",border:"none",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:600,padding:"4px 6px"}}>Edit</button>
-                <button onClick={()=>{setCategories(p=>p.filter(c=>c.id!==cat.id));showToast&&showToast("Category removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex",padding:"4px 3px"}}><Trash2 size={13}/></button>
+                <button onClick={()=>{const name=cat.name;setCategories(p=>p.filter(c=>c.id!==cat.id));setExpenses&&setExpenses(p=>p.map(e=>e.category===name?{...e,category:"Misc"}:e));showToast&&showToast("Category removed — expenses moved to Misc","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex",padding:"4px 3px"}}><Trash2 size={13}/></button>
               </div>
             ))}
           </div>
@@ -4311,7 +4317,7 @@ function CategoriesView({categories,setCategories,showToast}){
             <div key={cat.id} style={{background:C.surface,borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:12}}>
               <div style={{width:38,height:38,borderRadius:10,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{cat.icon}</div>
               <div style={{flex:1,fontSize:14,fontWeight:500,color:C.text}}>{cat.name}</div>
-              {!DEFAULT_IDS.includes(cat.id)&&<><button onClick={()=>{setEditCat(cat);setEditForm({name:cat.name,icon:cat.icon||""});setEditCustomEmoji("");}} style={{background:"none",border:"none",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:600}}>Edit</button><button onClick={()=>{setCategories(p=>p.filter(c=>c.id!==cat.id));showToast&&showToast("Removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={13}/></button></>}
+              {!DEFAULT_IDS.includes(cat.id)&&<><button onClick={()=>{setEditCat(cat);setEditForm({name:cat.name,icon:cat.icon||""});setEditCustomEmoji("");}} style={{background:"none",border:"none",cursor:"pointer",color:C.accent,fontSize:12,fontWeight:600}}>Edit</button><button onClick={()=>{const name=cat.name;setCategories(p=>p.filter(c=>c.id!==cat.id));setExpenses&&setExpenses(p=>p.map(e=>e.category===name?{...e,category:"Misc"}:e));showToast&&showToast("Removed — expenses moved to Misc","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,display:"flex"}}><Trash2 size={13}/></button></>}
             </div>
           ))}
           {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.textLight,fontSize:13}}>No categories match "{searchCat}"</div>}
@@ -5402,12 +5408,18 @@ function AppInner(){
         }
       }
     }
+    let bgTimestamp=0;
     function onVis(){
-      if(!document.hidden){
+      if(document.hidden){
+        bgTimestamp=Date.now();
+      } else {
         onFocus();
-        // On iOS PWA, state is preserved between sessions — always return to home
-        // when the app is foregrounded so it never opens mid-settings or mid-menu.
         setTabRaw(t=>["home","bills","spending","debt","chat"].includes(t)?t:"home");
+        // Re-lock with PIN if app was backgrounded for more than 2 minutes
+        if(bgTimestamp>0&&Date.now()-bgTimestamp>2*60*1000){
+          setPinEnabled(pe=>{if(pe){setLocked(true);}return pe;});
+        }
+        bgTimestamp=0;
       }
     }
     window.addEventListener("focus",onFocus);
@@ -5644,7 +5656,6 @@ function AppInner(){
   const[extraPayDebt,setExtraPayDebt]=useState(0);
   const[confirm,setConfirm]=useState(null);
   const[syncing,setSyncing]=useState(false);
-  const[syncStatus,setSyncStatus]=useState(null);
   const[toast,setToast]=useState(null);
   const showToast=(msg,type='success',action=null)=>{setToast({msg,type,action});const dur=type==='error'?4000:type==='info'?3000:action?4000:2500;setTimeout(()=>setToast(t=>t?.msg===msg?null:t),dur);};
   const showUndoToast=(msg,undoFn)=>showToast(msg,"error",{label:"Undo",fn:undoFn});
@@ -5704,7 +5715,7 @@ function AppInner(){
     })();
   },[]);
 
-  useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);return[...prev,_bh].slice(-104);});},[accounts,ready]);
+  useEffect(()=>{if(!ready)return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:parseFloat(accounts.checking||0),savings:parseFloat(accounts.savings||0),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);return[...prev,_bh].slice(-104);});},[accounts,debts,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
   useEffect(()=>{if(!ready)return;if(!expenses.length&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
   useEffect(()=>{if(!ready)return;if(!bills.length&&!cloudLoadedRef.current)return;ss("fv6:bills",bills);},[bills,ready]);
@@ -5824,12 +5835,12 @@ function AppInner(){
       const prevTotal=expenses.filter(e=>e.date?.startsWith(prevKey)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
       const catMap=lastExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
       const topCat=Object.entries(catMap).sort((a,b)=>b[1]-a[1])[0];
-      const lastInc=monthlyIncome;
+      const lastInc=(parseFloat(income.primary||0)*paycheckMultiplier)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
       const savRate=lastInc>0?Math.max(0,(lastInc-lastTotal)/lastInc*100):0;
       setMonthlySummary({month:FULL_MOS[lastMs.getMonth()],total:lastTotal,prevTotal,topCat:topCat?.[0],topAmt:topCat?.[1],txnCount:lastExp.length,savRate});
       localStorage.setItem(seenKey,curMonth);
     }catch(e){}
-  },[ready]);
+  },[ready,expenses,income]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{if(ready)ss("fv6:calColors",calColors);},[calColors,ready]);
   useEffect(()=>{if(ready)ss("fv6:taccount",tradingAccount);},[tradingAccount,ready]);
   useEffect(()=>{try{localStorage.setItem("fv_dark",darkMode?"1":"0");}catch{};document.body.classList.toggle("dark-mode",!!darkMode);},[darkMode]);
@@ -6619,7 +6630,7 @@ function AppInner(){
             </div>
           </div>
           <div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
-        {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats} showToast={showToast}/>}
+        {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats} expenses={expenses} setExpenses={setExpenses} showToast={showToast}/>}
         {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast} showUndoToast={showUndoToast} household={household}/>}
         {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast} showUndoToast={showUndoToast} household={household} requestNotifPermission={requestNotifPermission}/>}
         {tab==="more"&&!isMoreTab&&(
@@ -6914,7 +6925,7 @@ function AppInner(){
               </button>
             ))}
           </div>
-        </div>}<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Recurring</div><div style={{fontSize:12,color:C.textLight}}>Auto-log this monthly</div></div><button onClick={()=>ff("recurring",!form.recurring)} style={{background:"none",border:"none",cursor:"pointer",color:form.recurring?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.recurring?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div></Modal>}
+        </div>}<div style={{padding:"9px 12px",borderRadius:10,background:C.accentBg,border:`1px solid ${C.accentMid}`,marginTop:10,fontSize:12,color:C.accent,lineHeight:1.5}}>🔄 For auto-logged recurring expenses (Netflix, rent, etc.), use <strong>More → Recurring</strong>.</div></Modal>}
       {modal==="bill"&&<Modal title="Add Bill" icon={CalendarClock} onClose={cl} onSubmit={submit} submitLabel="Add Bill" accent={C.amber} error={formError}><FI label="Bill Name" placeholder="Rent, Electric, Netflix..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Monthly","Bi-weekly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/>{household.enabled&&household.members.length>1&&<div style={{marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Paid by</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{[{id:"shared",name:"Shared",emoji:"🏠"},...household.members].map(m=>(<button key={m.id} onClick={()=>ff("paidBy",m.id)} style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:99,border:`1.5px solid ${(form.paidBy||"shared")===m.id?C.amber:C.border}`,background:(form.paidBy||"shared")===m.id?"#FFFBEB":"#fff",cursor:"pointer",fontSize:12,fontWeight:(form.paidBy||"shared")===m.id?700:400,color:(form.paidBy||"shared")===m.id?C.amber:C.textMid}}><span>{m.emoji}</span><span>{m.name}</span></button>))}</div></div>}</Modal>}
       {modal==="debt"&&<Modal title="Add Debt" icon={CreditCard} onClose={cl} onSubmit={submit} submitLabel="Track Debt" accent={C.red} wide error={formError}><FI label="Name" placeholder="Car loan, student debt..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div style={{display:"flex",gap:12}}><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/></div></Modal>}
       {modal==="bgoal_home"&&<Modal title="Spending Envelope" icon={Target} onClose={cl} onSubmit={()=>{if(!form.category||!form.limit)return;setBGoals(p=>[...p,{id:Date.now(),...form}]);cl();}} submitLabel="Add Envelope" accent={C.purple}><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.accent,lineHeight:1.5}}>
