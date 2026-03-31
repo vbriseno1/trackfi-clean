@@ -49,6 +49,7 @@ function launchConfetti(){
 // 🔑 Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env (see .env.example)
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "";
 
 // Called whenever any Supabase call gets a 401 or refresh token fails.
 // Set by the main App component so the UI can react without prop-drilling.
@@ -5696,8 +5697,27 @@ function AppInner(){
   };
   const requestNotifPermission=async()=>{
     if(!notifSupported())return"unsupported";
-    if(notifPermission()==="granted")return"granted";
-    try{const result=await window.Notification.requestPermission();return result;}catch{return"denied";}
+    if(notifPermission()==="default"){
+      try{await window.Notification.requestPermission();}catch{}
+    }
+    if(notifPermission()!=="granted")return"denied";
+    // Subscribe this device to push and save to Supabase
+    try{
+      if(VAPID_PUBLIC_KEY&&authSession?.access_token&&"serviceWorker"in navigator&&"PushManager"in window){
+        const reg=await navigator.serviceWorker.ready;
+        // Convert VAPID public key from base64url to Uint8Array
+        const b64=VAPID_PUBLIC_KEY.replace(/-/g,"+").replace(/_/g,"/");
+        const raw=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+        const existing=await reg.pushManager.getSubscription();
+        const sub=existing||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:raw});
+        await supaFetch("/rest/v1/push_subscriptions",{
+          method:"POST",
+          headers:{"Prefer":"resolution=merge-duplicates"},
+          body:JSON.stringify({user_id:authSession.user.id,subscription:sub.toJSON()})
+        });
+      }
+    }catch(e){}
+    return"granted";
   };
   // Monthly summary: show on first open of new month if last month had data
   useEffect(()=>{
