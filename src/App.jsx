@@ -5394,7 +5394,14 @@ function AppInner(){
         }
       }
     }
-    const onVis=()=>{if(!document.hidden)onFocus();};
+    function onVis(){
+      if(!document.hidden){
+        onFocus();
+        // On iOS PWA, state is preserved between sessions — always return to home
+        // when the app is foregrounded so it never opens mid-settings or mid-menu.
+        setTabRaw(t=>["home","bills","spending","debt","chat"].includes(t)?t:"home");
+      }
+    }
     window.addEventListener("focus",onFocus);
     document.addEventListener("visibilitychange",onVis);
     return()=>{
@@ -5565,7 +5572,7 @@ function AppInner(){
   const[savingsGoals,setSGoals]=useState([]);
   const[categories,setCats]=useState(DEF_CATS);
   const[accountRates,setAccountRates]=useState(()=>{try{const r=localStorage.getItem("fv_account_rates");return r?JSON.parse(r):{checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0};}catch{return{checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0};}});
-  const[household,setHousehold]=useState({enabled:false,name:"Our Household",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10b981"}]});
+  const[household,setHousehold]=useState({enabled:false,name:"My Finances",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"}]});
   const[trades,setTrades]=useState([]);
   const[tradingAccount,setTradingAccount]=useState({deposit:"",balance:""});
   const[shifts,setShifts]=useState([]);
@@ -6082,7 +6089,7 @@ function AppInner(){
     if(d.useCase==="couple"){setHousehold(h=>({...h,enabled:true,name:(d.name?d.name.split(" ")[0]+"'s Household":"Our Household"),members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10B981"}]}));}
     else if(d.useCase==="roommates"){setHousehold(h=>({...h,enabled:true,name:"Shared Household",members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"roommate",name:"Roommate",emoji:"🏠",color:"#D97706"}]}));}
     else if(d.useCase==="family"){setHousehold(h=>({...h,enabled:true,name:(d.name?d.name.split(" ")[0]+"'s Family":"Our Family"),members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10B981"}]}));}
-    else{setHousehold(h=>({...h,enabled:false}));} // "personal" — ensure household is off
+    else{setHousehold({enabled:false,name:"My Finances",members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"}]});} // "personal" — single user, no partner member
 
     const hasTrading=parseFloat(d.income?.trading||0)>0;
     setSettings(p=>({...p,showTrading:hasTrading,showHealth:true,showSavings:true,showForecast:true}));
