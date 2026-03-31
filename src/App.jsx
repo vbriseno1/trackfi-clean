@@ -3218,7 +3218,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   </div>);
 }
 
-function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo}){
+function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo,backupExport,backupImport}){
   const[nm,setNm]=useState(appName||"");
   const[showPIN,setShowPIN]=useState(false);
   const[showEmailChange,setShowEmailChange]=useState(false);
@@ -3227,9 +3227,6 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
   const[newPw1,setNewPw1]=useState("");const[newPw2,setNewPw2]=useState("");
   const[acctMsg,setAcctMsg]=useState("");const[acctLoading,setAcctLoading]=useState(false);
   const[pendingImport,setPendingImport]=useState(null);
-
-  function exportData(){const d={exportedAt:new Date().toISOString(),appName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,version:"2.0"};const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;a.click();URL.revokeObjectURL(u);}
-  async function importData(file){try{const t=await file.text();const d=JSON.parse(t);if(!d||typeof d!=="object"||(!d.expenses&&!d.bills&&!d.accounts)){showToast&&showToast("❌ Invalid backup file","error");return;}if(d.accounts)setAccounts(p=>({...p,...d.accounts}));if(d.income)setIncome(p=>({...p,...d.income}));if(d.expenses)setExpenses(d.expenses);if(d.bills)setBills(d.bills);if(d.debts)setDebts(d.debts);if(d.trades)setTrades(d.trades);if(d.shifts)setShifts(d.shifts);if(d.savingsGoals)setSGoals(d.savingsGoals);if(d.budgetGoals)setBGoals(d.budgetGoals);showToast&&showToast("✅ Data imported!");} catch(e){showToast&&showToast("❌ "+e.message,"error");}}
 
   const Tog=(k,l,d,ic)=>(<div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{ic}</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>{l}</div><div style={{fontSize:12,color:C.textLight}}>{d}</div></div></div><button onClick={()=>setSettings(p=>({...p,[k]:!p[k]}))} style={{background:"none",border:"none",cursor:"pointer",color:settings[k]?C.accent:C.borderLight,padding:0,flexShrink:0}}>{settings[k]?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>);
 
@@ -3347,15 +3344,16 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
         <span style={{fontSize:18}}>📦</span>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Data</div>
       </div>
+      <div style={{fontSize:12,color:C.textLight,marginBottom:8,lineHeight:1.45}}>Includes transactions, bills, debts, goals, household & settle-up history, recurring, notifications, net worth chart data, categories, and preferences — use for moving phones or sharing a restore file with a partner (same account).</div>
       <div style={{display:"flex",gap:8,marginBottom:10}}>
-        <button className="ba" onClick={exportData} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export JSON</button>
+        <button className="ba" onClick={backupExport} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export JSON</button>
         <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)setPendingImport(f);e.target.value="";}}/></label>
       </div>
       {pendingImport&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
         <div style={{fontSize:13,fontWeight:700,color:C.amber,marginBottom:4}}>⚠️ Replace all current data with "{pendingImport.name}"?</div>
-        <div style={{fontSize:12,color:C.textMid,marginBottom:10}}>This will overwrite your expenses, bills, debts, and goals. Export a backup first if needed.</div>
+        <div style={{fontSize:12,color:C.textMid,marginBottom:10}}>Replaces expenses, bills, debts, goals, household, recurring, notifications, charts, and settings. Export a backup first if needed.</div>
         <div style={{display:"flex",gap:8}}>
-          <button className="ba" onClick={async()=>{await importData(pendingImport);setPendingImport(null);}} style={{flex:1,background:C.amber,border:"none",borderRadius:8,padding:"9px 0",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Yes, Import</button>
+          <button className="ba" onClick={async()=>{await backupImport(pendingImport);setPendingImport(null);}} style={{flex:1,background:C.amber,border:"none",borderRadius:8,padding:"9px 0",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Yes, Import</button>
           <button className="ba" onClick={()=>setPendingImport(null)} style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 0",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancel</button>
         </div>
       </div>}
@@ -6221,6 +6219,61 @@ function AppInner(){
     navTo("home");
   }
 
+  function backupExport(){
+    const d={
+      exportedAt:new Date().toISOString(),
+      version:"3.0",
+      appName,greetName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,
+      categories,settings,calColors,dashConfig,household,recurrings,settlements,hhBudgets,nwGoal,subDismissed,
+      profCategory,profSub,tradingAccount,accountRates,balHist,notifs,
+      merchantCats:typeof window!=="undefined"?window._merchantCats:void 0
+    };
+    const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});
+    const u=URL.createObjectURL(b);
+    const a=document.createElement("a");
+    a.href=u;
+    a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;
+    a.click();
+    URL.revokeObjectURL(u);
+    showToast("✓ Full backup downloaded");
+  }
+  async function backupImport(file){
+    try{
+      const t=await file.text();
+      const d=JSON.parse(t);
+      if(!d||typeof d!=="object"||(!d.expenses&&!d.bills&&!d.accounts&&!d.household&&!d.recurrings)){showToast&&showToast("❌ Invalid backup file","error");return;}
+      if(d.accounts)setAccounts(p=>({...p,...d.accounts}));
+      if(d.income)setIncome(p=>({...p,...d.income}));
+      if(Array.isArray(d.expenses))setExpenses(d.expenses);
+      if(Array.isArray(d.bills))setBills(d.bills);
+      if(Array.isArray(d.debts))setDebts(d.debts);
+      if(Array.isArray(d.trades))setTrades(d.trades);
+      if(Array.isArray(d.shifts))setShifts(d.shifts);
+      if(Array.isArray(d.savingsGoals))setSGoals(d.savingsGoals);
+      if(Array.isArray(d.budgetGoals))setBGoals(d.budgetGoals);
+      if(Array.isArray(d.categories))setCats(d.categories);
+      if(d.settings)setSettings(p=>({...p,...d.settings}));
+      if(d.calColors)setCalColors(p=>({...p,...d.calColors}));
+      if(d.dashConfig)setDashConfig(p=>({...p,...d.dashConfig}));
+      if(d.household)setHousehold(p=>({...p,...d.household}));
+      if(Array.isArray(d.recurrings))setRecurrings(d.recurrings);
+      if(Array.isArray(d.settlements))setSettlements(d.settlements);
+      if(Array.isArray(d.hhBudgets))setHhBudgets(d.hhBudgets);
+      if(d.nwGoal!==undefined)setNwGoal(d.nwGoal);
+      if(Array.isArray(d.subDismissed))setSubDismissed(d.subDismissed);
+      if(d.profCategory)setProfCategory(d.profCategory);
+      if(d.profSub)setProfSub(d.profSub);
+      if(d.tradingAccount)setTradingAccount(p=>({...p,...d.tradingAccount}));
+      if(d.accountRates)setAccountRates(p=>({...p,...d.accountRates}));
+      if(Array.isArray(d.balHist))setBalHist(d.balHist);
+      if(Array.isArray(d.notifs))setNotifs(d.notifs);
+      if(d.appName)setAppName(d.appName);
+      if(d.greetName!==undefined)setGreetName(d.greetName);
+      if(d.merchantCats)try{window._merchantCats=d.merchantCats;ss("fv6:merchantCats",d.merchantCats);}catch{}
+      showToast&&showToast("✅ Backup imported — saving to your account…");
+    }catch(e){showToast&&showToast("❌ "+e.message,"error");}
+  }
+
   if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
 
   // Password reset flow — show set-new-password screen
@@ -6922,7 +6975,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast} settlements={settlements} setSettlements={setSettlements} hhBudgets={hhBudgets} setHhBudgets={setHhBudgets}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
