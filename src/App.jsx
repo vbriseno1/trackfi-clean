@@ -1539,11 +1539,10 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
   );
 }
 
-function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate}){
-  const[nwGoal,setNwGoal]=useState(()=>{try{const v=localStorage.getItem("fv_nwgoal");return v?JSON.parse(v):null;}catch{return null;}});
+function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwGoal,setNwGoal}){
   const[showGoalInput,setShowGoalInput]=useState(false);
   const[goalInput,setGoalInput]=useState("");
-  function saveGoal(){const v=parseFloat(goalInput);if(v>0){const g={target:v,created:Date.now()};try{localStorage.setItem("fv_nwgoal",JSON.stringify(g));}catch{}setNwGoal(g);setShowGoalInput(false);}}
+  function saveGoal(){const v=parseFloat(goalInput);if(v>0){const g={target:v,created:Date.now()};setNwGoal(g);setShowGoalInput(false);}}
 
   const totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
   const totalOriginal=debts.reduce((s,d)=>s+(parseFloat(d.original||d.balance||0)),0);
@@ -1645,7 +1644,7 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate}){
           </div>
         );
       })()}
-      {nwGoal&&(()=>{const pct=Math.min(100,Math.max(0,(currentNW/nwGoal.target)*100));const rem=Math.max(0,nwGoal.target-currentNW);return(<div style={{background:C.surface,border:`1px solid ${C.borderLight}`,borderRadius:16,padding:18,marginBottom:14}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Net Worth Goal</div><div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.accent}}>{fmt(nwGoal.target)}</div><button onClick={()=>{setNwGoal(null);localStorage.removeItem("fv_nwgoal");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textFaint,padding:2}}><X size={13}/></button></div></div><div style={{height:10,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:8}}><div style={{height:"100%",width:pct.toFixed(1)+"%",background:pct>=100?C.green:`linear-gradient(90deg,${C.accent},${C.green})`,borderRadius:99,transition:"width .6s"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12}}><span style={{color:C.textLight}}>{pct.toFixed(1)}% there · {fmt(currentNW)} now</span><span style={{fontWeight:600,color:pct>=100?C.green:C.text}}>{pct>=100?"🎉 Goal reached!":fmt(rem)+" to go"}</span></div></div>);})()}
+      {nwGoal&&(()=>{const pct=Math.min(100,Math.max(0,(currentNW/nwGoal.target)*100));const rem=Math.max(0,nwGoal.target-currentNW);return(<div style={{background:C.surface,border:`1px solid ${C.borderLight}`,borderRadius:16,padding:18,marginBottom:14}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Net Worth Goal</div><div style={{display:"flex",gap:8,alignItems:"center"}}><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.accent}}>{fmt(nwGoal.target)}</div><button onClick={()=>setNwGoal(null)} style={{background:"none",border:"none",cursor:"pointer",color:C.textFaint,padding:2}}><X size={13}/></button></div></div><div style={{height:10,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:8}}><div style={{height:"100%",width:pct.toFixed(1)+"%",background:pct>=100?C.green:`linear-gradient(90deg,${C.accent},${C.green})`,borderRadius:99,transition:"width .6s"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:12}}><span style={{color:C.textLight}}>{pct.toFixed(1)}% there · {fmt(currentNW)} now</span><span style={{fontWeight:600,color:pct>=100?C.green:C.text}}>{pct>=100?"🎉 Goal reached!":fmt(rem)+" to go"}</span></div></div>);})()}
       {!nwGoal&&<button onClick={()=>setShowGoalInput(true)} style={{width:"100%",background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:14}}>🎯 Set a Net Worth Goal</button>}
       {showGoalInput&&<div style={{background:C.surface,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:16,marginBottom:14}}><div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:8}}>Target Net Worth</div><div style={{display:"flex",gap:8}}><input type="number" autoFocus placeholder="100000" value={goalInput} onChange={e=>setGoalInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&saveGoal()} style={{flex:1,background:C.surfaceAlt,border:`1.5px solid ${C.accent}`,borderRadius:10,padding:"10px 13px",fontSize:14,color:C.text,outline:"none"}}/><button onClick={saveGoal} style={{background:C.accent,border:"none",borderRadius:10,padding:"0 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Set</button><button onClick={()=>setShowGoalInput(false)} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"0 12px",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>✕</button></div></div>}
       {(()=>{
@@ -3939,9 +3938,7 @@ function TaxView({expenses,income,trades,shifts,appName}){
 }
 
 
-function SubsView({detectedSubs,expenses,showToast}){
-  const[dismissed,setDismissed]=useState(()=>{try{return JSON.parse(localStorage.getItem("fv_sub_dismissed")||"[]");}catch{return[];}});
-  useEffect(()=>{try{localStorage.setItem("fv_sub_dismissed",JSON.stringify(dismissed));}catch{}},[dismissed]);
+function SubsView({detectedSubs,expenses,showToast,dismissed,setDismissed}){
   const active=detectedSubs.filter(s=>!dismissed.includes(s.name));
   const monthly=active.filter(s=>s.interval==="Monthly");
   const other=active.filter(s=>s.interval!=="Monthly");
@@ -3955,7 +3952,7 @@ function SubsView({detectedSubs,expenses,showToast}){
       <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3,marginBottom:4}}>Subscriptions</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div style={{fontSize:13,color:C.textLight}}>Auto-detected from your expenses</div>
-        {dismissed.length>0&&<button onClick={()=>{setDismissed([]);localStorage.removeItem("fv_sub_dismissed");}} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.accent,fontWeight:600,padding:0}}>Restore {dismissed.length} hidden</button>}
+        {dismissed.length>0&&<button onClick={()=>setDismissed([])} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.accent,fontWeight:600,padding:0}}>Restore {dismissed.length} hidden</button>}
       </div>
       {active.length===0&&<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:36,marginBottom:12}}>🔍</div><div style={{fontSize:14,fontWeight:600,color:C.text,marginBottom:4}}>No subscriptions detected yet</div><div style={{fontSize:13,color:C.textLight}}>Add more expenses and Trackfi will find recurring patterns.</div></div>}
       {active.length>0&&<>
@@ -4175,7 +4172,7 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
   useEffect(()=>{
     if(!appReady)return;
     const today=todayStr();
-    const lastRun=localStorage.getItem("fv_recurring_last");
+    const lastRun=localStorage.getItem(getScope()+"recurring_last");
     if(lastRun===today)return; // already ran today — skip
     const newExps=[];
     const updated=recurrings.map(r=>{
@@ -4200,7 +4197,7 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
       }
     }
     setRecurrings(updated);
-    try{localStorage.setItem("fv_recurring_last",today);}catch{}
+    try{localStorage.setItem(getScope()+"recurring_last",today);}catch{}
   },[appReady,recurrings.length]);
   const FREQS=["Weekly","Bi-weekly","Monthly","Quarterly","Annual"];
   const ICONS=["🏠","🚗","📱","💪","🎮","📺","☕","🛒","💊","🐕","🎓","⚡","💧","🌐","🎵","🏋️","🍕","✈️","👶","🐱"];
@@ -4381,11 +4378,9 @@ function CategoriesView({categories,setCategories,expenses,setExpenses,showToast
   );
 }
 
-function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBills}){
+function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBills,settlements,setSettlements,hhBudgets,setHhBudgets}){
   const[tab,setTab]=useState("split");// split | settle | budget | members
   const[form,setForm]=useState({name:"",emoji:"😊",color:"#6366f1"});
-  const[settlements,setSettlements]=useState(()=>{try{return JSON.parse(localStorage.getItem("fv_settlements")||"[]");}catch{return[];}});
-  const[hhBudgets,setHhBudgets]=useState(()=>{try{return JSON.parse(localStorage.getItem("fv_hh_budgets")||"[]");}catch{return[];}});
   const EMOJIS_HH=["😊","😄","🧑","👩","👨","🧔","👱","🧑‍💼","👩‍💼","🧑‍⚕️","👩‍⚕️","⭐","🌟","🏠"];
   const COLORS_HH=["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899"];
 
@@ -4423,14 +4418,10 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
     };
     const next=[entry,...settlements].slice(0,12);
     setSettlements(next);
-    try{localStorage.setItem("fv_settlements",JSON.stringify(next));}catch{}
     showToast("✅ Settled up! Balances reset.");
   }
 
-  function saveHhBudgets(next){
-    setHhBudgets(next);
-    try{localStorage.setItem("fv_hh_budgets",JSON.stringify(next));}catch{}
-  }
+  function saveHhBudgets(next){setHhBudgets(next);}
 
   const TABS=[{id:"split",label:"Split"},{id:"settle",label:"Settle Up"},{id:"budget",label:"Budget"},{id:"members",label:"Members"}];
 
@@ -5546,7 +5537,7 @@ function AppInner(){
         // Only migrate if: had a previous session OR has scoped data already
         // Don't migrate raw device data into a fresh account
         if((prevSession||hasScoped)&&hasLocalExpenses&&!hasScoped){
-          ["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","recurrings","household","accountRates","prof","profSub","dashConfig","appName","greetName"].forEach(k=>{
+          ["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","recurrings","household","accountRates","prof","profSub","dashConfig","appName","greetName","settlements","hhBudgets","nwGoal","subDismissed"].forEach(k=>{
             const legacy=localStorage.getItem("fv6:"+k);
             const scoped=localStorage.getItem(scope+k);
             if(legacy&&!scoped)localStorage.setItem(scope+k,legacy);
@@ -5572,13 +5563,18 @@ function AppInner(){
       // Apply each piece of data to state (same as boot load)
       const apply = (key, setter, merge=false) => {
         if (map[key] === undefined) return;
+        if (key === "nwGoal") {
+          const nv = map[key];
+          setter(nv === null || nv === undefined ? null : nv);
+          return;
+        }
         const v = map[key];
         if (v === null || v === undefined) return;
         // After a sign-out+sign-in, state was already reset to empty by resetUserState(),
         // so it's safe to apply empty arrays (they represent the new account's real state).
         // Skip empty arrays during background sync for most keys — avoids wiping local before first cloud upload.
-        // Never skip for bills/notifs: clears and dismissals must sync across devices and after delete-all.
-        if (Array.isArray(v) && v.length === 0 && cloudLoadedRef.current && key !== "bills" && key !== "notifs") return;
+        // Never skip for bills/notifs/settlements/hhBudgets/subDismissed: clears must sync across devices.
+        if (Array.isArray(v) && v.length === 0 && cloudLoadedRef.current && !["bills","notifs","settlements","hhBudgets","subDismissed"].includes(key)) return;
         if (merge) setter(prev => ({...prev, ...v}));
         else setter(v);
       };
@@ -5593,6 +5589,10 @@ function AppInner(){
       try { apply("shifts",    setShifts); } catch {}
       try { apply("recurrings",setRecurrings); } catch {}
       try { apply("notifs",    setNotifs); } catch {}
+      try { apply("settlements", setSettlements); } catch {}
+      try { apply("hhBudgets", setHhBudgets); } catch {}
+      try { apply("nwGoal",    setNwGoal); } catch {}
+      try { apply("subDismissed", setSubDismissed); } catch {}
       try { apply("accounts",  setAccounts, true); } catch {}
       try { apply("income",    setIncome,   true); } catch {}
       try { apply("settings",  setSettings, true); } catch {}
@@ -5621,6 +5621,7 @@ function AppInner(){
   function resetUserState(){
     setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);
     setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setRecurrings([]);
+    setSettlements([]);setHhBudgets([]);setNwGoal(null);setSubDismissed([]);
     setAccounts(DEF_ACCOUNTS);
     setIncome(DEF_INCOME);
     setHousehold(DEF_HOUSEHOLD);
@@ -5712,10 +5713,20 @@ function AppInner(){
     window.addEventListener("offline",goOffline);
     return()=>{window.removeEventListener("online",goOnline);window.removeEventListener("offline",goOffline);};
   },[]);
+  useEffect(()=>{
+    function onLeave(){if(_getUserId())flushPendingSync();}
+    window.addEventListener("pagehide",onLeave);
+    window.addEventListener("beforeunload",onLeave);
+    return()=>{window.removeEventListener("pagehide",onLeave);window.removeEventListener("beforeunload",onLeave);};
+  },[]);
   const[pinEnabled,setPinEnabled]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[locked,setLocked]=useState(()=>{try{return!!localStorage.getItem("fv_pin_hash");}catch{return false;}});
   const[onboarded,setOnboarded]=useState(()=>{try{return localStorage.getItem("fv_onboarded")==="1";}catch{return false;}});
   const[recurrings,setRecurrings]=useState(()=>{try{const scoped=localStorage.getItem(getScope()+"recurrings");if(scoped)return JSON.parse(scoped);const legacy=localStorage.getItem("fv_recurring");return legacy?JSON.parse(legacy):[];}catch{return[];}});
+  const[settlements,setSettlements]=useState(()=>{try{const s=localStorage.getItem(getScope()+"settlements");if(s!==null)return JSON.parse(s);const l=localStorage.getItem("fv_settlements");return l?JSON.parse(l):[];}catch{return[];}});
+  const[hhBudgets,setHhBudgets]=useState(()=>{try{const s=localStorage.getItem(getScope()+"hhBudgets");if(s!==null)return JSON.parse(s);const l=localStorage.getItem("fv_hh_budgets");return l?JSON.parse(l):[];}catch{return[];}});
+  const[nwGoal,setNwGoal]=useState(()=>{try{const s=localStorage.getItem(getScope()+"nwGoal");if(s!==null){const p=JSON.parse(s);return p;}const l=localStorage.getItem("fv_nwgoal");return l?JSON.parse(l):null;}catch{return null;}});
+  const[subDismissed,setSubDismissed]=useState(()=>{try{const s=localStorage.getItem(getScope()+"subDismissed");if(s!==null)return JSON.parse(s);const l=localStorage.getItem("fv_sub_dismissed");return l?JSON.parse(l):[];}catch{return[];}});
   const[modal,setModal]=useState(null);
   const[formError,setFormError]=useState("");
   const[showExport,setShowExport]=useState(false);
@@ -5750,9 +5761,9 @@ function AppInner(){
           if(_bulkMap[bare]!==undefined)return _bulkMap[bare];
           return sg("fv6:"+bare);
         }
-        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName","fv6:merchantCats","fv6:recurrings"];
+        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName","fv6:merchantCats","fv6:recurrings","fv6:settlements","fv6:hhBudgets","fv6:nwGoal","fv6:subDismissed"];
         const vals=await Promise.all(keys.map(k=>_sg_boot(k.replace("fv6:",""))));
-        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn,mc,rec]=vals;
+        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn,mc,rec,stl,hhb,nwg,subd]=vals;
         try{if(exp&&exp.length)setExpenses(exp);}catch{}
         try{if(bll&&bll.length)setBills(bll);}catch{}
         try{if(dbt&&dbt.length)setDebts(dbt);}catch{}
@@ -5770,6 +5781,10 @@ function AppInner(){
         try{if(bh&&bh.length)setBalHist(bh);}catch{}
         try{if(sh&&sh.length)setShifts(sh);}catch{}
         try{if(rec&&rec.length)setRecurrings(rec);}catch{}
+        try{if(uid_boot&&("nwGoal" in _bulkMap))setNwGoal(_bulkMap["nwGoal"]);else if(nwg!==undefined&&nwg!==null)setNwGoal(nwg);}catch{}
+        try{if(Array.isArray(stl))setSettlements(stl);}catch{}
+        try{if(Array.isArray(hhb))setHhBudgets(hhb);}catch{}
+        try{if(Array.isArray(subd))setSubDismissed(subd);}catch{}
         try{if(prof)setProfCategory(prof);}catch{}
         try{if(psub)setProfSub(psub);}catch{}
         try{if(dc)setDashConfig(a=>({...a,...dc}));}catch{}
@@ -5807,6 +5822,10 @@ function AppInner(){
   useEffect(()=>{if(!ready)return;if(!notifs.length&&!cloudLoadedRef.current)return;ss("fv6:notifs",notifs);},[notifs,ready]);
   useEffect(()=>{if(!ready)return;if(!shifts.length&&!cloudLoadedRef.current)return;ss("fv6:shifts",shifts);},[shifts,ready]);
   useEffect(()=>{if(!ready)return;if(!recurrings.length&&!cloudLoadedRef.current)return;ss("fv6:recurrings",recurrings);},[recurrings,ready]);
+  useEffect(()=>{if(!ready)return;if(!settlements.length&&!cloudLoadedRef.current)return;ss("fv6:settlements",settlements);},[settlements,ready]);
+  useEffect(()=>{if(!ready)return;if(!hhBudgets.length&&!cloudLoadedRef.current)return;ss("fv6:hhBudgets",hhBudgets);},[hhBudgets,ready]);
+  useEffect(()=>{if(!ready||!cloudLoadedRef.current)return;ss("fv6:nwGoal",nwGoal);},[nwGoal,ready]);
+  useEffect(()=>{if(!ready)return;if(!subDismissed.length&&!cloudLoadedRef.current)return;ss("fv6:subDismissed",subDismissed);},[subDismissed,ready]);
   // Settings & config (change infrequently)
   useEffect(()=>{
     if(!ready)return;
@@ -6894,13 +6913,13 @@ function AppInner(){
         {tab==="trend"&&<TrendView balHist={balHist} accounts={accounts} expenses={expenses} onNavigate={navTo}/>}
         {tab==="statement"&&<StatementView expenses={expenses} bills={bills} income={income} accounts={accounts} debts={debts} trades={trades} appName={appName} categories={categories} onAdd={()=>om("expense")}/>}
         {tab==="search"&&<SearchView expenses={expenses} bills={bills} debts={debts} trades={trades} categories={categories} setEditItem={setEditItem} onNavigate={navTo}/>}
-        {tab==="subscriptions"&&<SubsView detectedSubs={detectedSubs} expenses={expenses} showToast={showToast}/>}
+        {tab==="subscriptions"&&<SubsView detectedSubs={detectedSubs} expenses={expenses} showToast={showToast} dismissed={subDismissed} setDismissed={setSubDismissed}/>}
         {tab==="insights"&&<InsightsView expenses={expenses} income={income} bills={bills} debts={debts} budgetGoals={budgetGoals} savingsGoals={savingsGoals}/>}
         {tab==="paycheck"&&<PaycheckView bills={bills} income={income} setIncome={setIncome} expenses={expenses} accounts={accounts} budgetGoals={budgetGoals} onAdd={()=>om("expense")}/>}
-        {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} tradingAccount={tradingAccount} onNavigate={navTo}/>}
+        {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} tradingAccount={tradingAccount} onNavigate={navTo} nwGoal={nwGoal} setNwGoal={setNwGoal}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
-        {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast}/>}
+        {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast} settlements={settlements} setSettlements={setSettlements} hhBudgets={hhBudgets} setHhBudgets={setHhBudgets}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
         {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
