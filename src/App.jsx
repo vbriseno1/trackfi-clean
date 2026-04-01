@@ -5670,23 +5670,23 @@ function AppInner(){
         const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName","fv6:merchantCats","fv6:recurrings","fv6:settlements","fv6:hhBudgets","fv6:nwGoal","fv6:subDismissed"];
         const vals=await Promise.all(keys.map(k=>_sg_boot(k.replace("fv6:",""))));
         const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn,mc,rec,stl,hhb,nwg,subd]=vals;
-        try{if(exp&&exp.length)setExpenses(exp);}catch{}
-        try{if(bll&&bll.length)setBills(bll);}catch{}
-        try{if(dbt&&dbt.length)setDebts(dbt);}catch{}
-        try{if(bg&&bg.length)setBGoals(bg);}catch{}
-        try{if(sg2&&sg2.length)setSGoals(sg2);}catch{}
-        try{if(cats&&cats.length)setCats(cats);}catch{}
-        try{if(tr&&tr.length)setTrades(tr);}catch{}
+        try{if(Array.isArray(exp))setExpenses(exp);}catch{}
+        try{if(Array.isArray(bll))setBills(bll);}catch{}
+        try{if(Array.isArray(dbt))setDebts(dbt);}catch{}
+        try{if(Array.isArray(bg))setBGoals(bg);}catch{}
+        try{if(Array.isArray(sg2))setSGoals(sg2);}catch{}
+        try{if(Array.isArray(cats))setCats(cats);}catch{}
+        try{if(Array.isArray(tr))setTrades(tr);}catch{}
         try{if(ta)setTradingAccount(ta);}catch{}
         try{if(ac)setAccounts(a=>({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:"",...a,...ac}));}catch{}
         try{if(inc)setIncome(a=>({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...a,...inc}));}catch{}
         try{if(sett)setSettings(a=>({...a,...sett}));}catch{}
         try{const hh=await sg("fv6:household");if(hh)setHousehold(h=>({...h,...hh}));}catch{}
         try{if(cc)setCalColors(a=>({...a,...cc}));}catch{}
-        try{if(nts&&nts.length)setNotifs(nts);}catch{}
-        try{if(bh&&bh.length)setBalHist(bh);}catch{}
-        try{if(sh&&sh.length)setShifts(sh);}catch{}
-        try{if(rec&&rec.length)setRecurrings(rec);}catch{}
+        try{if(Array.isArray(nts))setNotifs(nts);}catch{}
+        try{if(Array.isArray(bh))setBalHist(bh);}catch{}
+        try{if(Array.isArray(sh))setShifts(sh);}catch{}
+        try{if(Array.isArray(rec))setRecurrings(rec);}catch{}
         try{if(uid_boot&&("nwGoal" in _bulkMap))setNwGoal(_bulkMap["nwGoal"]);else if(nwg!==undefined&&nwg!==null)setNwGoal(nwg);}catch{}
         try{if(Array.isArray(stl))setSettlements(stl);}catch{}
         try{if(Array.isArray(hhb))setHhBudgets(hhb);}catch{}
@@ -5698,8 +5698,9 @@ function AppInner(){
         try{if(gn)setGreetName(gn);}catch{}
         try{if(mc)window._merchantCats=mc;}catch{}
         try{const ar=_bulkMap["accountRates"]||(await sg("fv6:accountRates"));if(ar)setAccountRates(prev=>({...prev,...ar}));}catch{}
-        if(Object.keys(_bulkMap).length>0)cloudLoadedRef.current=true;
         try{const ob=_bulkMap["onboarded"]||(await sg("fv6:onboarded"));if(ob){localStorage.setItem("fv_onboarded","1");setOnboarded(true);}}catch{}
+        // After all boot setState calls so ss() effects never see cloudLoadedRef + stale [] (would overwrite Supabase).
+        if(Object.keys(_bulkMap).length>0)cloudLoadedRef.current=true;
       }catch(e){console.error("Load error",e);}
       setReady(true);
     })();
