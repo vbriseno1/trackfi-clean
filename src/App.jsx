@@ -5278,6 +5278,8 @@ function AppInner(){
   function goBack(){setTabHistory(h=>{if(!h.length)return h;const p=h[h.length-1];setTabRaw(p);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));return h.slice(0,-1);});}
   const canGoBack=tabHistory.length>0;
   const _startupParams=useRef((()=>{try{const sp=new URLSearchParams(window.location.search);return{action:sp.get("action"),tab:sp.get("tab")};}catch{return{};}})());
+  /** When returning from another app/tab, always pull cloud after debounce — avoids missing other devices' updates. */
+  const visibilitySyncTimerRef=useRef(null);
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
   const[pwResetMode,setPwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
@@ -5326,13 +5328,13 @@ function AppInner(){
   // Auto-sync when user returns to the app (tab focus, phone unlock, etc.)
   useEffect(()=>{
     function onFocus(){
-      if(authSession){
-        const lastSync=parseInt(localStorage.getItem("fv_last_sync")||"0");
-        const now=Date.now();
-        if(now-lastSync>30000){ // only sync if 30+ seconds since last sync
-          try{localStorage.setItem("fv_last_sync",String(now));}catch{}
-          loadFromSupabase(authSession);
-        }
+      if(!authSession)return;
+      const lastSync=parseInt(localStorage.getItem("fv_last_sync")||"0");
+      const now=Date.now();
+      // Throttle duplicate pulls from focus alone (visibility handler does the main pull).
+      if(now-lastSync>8000){
+        try{localStorage.setItem("fv_last_sync",String(now));}catch{}
+        loadFromSupabase(authSession);
       }
     }
     let bgTimestamp=0;
@@ -5340,9 +5342,15 @@ function AppInner(){
       if(document.hidden){
         bgTimestamp=Date.now();
       } else {
-        onFocus();
+        if(authSession){
+          if(visibilitySyncTimerRef.current)clearTimeout(visibilitySyncTimerRef.current);
+          visibilitySyncTimerRef.current=setTimeout(()=>{
+            visibilitySyncTimerRef.current=null;
+            try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
+            loadFromSupabase(authSession);
+          },280);
+        }
         setTabRaw(t=>["home","bills","spending","debt","chat"].includes(t)?t:"home");
-        // Re-lock with PIN if app was backgrounded for more than 2 minutes
         if(bgTimestamp>0&&Date.now()-bgTimestamp>2*60*1000){
           setPinEnabled(pe=>{if(pe){setLocked(true);}return pe;});
         }
@@ -5354,6 +5362,7 @@ function AppInner(){
     return()=>{
       window.removeEventListener("focus",onFocus);
       document.removeEventListener("visibilitychange",onVis);
+      if(visibilitySyncTimerRef.current)clearTimeout(visibilitySyncTimerRef.current);
     };
   },[authSession]);
 
