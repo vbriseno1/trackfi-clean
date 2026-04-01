@@ -10,6 +10,13 @@ if (sentryDsn) {
     environment: import.meta.env.MODE,
     sendDefaultPii: false,
   })
+  // Call from browser console so Sentry receives a real event (Issues stays empty until then).
+  window.__TRACKFI_SENTRY_TEST__ = () => {
+    Sentry.captureException(new Error('Trackfi Sentry test'))
+  }
+  if (import.meta.env.DEV) {
+    console.info('[Trackfi] Sentry: run __TRACKFI_SENTRY_TEST__() in the console to verify')
+  }
 }
 
 const tree = (

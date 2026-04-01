@@ -5749,23 +5749,32 @@ function AppInner(){
     }));
     try{localStorage.setItem("fv_bills_reset_month",currentMonth);}catch{}
   },[ready,bills.length]);
+  /** Prevents duplicate system notifications: SW showNotification is async, so two effect runs can both schedule OS before the in-app dedupe row exists. */
+  const osNotifCooldownRef=useRef(new Map());
   const pushNotif=(id,title,body,type)=>{
-    // Only fire OS notification when we actually add a new in-app row — the bills effect
-    // re-runs often (e.g. when notifs.length changes), and we must not show duplicates.
     setNotifs(p=>{
       if(p.find(n=>n.id===id))return p;
       const row={id,title,body,type,time:Date.now(),read:false};
       if(notifSupported()&&notifPermission()==="granted"){
-        const opts={body,icon:"/icons/icon-192.png",badge:"/icons/icon-192.png",tag:String(id),renotify:false,data:{url:"/"}};
-        try{
-          if(navigator.serviceWorker?.controller){
-            navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,opts)).catch(()=>{
+        const now=Date.now();
+        const last=osNotifCooldownRef.current.get(id);
+        const skipOsCooldown=last!=null&&now-last<12000;
+        // Don't buzz the device while the user is already looking at the app — bell list still updates.
+        const inForeground=typeof document!=="undefined"&&document.visibilityState==="visible";
+        const shouldShowOs=!skipOsCooldown&&!inForeground;
+        if(shouldShowOs){
+          osNotifCooldownRef.current.set(id,now);
+          const opts={body,icon:"/icons/icon-192.png",badge:"/icons/icon-192.png",tag:String(id),renotify:false,data:{url:"/"}};
+          try{
+            if(navigator.serviceWorker?.controller){
+              navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,opts)).catch(()=>{
+                new window.Notification(title,opts);
+              });
+            } else {
               new window.Notification(title,opts);
-            });
-          } else {
-            new window.Notification(title,opts);
-          }
-        }catch(e){}
+            }
+          }catch(e){}
+        }
       }
       return[row,...p.slice(0,49)];
     });
