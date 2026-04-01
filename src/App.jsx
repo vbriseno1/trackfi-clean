@@ -169,6 +169,10 @@ function sumMtdByPaidFrom(expenses,ms){
   });
   return o;
 }
+/** Same rules as MTD checking — one calendar day, YYYY-MM-DD */
+function dayCheckingSpend(expenses,dateStr){
+  return expenses.filter(e=>e.date===dateStr&&normalizePaidFrom(e.paidFrom)==="checking").reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+}
 const DEF_INCOME={primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""};
 const DEF_HOUSEHOLD={enabled:false,name:"My Finances",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"}]};
 const DEF_CALCOLORS=(C)=>({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
@@ -210,11 +214,15 @@ const DEF_CATS = [
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{overflow-x:hidden;-webkit-text-size-adjust:100%}
-html,body{background:#F0F2F8;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior:none;width:100%;overflow-x:hidden}
-#root{min-height:100vh;min-height:100dvh;width:100%;overflow-x:hidden}
+html{overflow-x:hidden;-webkit-text-size-adjust:100%;height:100%}
+html,body{background:#F0F2F8;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior:none;width:100%;overflow-x:hidden;height:100%;margin:0}
+#root{min-height:100vh;min-height:100dvh;height:100%;width:100%;overflow-x:hidden;display:flex;flex-direction:column}
 body.dark-mode{background:#0A1628}
-::-webkit-scrollbar{display:none}
+html::-webkit-scrollbar,body::-webkit-scrollbar{width:0;height:0}
+#fv-scroll{scrollbar-width:thin;scrollbar-color:rgba(100,116,139,.45) transparent}
+#fv-scroll::-webkit-scrollbar{width:8px}
+#fv-scroll::-webkit-scrollbar-thumb{background:rgba(100,116,139,.4);border-radius:4px}
+#fv-scroll::-webkit-scrollbar-track{background:transparent}
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 input,select,button,textarea{font-family:'Inter',sans-serif}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -5998,18 +6006,18 @@ function AppInner(){
   const savingsRate=totalIncome>0?Math.min(100,Math.max(0,cashflow/totalIncome*100)):0;
   const spendingStreak=useMemo(()=>{
     if(expenses.length<3)return 0;
-    const dailyAvgBase=burnRate||50;
+    const dailyAvgBase=burnRateChecking||50;
     let streak=0;
     const today2=new Date();
     for(let i=0;i<30;i++){
       const d=new Date(today2);d.setDate(d.getDate()-i);
       const ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-      const dayTotal=expenses.filter(e=>e.date===ds).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+      const dayTotal=dayCheckingSpend(expenses,ds);
       if(i===0&&dayTotal===0){continue;}
       if(dayTotal<dailyAvgBase){streak++;}else{break;}
     }
     return streak;
-  },[expenses,burnRate]);
+  },[expenses,burnRateChecking]);
   const unreadNotifs=useMemo(()=>notifs.filter(n=>!n.read).length,[notifs]);
 
   useEffect(()=>{
@@ -6321,9 +6329,9 @@ function AppInner(){
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
 
   return(
-    <div style={{minHeight:"100dvh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",width:"100%",maxWidth:640,margin:"0 auto",position:"relative",overflowX:"hidden",boxSizing:"border-box"}}>
+    <div style={{flex:1,minHeight:0,width:"100%",maxWidth:640,margin:"0 auto",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden",boxSizing:"border-box",height:"100%",maxHeight:"100dvh"}}>
       <style>{CSS}</style>
-      <div id="fv-scroll" style={{flex:1,minWidth:0,width:"100%",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",padding:"16px max(16px, env(safe-area-inset-left)) max(110px, calc(88px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-right))",boxSizing:"border-box"}}>
+      <div id="fv-scroll" style={{flex:1,minHeight:0,minWidth:0,width:"100%",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",padding:"16px max(16px, env(safe-area-inset-left)) max(110px, calc(88px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-right))",boxSizing:"border-box"}}>
         {["spend","home","chat","bills"].includes(tab)&&<button className="ba" onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:16,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
@@ -6590,7 +6598,7 @@ function AppInner(){
                 savingsRate>0&&`Saving ${savingsRate.toFixed(1)}% of income — ${savingsRate>=20?"great":"keep going"}`,
                 totalDebt>0&&`${fmt(debts.reduce((s,d)=>s+(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)),0))}/mo in interest costs`,
                 overdue.length>0&&`⚠ ${overdue.length} bill${overdue.length!==1?"s":""} overdue — take action now`,
-                spendingStreak>2&&`🔥 ${spendingStreak}-day spending streak — below your daily average`,
+                spendingStreak>2&&`🔥 ${spendingStreak}-day streak — checking spend below your daily average`,
                 savingsGoals.length>0&&`${savingsGoals.filter(g=>parseFloat(g.saved||0)>=parseFloat(g.target||1)).length}/${savingsGoals.length} savings goals complete`,
               ].filter(Boolean);
               if(!insights.length)return null;
@@ -6765,7 +6773,7 @@ function AppInner(){
           </div>
         )}
 
-        {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}>
+        {tab==="chat"&&<div style={{height:"calc(100dvh - 150px)",maxHeight:"calc(100dvh - 150px)",display:"flex",flexDirection:"column",minHeight:0}}>
           <div style={{marginBottom:10}}>
             <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>AI Logger</div>
             <div style={{fontSize:13,color:C.textLight,marginTop:1,marginBottom:10}}>Paid-from aware — "lunch 12", "coffee 6 on card", "split spending", "rent 1200 due 28th"</div>
@@ -7135,4 +7143,12 @@ if(typeof window!=="undefined"){
   });
 }
 
-export default function App(){return(<ErrorBoundary><AppInner/></ErrorBoundary>);}
+export default function App(){
+  return(
+    <ErrorBoundary>
+      <div style={{flex:1,minHeight:0,height:"100%",maxHeight:"100dvh",width:"100%",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <AppInner/>
+      </div>
+    </ErrorBoundary>
+  );
+}
