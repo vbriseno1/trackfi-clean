@@ -17,6 +17,15 @@ if (sentryDsn) {
   if (import.meta.env.DEV) {
     console.info('[Trackfi] Sentry: run __TRACKFI_SENTRY_TEST__() in the console to verify')
   }
+  // One event on first production load so Sentry's Issues/onboarding sees traffic (delete/archive in Sentry if you want).
+  if (import.meta.env.PROD) {
+    try {
+      if (!sessionStorage.getItem('fv_sentry_first_ping')) {
+        sessionStorage.setItem('fv_sentry_first_ping', '1')
+        Sentry.captureMessage('Trackfi: Sentry connected (first-load ping — safe to delete)')
+      }
+    } catch (_) {}
+  }
 }
 
 const tree = (
