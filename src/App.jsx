@@ -192,7 +192,9 @@ const DEF_CATS = [
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{background:#F0F2F8;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior:none}
+html{overflow-x:hidden;-webkit-text-size-adjust:100%}
+html,body{background:#F0F2F8;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior:none;width:100%;overflow-x:hidden}
+#root{min-height:100vh;min-height:100dvh;width:100%;overflow-x:hidden}
 body.dark-mode{background:#0A1628}
 ::-webkit-scrollbar{display:none}
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
@@ -220,7 +222,7 @@ input,select,button,textarea{font-family:'Inter',sans-serif}
 .swipe-content{transition:transform .22s cubic-bezier(.22,1,.36,1)}
 .swipe-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center}
 textarea:focus,input:focus,select:focus{outline:none}
-input,select{-webkit-appearance:none}
+input,select,textarea{-webkit-appearance:none;max-width:100%}
 button{-webkit-tap-highlight-color:transparent}
 `;
 
@@ -244,13 +246,13 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-const iS = (focused,err) => ({width:"100%",background:focused?"#fff":C.surfaceAlt,border:`1.5px solid ${err?C.red:focused?C.accent:C.border}`,borderRadius:12,padding:"12px 14px",color:C.text,fontSize:14,outline:"none",transition:"all .18s cubic-bezier(.22,1,.36,1)",boxSizing:"border-box",boxShadow:focused&&!err?`0 0 0 3px ${C.accent}18`:"none"});
+const iS = (focused,err) => ({width:"100%",maxWidth:"100%",minWidth:0,background:focused?"#fff":C.surfaceAlt,border:`1.5px solid ${err?C.red:focused?C.accent:C.border}`,borderRadius:12,padding:"12px 14px",color:C.text,fontSize:14,outline:"none",transition:"all .18s cubic-bezier(.22,1,.36,1)",boxSizing:"border-box",boxShadow:focused&&!err?`0 0 0 3px ${C.accent}18`:"none"});
 
 function FI({label,half,error,...p}){
   const[f,sf]=useState(false);
   return(
-    <div style={{marginBottom:14,flex:half?"1 1 45%":"1 1 100%"}}>
-      {label&&<div style={{fontSize:11,fontWeight:600,color:error?C.red:C.slate,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{label}{error&&<span style={{marginLeft:6,fontWeight:500,textTransform:"none"}}>— {error}</span>}</div>}
+    <div style={{marginBottom:14,flex:half?"1 1 45%":"1 1 100%",minWidth:0,maxWidth:"100%"}}>
+      {label&&<div style={{fontSize:11,fontWeight:600,color:error?C.red:C.slate,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,overflowWrap:"anywhere"}}>{label}{error&&<span style={{marginLeft:6,fontWeight:500,textTransform:"none"}}>— {error}</span>}</div>}
       <input {...p} style={iS(f,error)} onFocus={()=>sf(true)} onBlur={()=>sf(false)}/>
     </div>
   );
@@ -258,9 +260,9 @@ function FI({label,half,error,...p}){
 function FS({label,options,...p}){
   const[f,sf]=useState(false);
   return(
-    <div style={{marginBottom:14}}>
+    <div style={{marginBottom:14,minWidth:0,maxWidth:"100%"}}>
       {label&&<div style={{fontSize:11,fontWeight:600,color:C.slate,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{label}</div>}
-      <select {...p} style={{...iS(f),cursor:"pointer",appearance:"none"}} onFocus={()=>sf(true)} onBlur={()=>sf(false)}>
+      <select {...p} style={{...iS(f),cursor:"pointer",appearance:"none",width:"100%",maxWidth:"100%"}} onFocus={()=>sf(true)} onBlur={()=>sf(false)}>
         <option value="">Select...</option>
         {(options||[]).map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
       </select>
@@ -272,17 +274,17 @@ function Modal({title,icon:Icon,onClose,onSubmit,submitLabel="Save",accent=C.acc
   return(
     <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(10,22,40,.5)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",animation:"fadeIn .2s ease"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:wide?640:480,maxHeight:"94vh",overflowY:"auto",padding:"0 0 40px",animation:"slideUp .26s cubic-bezier(.22,1,.36,1)",boxShadow:"0 -4px 60px rgba(10,22,40,.22)"}}
+      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:wide?640:480,minWidth:0,boxSizing:"border-box",maxHeight:"94vh",overflowY:"auto",overflowX:"hidden",padding:"0 0 max(40px, env(safe-area-inset-bottom))",animation:"slideUp .26s cubic-bezier(.22,1,.36,1)",boxShadow:"0 -4px 60px rgba(10,22,40,.22)"}}
         onKeyDown={e=>{if(e.key==="Enter"&&e.target.tagName==="INPUT"&&!e.shiftKey&&onSubmit){e.preventDefault();onSubmit();}}}>
         <div style={{width:40,height:4,background:C.border,borderRadius:99,margin:"14px auto 4px"}}/>
-        <div style={{padding:"16px 24px 20px",borderBottom:`1px solid ${C.borderLight}`,marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            {Icon&&<div style={{background:accent+"14",borderRadius:12,padding:"9px 10px",display:"flex"}}><Icon size={20} color={accent}/></div>}
-            <span style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,letterSpacing:-.3}}>{title}</span>
+        <div style={{padding:"16px clamp(16px, 5vw, 24px) 20px",borderBottom:`1px solid ${C.borderLight}`,marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0,flex:1}}>
+            {Icon&&<div style={{background:accent+"14",borderRadius:12,padding:"9px 10px",display:"flex",flexShrink:0}}><Icon size={20} color={accent}/></div>}
+            <span style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,letterSpacing:-.3,overflowWrap:"anywhere"}}>{title}</span>
           </div>
           <button onClick={onClose} className="ba" style={{background:C.surfaceAlt,border:"none",cursor:"pointer",color:C.textMid,padding:"7px 8px",borderRadius:10,display:"flex"}}><X size={15}/></button>
         </div>
-        <div style={{padding:"0 24px"}}>
+        <div style={{padding:"0 clamp(16px, 5vw, 24px)",minWidth:0,boxSizing:"border-box"}}>
           {children}
           {error&&<div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"9px 13px",marginTop:10,fontSize:13,color:C.red,fontWeight:500}}>{error}</div>}
           {onSubmit&&<button className="ba" onClick={onSubmit} style={{width:"100%",background:`linear-gradient(135deg,${accent},${accent}dd)`,border:"none",borderRadius:14,padding:"16px 0",color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",marginTop:16,boxShadow:`0 4px 20px ${accent}40`,letterSpacing:.4}}>{submitLabel}</button>}
@@ -302,12 +304,12 @@ function BarProg({pct,color=C.accent,h=5}){
 }
 function SH({title,sub,onAdd,addLabel="Add",right}){
   return(
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
-      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,gap:10,minWidth:0}}>
+      <div style={{display:"flex",gap:10,alignItems:"flex-start",minWidth:0,flex:1}}>
         <div style={{width:3,height:sub?38:26,background:`linear-gradient(180deg,${C.accent},${C.purple}88)`,borderRadius:99,marginTop:2,flexShrink:0}}/>
-        <div>
-          <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4,lineHeight:1.2}}>{title}</div>
-          {sub&&<div style={{fontSize:12,color:C.textLight,marginTop:3,fontWeight:500}}>{sub}</div>}
+        <div style={{minWidth:0}}>
+          <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4,lineHeight:1.2,overflowWrap:"anywhere"}}>{title}</div>
+          {sub&&<div style={{fontSize:12,color:C.textLight,marginTop:3,fontWeight:500,overflowWrap:"anywhere"}}>{sub}</div>}
         </div>
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,marginTop:2}}>
@@ -861,12 +863,12 @@ Ask me anything:\
       </div>
     </div>
     <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:8,paddingBottom:10,minHeight:0}}>
-      {msgs.map((m,i)=><div key={i} style={{display:"flex",justifyContent:m.role==="u"?"flex-end":"flex-start"}}><div style={{maxWidth:"86%",padding:"11px 14px",borderRadius:m.role==="u"?"18px 18px 4px 18px":"18px 18px 18px 4px",background:m.role==="u"?C.accent:"#fff",color:m.role==="u"?"#fff":C.text,fontSize:14,lineHeight:1.55,border:m.role==="a"?"1px solid "+C.border:"none",whiteSpace:"pre-wrap"}}>{m.text}</div></div>)}
+      {msgs.map((m,i)=><div key={i} style={{display:"flex",justifyContent:m.role==="u"?"flex-end":"flex-start",minWidth:0}}><div style={{maxWidth:"86%",minWidth:0,padding:"11px 14px",borderRadius:m.role==="u"?"18px 18px 4px 18px":"18px 18px 18px 4px",background:m.role==="u"?C.accent:"#fff",color:m.role==="u"?"#fff":C.text,fontSize:14,lineHeight:1.55,border:m.role==="a"?"1px solid "+C.border:"none",whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{m.text}</div></div>)}
       {pending&&<div style={{background:C.surface,border:"1.5px solid "+C.accentMid,borderRadius:16,padding:18}}><div style={{fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Confirm</div>{pending.name&&cr("Name",pending.name)}{(pending.amount||pending.balance)&&cr("Amount",fmt(pending.amount||pending.balance))}{pending.category&&cr("Category",pending.category)}{pending.symbol&&cr("Trade",pending.symbol+" "+(parseFloat(pending.pnl)>=0?"+":"")+fmt(pending.pnl))}<div style={{display:"flex",gap:8,marginTop:12}}><button className="ba" onClick={confirm} style={{flex:1,background:C.green,border:"none",borderRadius:10,padding:"11px 0",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>✅ Save</button><button className="ba" onClick={()=>setPending(null)} style={{flex:1,background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancel</button></div></div>}
       <div ref={botRef}/>
     </div>
-    <div style={{display:"flex",gap:8,paddingTop:10,borderTop:"1px solid "+C.border,flexShrink:0}}>
-      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder='Try "lunch 12" or "can I afford $200?"' style={{flex:1,background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none"}}/>
+    <div style={{display:"flex",gap:8,paddingTop:10,borderTop:"1px solid "+C.border,flexShrink:0,minWidth:0,alignItems:"center"}}>
+      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder='Try "lunch 12" or "can I afford $200?"' style={{flex:1,minWidth:0,maxWidth:"100%",background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box"}}/>
       <button className="ba" onClick={send} disabled={!input.trim()} style={{background:input.trim()?C.accent:C.border,border:"none",borderRadius:12,padding:"0 16px",cursor:input.trim()?"pointer":"default",display:"flex",alignItems:"center",color:input.trim()?"#fff":C.textLight}}><Send size={17}/></button>
     </div>
   </div>);
@@ -6238,10 +6240,10 @@ function AppInner(){
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
 
   return(
-    <div style={{minHeight:"100vh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",maxWidth:640,margin:"0 auto",position:"relative"}}>
+    <div style={{minHeight:"100dvh",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",width:"100%",maxWidth:640,margin:"0 auto",position:"relative",overflowX:"hidden",boxSizing:"border-box"}}>
       <style>{CSS}</style>
-      <div id="fv-scroll" style={{flex:1,overflowY:"auto",padding:"16px 16px 110px"}}>
-        {["spend","home","chat","bills"].includes(tab)&&<button className="ba" onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:16,bottom:90,width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
+      <div id="fv-scroll" style={{flex:1,minWidth:0,width:"100%",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",padding:"16px max(16px, env(safe-area-inset-left)) max(110px, calc(88px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-right))",boxSizing:"border-box"}}>
+        {["spend","home","chat","bills"].includes(tab)&&<button className="ba" onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:16,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
         {tab==="home"&&(
@@ -6978,7 +6980,7 @@ function AppInner(){
         <span>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</span>
         {toast.action&&<button onClick={e=>{e.stopPropagation();toast.action.fn();setToast(null);}} style={{background:"rgba(255,255,255,.22)",border:"none",borderRadius:8,padding:"3px 10px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0,marginLeft:4}}>{toast.action.label}</button>}
       </div>}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:640,background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px 8px max(14px,env(safe-area-inset-bottom))",zIndex:100,boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)"}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:"min(640px, 100vw)",boxSizing:"border-box",background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px max(8px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right))",zIndex:100,boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)",overflowX:"hidden"}}>
         {NAV.map(n=>{const active=n.id==="more"?isMoreTab||tab==="more":tab===n.id;return(
           <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:active?"rgba(99,102,241,.08)":"transparent",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",transition:"all .18s"}}>
             {n.id==="chat"?(
