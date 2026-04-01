@@ -340,12 +340,19 @@ function FI({label,half,error,...p}){
 }
 function FS({label,options,...p}){
   const[f,sf]=useState(false);
+  const safeOpts=(options||[]).filter(o=>o!=null);
   return(
     <div style={{marginBottom:14,minWidth:0,maxWidth:"100%"}}>
       {label&&<div style={{fontSize:11,fontWeight:600,color:C.slate,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{label}</div>}
       <select {...p} style={{...iS(f),cursor:"pointer",appearance:"none",width:"100%",maxWidth:"100%"}} onFocus={()=>sf(true)} onBlur={()=>sf(false)}>
         <option value="">Select...</option>
-        {(options||[]).map(o=><option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
+        {safeOpts.map((o,i)=>{
+          const isObj=typeof o==="object"&&o!==null&&!Array.isArray(o);
+          const val=isObj&&Object.prototype.hasOwnProperty.call(o,"value")?o.value:o;
+          const disp=isObj&&Object.prototype.hasOwnProperty.call(o,"label")&&o.label!=null&&o.label!==""?o.label:String(val??"");
+          const v=val!=null?String(val):"";
+          return <option key={v+"-"+i} value={v}>{disp}</option>;
+        })}
       </select>
     </div>
   );
@@ -1588,7 +1595,7 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwG
   const firstNW=chartData[0]?.netWorth||currentNW;
   const change=currentNW-firstNW;
   const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return FULL_MOS[d.getMonth()]+" "+d.getDate();};
-  const TT=({active,payload,label})=>{if(!active||!payload?.length)return null;return(<div style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"10px 14px",fontSize:12}}><div style={{fontWeight:700,marginBottom:6}}>{fD(label)}</div>{payload.map(p=><div key={p.dataKey} style={{display:"flex",justifyContent:"space-between",gap:16,marginBottom:2}}><span style={{color:C.textLight}}>{p.name}</span><span style={{fontWeight:700}}>{fmt(p.value)}</span></div>)}</div>);};
+  const TT=({active,payload,label})=>{if(!active||!payload?.length)return null;const rows=payload.filter(p=>p!=null);if(!rows.length)return null;return(<div style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"10px 14px",fontSize:12}}><div style={{fontWeight:700,marginBottom:6}}>{fD(label)}</div>{rows.map((p,i)=><div key={p.dataKey??i} style={{display:"flex",justifyContent:"space-between",gap:16,marginBottom:2}}><span style={{color:C.textLight}}>{p.name}</span><span style={{fontWeight:700}}>{fmt(p.value??0)}</span></div>)}</div>);};
   return(
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
@@ -3817,7 +3824,7 @@ function IncomeSpendingView({expenses,income,trades,bills=[]}){
     const inc=ti+(tp>0?tp:0);
     return{month:FULL_MOS[d.getMonth()].slice(0,3),income:parseFloat(inc.toFixed(0)),spending:parseFloat(sp.toFixed(0)),saved:parseFloat(Math.max(0,inc-sp).toFixed(0))};
   }),[expenses,income,trades,months]);
-  const TT=({active,payload,label})=>{if(!active||!payload?.length)return null;return(<div style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"10px 14px",fontSize:12}}><div style={{fontWeight:700,marginBottom:6}}>{label}</div>{payload.map(p=><div key={p.dataKey} style={{display:"flex",justifyContent:"space-between",gap:12,marginBottom:2}}><span style={{color:C.textLight}}>{p.name}</span><span style={{fontWeight:700}}>{fmt(p.value)}</span></div>)}</div>);};
+  const TT=({active,payload,label})=>{if(!active||!payload?.length)return null;const rows=payload.filter(p=>p!=null);if(!rows.length)return null;return(<div style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"10px 14px",fontSize:12}}><div style={{fontWeight:700,marginBottom:6}}>{label}</div>{rows.map((p,i)=><div key={p.dataKey??i} style={{display:"flex",justifyContent:"space-between",gap:12,marginBottom:2}}><span style={{color:C.textLight}}>{p.name}</span><span style={{fontWeight:700}}>{fmt(p.value??0)}</span></div>)}</div>);};
   return(
     <div className="fu">
       {(()=>{
