@@ -5750,19 +5750,25 @@ function AppInner(){
     try{localStorage.setItem("fv_bills_reset_month",currentMonth);}catch{}
   },[ready,bills.length]);
   const pushNotif=(id,title,body,type)=>{
-    setNotifs(p=>{if(p.find(n=>n.id===id))return p;return[{id,title,body,type,time:Date.now(),read:false},...p.slice(0,49)];});
-    if(!notifSupported()||notifPermission()!=="granted")return;
-    const opts={body,icon:"/icons/icon-192.png",badge:"/icons/icon-192.png",tag:id,renotify:false,data:{url:"/"}};
-    try{
-      // Prefer SW showNotification — works when app is backgrounded on Android PWA
-      if(navigator.serviceWorker?.controller){
-        navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,opts)).catch(()=>{
-          new window.Notification(title,opts);
-        });
-      } else {
-        new window.Notification(title,opts);
+    // Only fire OS notification when we actually add a new in-app row — the bills effect
+    // re-runs often (e.g. when notifs.length changes), and we must not show duplicates.
+    setNotifs(p=>{
+      if(p.find(n=>n.id===id))return p;
+      const row={id,title,body,type,time:Date.now(),read:false};
+      if(notifSupported()&&notifPermission()==="granted"){
+        const opts={body,icon:"/icons/icon-192.png",badge:"/icons/icon-192.png",tag:String(id),renotify:false,data:{url:"/"}};
+        try{
+          if(navigator.serviceWorker?.controller){
+            navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,opts)).catch(()=>{
+              new window.Notification(title,opts);
+            });
+          } else {
+            new window.Notification(title,opts);
+          }
+        }catch(e){}
       }
-    }catch(e){}
+      return[row,...p.slice(0,49)];
+    });
   };
   // On load: if permission already granted and user is logged in, ensure subscription is saved
   useEffect(()=>{
