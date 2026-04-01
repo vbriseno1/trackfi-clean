@@ -5332,17 +5332,11 @@ function AppInner(){
       const now=Date.now();
       if(now-lastVisibilityPullRef.current<700)return;
       lastVisibilityPullRef.current=now;
-      try{localStorage.setItem("fv_last_sync",String(now));}catch{}
       void loadFromSupabase(authSession);
     }
     function onFocus(){
       if(!authSession)return;
-      const lastSync=parseInt(localStorage.getItem("fv_last_sync")||"0");
-      const now=Date.now();
-      if(now-lastSync>8000){
-        try{localStorage.setItem("fv_last_sync",String(now));}catch{}
-        loadFromSupabase(authSession);
-      }
+      pullIfDue();
     }
     let bgTimestamp=0;
     function onVis(){
@@ -5455,22 +5449,25 @@ function AppInner(){
         }
       }
     }catch{}
-    // Pull fresh data from Supabase after login (delay slightly to let boot load finish)
-    setTimeout(()=>loadFromSupabase(sess), 800);
+    // Authoritative pull after migration: boot may have run with a different scope before session was set.
+    setTimeout(()=>loadFromSupabase(sess), 150);
   }
   async function loadFromSupabase(sess) {
     const uid = sess?.user?.id;
     if (!uid) return;
+    const gen = ++remotePullGenRef.current;
     // Let React effects run so ss() has the latest bills/notifs in localStorage + buffer, then push to cloud before we fetch (avoids deleted items reappearing).
     await new Promise(r => setTimeout(r, 50));
     await flushPendingSync();
     setSyncing(true);
     try {
       const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&select=key,value`);
+      if (gen !== remotePullGenRef.current) return;
       if (!res?.data || !Array.isArray(res.data)) return;
       const map = {};
       res.data.forEach(row => { map[row.key] = row.value; });
-      // Apply each piece of data to state (same as boot load)
+      // Apply server snapshot: every key present in the response replaces local state (including []).
+      // Keys absent from Supabase leave local/React state unchanged — offline-first until first upload.
       const apply = (key, setter, merge=false) => {
         if (map[key] === undefined) return;
         if (key === "nwGoal") {
@@ -5480,11 +5477,6 @@ function AppInner(){
         }
         const v = map[key];
         if (v === null || v === undefined) return;
-        // After a sign-out+sign-in, state was already reset to empty by resetUserState(),
-        // so it's safe to apply empty arrays (they represent the new account's real state).
-        // Skip empty arrays during background sync for most keys — avoids wiping local before first cloud upload.
-        // Never skip for bills/notifs/settlements/hhBudgets/subDismissed: clears must sync across devices.
-        if (Array.isArray(v) && v.length === 0 && cloudLoadedRef.current && !["bills","notifs","settlements","hhBudgets","subDismissed"].includes(key)) return;
         if (merge) setter(prev => ({...prev, ...v}));
         else setter(v);
       };
@@ -5525,7 +5517,7 @@ function AppInner(){
       });
       try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
     } catch(e) { console.error("loadFromSupabase error", e); showToast("Sync failed — check your connection","error"); }
-    finally { setSyncing(false); }
+    finally { if (gen === remotePullGenRef.current) setSyncing(false); }
   }
   function handleSkip(){try{localStorage.setItem("fv_skip_auth","1");}catch{}setSkipAuth(true);}
   function resetUserState(){
@@ -5573,6 +5565,8 @@ function AppInner(){
   // True once we've successfully loaded at least one round of cloud data.
   // Prevents empty boot state from overwriting real Supabase data on other devices.
   const cloudLoadedRef=useRef(false);
+  /** Increments on each loadFromSupabase call so stale responses never overwrite newer state. */
+  const remotePullGenRef=useRef(0);
   const[accounts,setAccounts]=useState(DEF_ACCOUNTS);
   const[income,setIncome]=useState(DEF_INCOME);
   const[expenses,setExpenses]=useState([]);
@@ -5681,7 +5675,7 @@ function AppInner(){
         try{if(ac)setAccounts(a=>({checking:"",savings:"",cushion:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:"",...a,...ac}));}catch{}
         try{if(inc)setIncome(a=>({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...a,...inc}));}catch{}
         try{if(sett)setSettings(a=>({...a,...sett}));}catch{}
-        try{const hh=await sg("fv6:household");if(hh)setHousehold(h=>({...h,...hh}));}catch{}
+        try{const hh=_bulkMap["household"]!==undefined?_bulkMap["household"]:(await sg("fv6:household"));if(hh)setHousehold(h=>({...h,...hh}));}catch{}
         try{if(cc)setCalColors(a=>({...a,...cc}));}catch{}
         try{if(Array.isArray(nts))setNotifs(nts);}catch{}
         try{if(Array.isArray(bh))setBalHist(bh);}catch{}

@@ -37,7 +37,11 @@ export async function supaFetch(path, opts = {}) {
     ...(token ? { Authorization: "Bearer " + token } : {}),
     ...(opts.headers || {}),
   };
-  const res = await fetch(SUPA_URL + path, { ...opts, headers });
+  const res = await fetch(SUPA_URL + path, {
+    ...opts,
+    cache: opts.cache ?? "no-store",
+    headers,
+  });
   if (!res.ok) {
     const e = await res.json().catch(() => ({ message: "Request failed" }));
     if (res.status === 401) _onSessionExpired?.();
