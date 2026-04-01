@@ -22,6 +22,7 @@ import {
   sg,
   ss,
   flushPendingSync,
+  cancelPendingDebouncedSync,
 } from "./lib/supabase.js";
 
 // ── Confetti burst — pure canvas, no library ──────────────────────────────────
@@ -5456,14 +5457,16 @@ function AppInner(){
     const uid = sess?.user?.id;
     if (!uid) return;
     const gen = ++remotePullGenRef.current;
-    // Let React effects run so ss() has the latest bills/notifs in localStorage + buffer, then push to cloud before we fetch (avoids deleted items reappearing).
+    // Do NOT flushPendingSync() before fetch: debounced ss() may still hold stale bills JSON
+    // from this device and would overwrite newer rows another device just wrote.
     await new Promise(r => setTimeout(r, 50));
-    await flushPendingSync();
     setSyncing(true);
     try {
       const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&select=key,value`);
       if (gen !== remotePullGenRef.current) return;
       if (!res?.data || !Array.isArray(res.data)) return;
+      // Drop any scheduled uploads from before this snapshot — they may target pre-pull state.
+      cancelPendingDebouncedSync();
       const map = {};
       res.data.forEach(row => { map[row.key] = row.value; });
       // Apply server snapshot: every key present in the response replaces local state (including []).
@@ -5517,7 +5520,13 @@ function AppInner(){
       });
       try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
     } catch(e) { console.error("loadFromSupabase error", e); showToast("Sync failed — check your connection","error"); }
-    finally { if (gen === remotePullGenRef.current) setSyncing(false); }
+    finally {
+      if (gen === remotePullGenRef.current) {
+        setSyncing(false);
+        // After React applies server state, persistence effects re-run ss(); flush those writes.
+        setTimeout(() => { void flushPendingSync(); }, 0);
+      }
+    }
   }
   function handleSkip(){try{localStorage.setItem("fv_skip_auth","1");}catch{}setSkipAuth(true);}
   function resetUserState(){

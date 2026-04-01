@@ -178,6 +178,18 @@ export async function ss(k, v) {
   }
 }
 
+/**
+ * Clears debounced upload timers without sending. Call before applying a server snapshot
+ * on pull so a stale scheduled ss() cannot POST old JSON after newer remote data was fetched.
+ */
+export function cancelPendingDebouncedSync() {
+  for (const bare of Object.keys(_ssBuffer)) {
+    const buf = _ssBuffer[bare];
+    if (buf?.timer) clearTimeout(buf.timer);
+    delete _ssBuffer[bare];
+  }
+}
+
 export async function flushPendingSync() {
   const uid = getUserId();
   if (!uid) return;
