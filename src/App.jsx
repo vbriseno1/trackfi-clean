@@ -157,6 +157,18 @@ function normalizePaidFrom(pf){if(pf==="credit"||pf==="checking"||pf==="savings"
 function round2(n){return Math.round(n*100)/100;}
 const PAID_FROM_OPTIONS=["checking","credit","savings","none"];
 const PAID_FROM_FS_LABELS={checking:"🏦 Checking (debit/cash)",credit:"💳 Credit card (adds to balance owed)",savings:"💰 Savings",none:"📋 Track only — no balance change"};
+/** MTD spend that affects checking cash flow (legacy rows without paidFrom count as checking). */
+function sumMtdCheckingSpend(expenses,ms){
+  return expenses.filter(e=>e.date?.startsWith(ms)&&normalizePaidFrom(e.paidFrom)==="checking").reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+}
+function sumMtdByPaidFrom(expenses,ms){
+  const o={checking:0,credit:0,savings:0,none:0};
+  expenses.forEach(e=>{
+    if(!e.date?.startsWith(ms))return;
+    o[normalizePaidFrom(e.paidFrom)]+=parseFloat(e.amount)||0;
+  });
+  return o;
+}
 const DEF_INCOME={primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:""};
 const DEF_HOUSEHOLD={enabled:false,name:"My Finances",members:[{id:"me",name:"Me",emoji:"😊",color:"#6366f1"}]};
 const DEF_CALCOLORS=(C)=>({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
@@ -675,25 +687,18 @@ function parseMsg(text,categories,debts,opts={}){
 }
 
 function ChatView({categories,expenses,bills,debts,accounts,income,savingsGoals,trades,tradingAccount,budgetGoals=[],setExpenses,setBills,setDebts,setSGoals,setAccounts,setIncome,setTrades,setBGoals,applySpend,applyRefund,defaultExpensePaidFrom,defaultBillPaidFrom}){
-  const[msgs,setMsgs]=useState([{role:"a",text:"Hey! I can log anything:\
-• \"lunch 12\", \"groceries 85\", \"gas 55\" → log expense\
-• \"rent 1200 due 28th\" → add bill\
-• \"checking 3200\" → update balance\
-• \"moved 500 to savings\" → transfer\
-• \"car loan 15000 at 6%\" → track debt\
-• \"traded ES +250\" → log trade\
-• \"undo\" → undo last entry\
-Ask me anything:\
-• \"can I afford $200?\"\
-• \"what did I spend on groceries?\"\
-• \"when\'s my next payday?\"\
-• \"how am I doing this month?\"\
-• \"what are my goals?\""}]);
+  const[msgs,setMsgs]=useState([{role:"a",text:"Hey! I match Trackfi’s paid-from logic:\
+• Each expense hits Checking (cash), Credit card (adds to card balance owed), Savings, or Track only (categories/import — no balance change).\
+• \"lunch 12\" uses your default; add \"credit card\" or \"on card\" to charge the card.\
+• \"rent 1200 due 28th\" → bill (pay-from when you mark paid).\
+• \"checking 3200\" → balance · \"moved 500 to savings\" → transfer · debt / trades / undo\
+Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · groceries · payday · goals"}]);
   const[input,setInput]=useState("");const[pending,setPending]=useState(null);const[history,setHistory]=useState([]);
   const botRef=useRef();
   useEffect(()=>{botRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,pending]);
   const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
   const ck=parseFloat(accounts.checking||0);
+  const ccOwed=parseFloat(accounts.credit_card||0);
   // Use real pay-frequency-aware safe-to-spend
   const chatPayFreq=income.payFrequency||"Biweekly";
   const chatPayDays=chatPayFreq==="Weekly"?7:chatPayFreq==="Biweekly"?14:chatPayFreq==="Twice Monthly"?15:30;
@@ -707,8 +712,10 @@ Ask me anything:\
   const chatNextPayStr=chatNextPay.getFullYear()+"-"+String(chatNextPay.getMonth()+1).padStart(2,"0")+"-"+String(chatNextPay.getDate()).padStart(2,"0");
   const bs=bills.reduce((s,b)=>{if(b.paid)return s;const d=b.dueDate||"";return d&&d<=chatNextPayStr?s+(parseFloat(b.amount)||0):s;},0);
   const _chatMs=chatNow.getFullYear()+"-"+String(chatNow.getMonth()+1).padStart(2,"0");
-  const _chatMtd=expenses.filter(e=>e.date?.startsWith(_chatMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-  const burn=dayOfMonth()>0?_chatMtd/dayOfMonth():0;
+  const _chatSplit=sumMtdByPaidFrom(expenses,_chatMs);
+  const _chatMtd=_chatSplit.checking+_chatSplit.credit+_chatSplit.savings+_chatSplit.none;
+  const _mtdCk=_chatSplit.checking;
+  const burn=dayOfMonth()>0?_mtdCk/dayOfMonth():0;
   const chatProjected=burn*Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
   const chatOtherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const _chatDaysUntilPay=Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
@@ -728,7 +735,10 @@ Ask me anything:\
     if(t.includes("afford")||t.includes("safe to spend")||t.includes("safe to")){
       const m=t.match(/[\d,]+/);const a=m?parseFloat(m[0].replace(/,/g,"")):null;
       if(a)return a<=sts?"\u2705 Yes \u2014 "+fmt(a)+" fits. You have "+fmt(sts)+" safe to spend until "+chatNextPay.toLocaleDateString("en-US",{month:"short",day:"numeric"})+".":"\u274c No \u2014 "+fmt(a)+" exceeds your safe-to-spend of "+fmt(sts)+". Short by "+fmt(a-sts)+".";
-      return"Safe to spend: "+fmt(sts)+"\nChecking: "+fmt(ck)+" \u00b7 Bills before payday: "+fmt(bs)+"\nNext pay: "+chatNextPay.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+      return"Safe to spend: "+fmt(sts)+" \u2014 cash path (checking burn projection; credit card charges don\u2019t reduce this).\nChecking: "+fmt(ck)+(ccOwed>0?"\n\ud83d\udcb3 Card balance owed (in app): "+fmt(ccOwed):"")+"\nBills before payday: "+fmt(bs)+"\nNext pay: "+chatNextPay.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+    }
+    if((t.includes("split")&&t.includes("spend"))||t.includes("checking vs credit")||t.includes("paid from")||t.includes("paidfrom")){
+      return"\ud83d\udcca This month by paid-from:\n\ud83c\udfe6 Checking: "+fmt(_chatSplit.checking)+"\n\ud83d\udcb3 Credit card: "+fmt(_chatSplit.credit)+"\n\ud83d\udcb0 Savings: "+fmt(_chatSplit.savings)+"\n\ud83d\udccb Track only: "+fmt(_chatSplit.none)+"\n\nTotal in categories: "+fmt(_chatMtd);
     }
     if(t.includes("bill")||t.includes("due")||t.includes("upcoming")){
       const ov=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
@@ -754,11 +764,12 @@ Ask me anything:\
       const dom=new Date().getDate();const dim=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
       const projected=dom>0?(_thisTotal/dom)*dim:0;
       const diff=_prevTotal>0?((_thisTotal-_prevTotal)/_prevTotal*100):0;
-      return"\ud83d\udcca "+FULL_MOS[new Date().getMonth()]+" so far: "+fmt(_thisTotal)+"\nBurn rate: "+fmt(dom>0?_thisTotal/dom:0)+"/day\nProjected month-end: "+fmt(projected)+(_prevTotal>0?"\n"+(diff>0?"\u2b06\ufe0f "+diff.toFixed(0)+"% more":"\u2b07\ufe0f "+Math.abs(diff).toFixed(0)+"% less")+" than last month":"");
+      const splitLn=_chatSplit.credit+_chatSplit.none+_chatSplit.savings>0?"\nBy paid-from: "+fmt(_chatSplit.checking)+" chk · "+fmt(_chatSplit.credit)+" card · "+fmt(_chatSplit.savings)+" sav · "+fmt(_chatSplit.none)+" track":"";
+      return"\ud83d\udcca "+FULL_MOS[new Date().getMonth()]+" so far: "+fmt(_thisTotal)+splitLn+"\nBurn (all): "+fmt(dom>0?_thisTotal/dom:0)+"/day\nProjected month-end: "+fmt(projected)+(_prevTotal>0?"\n"+(diff>0?"\u2b06\ufe0f "+diff.toFixed(0)+"% more":"\u2b07\ufe0f "+Math.abs(diff).toFixed(0)+"% less")+" than last month":"");
     }
     if(t.includes("balance")||t.includes("checking")||(t.includes("account")&&!t.includes("health"))){
       const total=["checking","savings","cushion","investments","k401","roth_ira","brokerage","crypto","hsa"].reduce((s,k)=>s+(parseFloat(accounts[k]||0)),0);
-      return"\ud83d\udcb3 Checking: "+fmt(accounts.checking)+"\n\ud83d\udcb0 Savings: "+fmt(accounts.savings)+(parseFloat(accounts.cushion||0)>0?"\n\ud83d\udee1\ufe0f Cushion: "+fmt(accounts.cushion):"")+(parseFloat(accounts.investments||0)>0?"\n\ud83d\udcc8 Investments: "+fmt(accounts.investments):"")+"\nTotal liquid: "+fmt(total);
+      return"\ud83d\udcb3 Checking: "+fmt(accounts.checking)+"\n\ud83d\udcb0 Savings: "+fmt(accounts.savings)+(parseFloat(accounts.cushion||0)>0?"\n\ud83d\udee1\ufe0f Cushion: "+fmt(accounts.cushion):"")+(ccOwed>0?"\n\ud83d\udcb3 Credit card owed (app): "+fmt(ccOwed):"")+(parseFloat(accounts.investments||0)>0?"\n\ud83d\udcc8 Investments: "+fmt(accounts.investments):"")+"\nTotal liquid (assets): "+fmt(total);
     }
     if(t.includes("payday")||t.includes("paycheck")||t.includes("pay day")||t.includes("next pay")||t.includes("get paid")){
       const days=Math.max(0,Math.ceil((chatNextPay-chatNow)/86400000));
@@ -779,16 +790,19 @@ Ask me anything:\
       if(!savingsGoals.length)return"No savings goals set yet. Tap Goals in the menu to add one!";
       return"\ud83c\udfaf Savings Goals:\n"+savingsGoals.map(g=>{const pct=Math.min(100,(parseFloat(g.saved||0)/parseFloat(g.target||1))*100);const rem=Math.max(0,parseFloat(g.target||0)-parseFloat(g.saved||0));const mo=parseFloat(g.monthly||0);const months=mo>0?Math.ceil(rem/mo):null;return(g.icon||"\ud83c\udfaf")+" "+g.name+": "+fmt(g.saved||0)+" / "+fmt(g.target)+" ("+pct.toFixed(0)+"%)"+( months?" \u00b7 "+months+"mo to go":"");}).join("\n");
     }
-    if(t.includes("debt")||t.includes("loan")||t.includes("credit card")||t.includes("owe")){
-      const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
+    if(t.includes("debt")||t.includes("loan")||(t.includes("credit card")&&!t.includes("split"))||t.includes("owe")){
+      const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0)+ccOwed;
       const monthlyInt=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)),0);
-      if(!debts.length)return"\u2705 No debts tracked! Add one with 'car loan 15000 at 6%'";
-      return"\ud83d\udcb3 Total debt: "+fmt(td)+"\nMonthly interest: "+fmt(monthlyInt)+"\n\n"+debts.map(d=>"\u2022 "+d.name+": "+fmt(d.balance)+(d.rate?" @ "+d.rate+"%":"")).join("\n");
+      const lines=[];
+      if(ccOwed>0)lines.push("\ud83d\udcb3 Credit card (app balance): "+fmt(ccOwed));
+      if(debts.length)lines.push(...debts.map(d=>"\u2022 "+d.name+": "+fmt(d.balance)+(d.rate?" @ "+d.rate+"%":"")));
+      if(!lines.length)return"\u2705 No debt or card balance in the app. Add loans with e.g. 'car loan 15000 at 6%'. Card charges from \"Credit card\" add to Settings \u2192 Credit card owed.";
+      return"\ud83d\udcb3 Total owed: "+fmt(td)+(ccOwed>0&&debts.length?" (includes app card + debt list)":"")+"\nMonthly interest (debts): "+fmt(monthlyInt)+"\n\n"+lines.join("\n");
     }
     if(t.includes("net worth")||t.includes("worth")){
       const ta=["checking","savings","cushion","investments","k401","roth_ira","brokerage","crypto","hsa","property","vehicles"].reduce((s,k)=>s+(parseFloat(accounts[k]||0)),0);
-      const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
-      return"\ud83d\udcca Net Worth: "+fmt(ta-td)+"\nAssets: "+fmt(ta)+" \u00b7 Debts: "+fmt(td);
+      const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0)+ccOwed;
+      return"\ud83d\udcca Net Worth: "+fmt(ta-td)+"\nAssets: "+fmt(ta)+" \u00b7 Debts (loans + app card): "+fmt(td);
     }
     if(t.includes("biggest")||t.includes("largest")||t.includes("most spent")){
       const top=_thisExp.slice().sort((a,b)=>parseFloat(b.amount)-parseFloat(a.amount))[0];
@@ -825,7 +839,7 @@ Ask me anything:\
       const sr=monthly>0?Math.max(0,(monthly-_thisTotal)/monthly*100):0;
       const liquid=parseFloat(accounts.savings||0)+parseFloat(accounts.cushion||0);
       const moExpH=_thisTotal||1;const ef=liquid/moExpH;
-      const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
+      const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0)+ccOwed;
       const s1=sr>=20?100:sr>=15?85:sr>=10?70:sr>=5?50:30;
       const s2=ef>=6?100:ef>=3?80:ef>=1?55:30;
       const s3=td===0?100:60;
@@ -852,11 +866,11 @@ Ask me anything:\
       return"💸 Where you're spending most:\n"+_topCats.slice(0,5).map(([c,a],i)=>(i+1)+". "+c+": "+fmt(a)).join("\n")+"\nTotal: "+fmt(_thisTotal);
     }
     if(t.includes("help")||t.includes("what can")||t.includes("commands")||t.includes("how do")){
-      return"\ud83d\udcac I can help with:\n\u2022 \"lunch 12\", \"groceries 85\" \u2192 log expense\n\u2022 \"rent 1200 due 28th\" \u2192 add bill\n\u2022 \"checking 3200\" \u2192 update balance\n\u2022 \"can I afford $200?\"\n\u2022 \"how am I doing?\"\n\u2022 \"what did I spend on groceries?\"\n\u2022 \"when\'s my next payday?\"\n\u2022 \"what are my goals?\"\n\u2022 \"my income\" or \"my debt\"\n\u2022 \"undo\" \u2192 undo last entry";
+      return"\ud83d\udcac Try:\n\u2022 \"lunch 12\" / \"groceries 40 on card\" \u2192 paid-from (checking vs credit)\n\u2022 \"split spending\" \u2192 MTD by paid-from\n\u2022 \"rent 1200 due 28th\" \u2192 bill\n\u2022 \"checking 3200\" \u2192 balance\n\u2022 \"can I afford $200?\" \u00b7 \"my balances\" \u00b7 payday \u00b7 goals \u00b7 debt\n\u2022 \"undo\"";
     }
     return null;
   }
-  function send(){const text=input.trim();if(!text)return;setInput("");setMsgs(p=>[...p,{role:"u",text}]);const t=text.toLowerCase();const isQ=t.includes("?")||/^(how|what|can|show|is|am|will|when|tell)/.test(t);if(isQ){const ans=handleQ(t);if(ans){setMsgs(p=>[...p,{role:"a",text:ans}]);return;}}const parsed=parseMsg(text,categories,debts,{defaultExpensePaidFrom,defaultBillPaidFrom});if(!parsed){setMsgs(p=>[...p,{role:"a",text:"Try: lunch 12 · groceries 85 · rent 1200 due 28th · checking 3200 · undo\nAsk: can I afford $200? · how am I doing? · my bills"}]);return;}
+  function send(){const text=input.trim();if(!text)return;setInput("");setMsgs(p=>[...p,{role:"u",text}]);const t=text.toLowerCase();const isQ=t.includes("?")||/^(how|what|can|show|is|am|will|when|tell)/.test(t);if(isQ){const ans=handleQ(t);if(ans){setMsgs(p=>[...p,{role:"a",text:ans}]);return;}}const parsed=parseMsg(text,categories,debts,{defaultExpensePaidFrom,defaultBillPaidFrom});if(!parsed){setMsgs(p=>[...p,{role:"a",text:"Try: lunch 12 · lunch 20 on card · split spending · rent 1200 due 28th · checking 3200 · undo\nAsk: can I afford $200? · my balances · my bills"}]);return;}
     if(parsed.type==="undo"){if(!history.length){setMsgs(p=>[...p,{role:"a",text:"Nothing to undo!"}]);return;}const last=history[history.length-1];if(last.type==="expense"){setExpenses(p=>p.filter(x=>x.id!==last.id));const refund=last.amt!=null?last.amt:parseFloat(expenses.find(e=>e.id===last.id)?.amount)||0;const rp=normalizePaidFrom(last.paidFrom);if(applyRefund&&refund)applyRefund(rp,refund);}else if(last.type==="bill")setBills(p=>p.filter(x=>x.id!==last.id));else if(last.type==="debt")setDebts(p=>p.filter(x=>x.id!==last.id));else if(last.type==="trade")setTrades(p=>p.filter(x=>x.id!==last.id));else if(last.type==="account")setAccounts(p=>({...p,[last.key]:last.oldVal}));setHistory(p=>p.slice(0,-1));setMsgs(p=>[...p,{role:"a",text:"↩️ Undone: "+last.label}]);return;}
     setPending(parsed);setMsgs(p=>[...p,{role:"a",text:"Confirm?"}]);}
   function confirm(){if(!pending)return;const id=Date.now();let lbl="";
@@ -870,7 +884,8 @@ Ask me anything:\
         <span style={{fontFamily:MF,fontSize:15,fontWeight:800,color:sts>200?C.green:C.red}}>{fmt(sts)}</span>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:C.textLight}}>
-        <span>{fmt(burn)}/day</span>
+        <span title="Checking burn (MTD)">{fmt(burn)}/day chk</span>
+        {ccOwed>0&&<span title="Credit card balance owed in app">\ud83d\udcb3{fmt(ccOwed)}</span>}
         {history.length>0&&<span style={{color:C.accent,cursor:"pointer"}} onClick={()=>{const text="undo";setInput("");const fakeE={key:"Enter"};setMsgs(p=>[...p,{role:"u",text:"undo"}]);const last=history[history.length-1];if(!last)return;if(last.type==="expense"){setExpenses(p=>p.filter(x=>x.id!==last.id));const refund=last.amt!=null?last.amt:parseFloat(expenses.find(e=>e.id===last.id)?.amount)||0;const rp=normalizePaidFrom(last.paidFrom);if(applyRefund&&refund)applyRefund(rp,refund);}else if(last.type==="bill")setBills(p=>p.filter(x=>x.id!==last.id));else if(last.type==="account")setAccounts(p=>({...p,[last.key]:last.oldVal}));setHistory(p=>p.slice(0,-1));setMsgs(p=>[...p,{role:"a",text:"↩️ Undone: "+last.label}]);}}>↩ Undo</span>}
       </div>
     </div>
@@ -880,7 +895,7 @@ Ask me anything:\
       <div ref={botRef}/>
     </div>
     <div style={{display:"flex",gap:8,paddingTop:10,borderTop:"1px solid "+C.border,flexShrink:0,minWidth:0,alignItems:"center"}}>
-      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder='Try "lunch 12" or "can I afford $200?"' style={{flex:1,minWidth:0,maxWidth:"100%",background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder='e.g. lunch 12 · lunch 15 on card · split spending · can I afford $80?' style={{flex:1,minWidth:0,maxWidth:"100%",background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box"}}/>
       <button className="ba" onClick={send} disabled={!input.trim()} style={{background:input.trim()?C.accent:C.border,border:"none",borderRadius:12,padding:"0 16px",cursor:input.trim()?"pointer":"default",display:"flex",alignItems:"center",color:input.trim()?"#fff":C.textLight}}><Send size={17}/></button>
     </div>
   </div>);
@@ -1331,9 +1346,10 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
   const beforeTotal=billsBeforePay.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);
   const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const spentSoFar=expenses.filter(e=>e.date?.startsWith(thisMs)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const spentCheckingMtd=sumMtdCheckingSpend(expenses,thisMs);
   const mSpent=spentSoFar;const _pvMult=income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12);const ti2=(parseFloat(income.primary||0)*_pvMult)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
-  const dailyBurn=spentSoFar/Math.max(1,today);
-  const projectedSpend=dailyBurn*daysUntilPay;
+  const dailyBurnChecking=spentCheckingMtd/Math.max(1,today);
+  const projectedSpend=dailyBurnChecking*daysUntilPay;
   // Match AppInner sts formula: checking + other income - bills before pay - projected - envelopes - buffer
   const _pvOtherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const _pvOtherProRated=_pvOtherMonthly*(daysUntilPay/30);
@@ -1403,7 +1419,8 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
       </div>
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Projected Spending</div>
-        {[["Daily burn rate",fmt(dailyBurn)+"/day",C.textMid],["Days until pay",String(daysUntilPay)+" days",C.textMid],["Projected spend",fmt(projectedSpend),projectedSpend>payPerPeriod?C.red:C.amber],["Checking balance",fmt(checking),C.green],["Bills due","-"+fmt(beforeTotal),C.red],["Safe to spend",fmt(safeToSpend),safeToSpend>500?C.green:safeToSpend>0?C.amber:C.red]].map(([l,v,c])=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>{l}</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:c}}>{v}</span></div>)}
+        <div style={{fontSize:11,color:C.textLight,marginBottom:10,lineHeight:1.45}}>Burn & projection use <strong>checking</strong> spending only. Credit card, savings, and “track only” don’t reduce this cash forecast.</div>
+        {[["Daily burn (checking)",fmt(dailyBurnChecking)+"/day",C.textMid],["Days until pay",String(daysUntilPay)+" days",C.textMid],["Projected spend",fmt(projectedSpend),projectedSpend>payPerPeriod?C.red:C.amber],["Checking balance",fmt(checking),C.green],["Bills due","-"+fmt(beforeTotal),C.red],["Safe to spend",fmt(safeToSpend),safeToSpend>500?C.green:safeToSpend>0?C.amber:C.red]].map(([l,v,c])=><div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}><span style={{fontSize:13,color:C.textMid}}>{l}</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:c}}>{v}</span></div>)}
       </div>
       {budgetGoals.length>0&&(()=>{
         const thisMs=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
@@ -5901,6 +5918,7 @@ function AppInner(){
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const totalDebt=useMemo(()=>debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0)+parseFloat(accounts.credit_card||0),[debts,accounts.credit_card]);
   const thisMonthExp=useMemo(()=>{const n=new Date();const ms=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");return expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);},[expenses]);
+  const thisMonthExpChecking=useMemo(()=>{const n=new Date();const ms=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");return sumMtdCheckingSpend(expenses,ms);},[expenses]);
   const cashflow=totalIncome-thisMonthExp;
   const netWorth=totalAssets-totalDebt;
   // Net Worth milestone checker — fire when assets cross thresholds
@@ -5924,6 +5942,7 @@ function AppInner(){
   const dueSoon=useMemo(()=>bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=7),[bills]);
   const billsSoonAmt=useMemo(()=>dueSoon.reduce((s,b)=>s+(parseFloat(b.amount)||0),0),[dueSoon]);
   const burnRate=dayOfMonth()>0?thisMonthExp/dayOfMonth():0;
+  const burnRateChecking=dayOfMonth()>0?thisMonthExpChecking/dayOfMonth():0;
   const projected=burnRate*daysInMonth();
   // Pay frequency helpers — all plain computed values, no hooks needed
   const payFreq=income.payFrequency||"Biweekly";
@@ -5957,7 +5976,7 @@ function AppInner(){
   // Bills due before next paycheck — simple filter, no hook
   const billsBeforeNextPayAmt=bills.reduce((s,b)=>{if(b.paid)return s;const d=(b.dueDate||"");return d&&d<=nextPayStr?s+(parseFloat(b.amount)||0):s;},0);
   // Projected spend until next pay
-  const projectedUntilPay=burnRate*daysUntilNextPay;
+  const projectedUntilPay=burnRateChecking*daysUntilNextPay;
   // Budget envelopes: reduce sts by the portion of variable budgets remaining until next pay
   // e.g. if haircut budget is $150/mo and next pay is 7 days away, reserve $35 (7/30 * $150)
   const _envelopeMs=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
@@ -6749,7 +6768,7 @@ function AppInner(){
         {tab==="chat"&&<div style={{height:"calc(100vh - 110px)",display:"flex",flexDirection:"column"}}>
           <div style={{marginBottom:10}}>
             <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>AI Logger</div>
-            <div style={{fontSize:13,color:C.textLight,marginTop:1,marginBottom:10}}>Type naturally — "lunch 12", "rent 1200 due 28th", "moved 500 to savings"</div>
+            <div style={{fontSize:13,color:C.textLight,marginTop:1,marginBottom:10}}>Paid-from aware — "lunch 12", "coffee 6 on card", "split spending", "rent 1200 due 28th"</div>
             {/* Smart prompt chips */}
             <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
               {(()=>{
