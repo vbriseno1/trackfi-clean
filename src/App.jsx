@@ -663,7 +663,7 @@ function parseMsg(text,categories,debts){
   return null;
 }
 
-function ChatView({categories,expenses,bills,debts,accounts,income,savingsGoals,trades,tradingAccount,setExpenses,setBills,setDebts,setSGoals,setAccounts,setIncome,setTrades,setBGoals}){
+function ChatView({categories,expenses,bills,debts,accounts,income,savingsGoals,trades,tradingAccount,budgetGoals=[],setExpenses,setBills,setDebts,setSGoals,setAccounts,setIncome,setTrades,setBGoals,adjustChecking}){
   const[msgs,setMsgs]=useState([{role:"a",text:"Hey! I can log anything:\
 • \"lunch 12\", \"groceries 85\", \"gas 55\" → log expense\
 • \"rent 1200 due 28th\" → add bill\
@@ -702,7 +702,7 @@ Ask me anything:\
   const chatOtherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const _chatDaysUntilPay=Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
   const chatOtherProRated=chatOtherMonthly*(_chatDaysUntilPay/30);
-  const _chatEnvReserve=budgetGoals.reduce((s,g)=>{const lim=parseFloat(g.limit||0);if(!lim)return s;const spent=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(_chatMs)).reduce((a,e)=>a+(parseFloat(e.amount)||0),0);return s+Math.max(0,lim-spent)*(Math.min(1,_chatDaysUntilPay/30));},0);
+  const _chatEnvReserve=(budgetGoals||[]).reduce((s,g)=>{const lim=parseFloat(g.limit||0);if(!lim)return s;const spent=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(_chatMs)).reduce((a,e)=>a+(parseFloat(e.amount)||0),0);return s+Math.max(0,lim-spent)*(Math.min(1,_chatDaysUntilPay/30));},0);
   const sts=Math.max(0,ck+chatOtherProRated-bs-chatProjected-_chatEnvReserve-200);
   // Pre-compute reusable values for handleQ
   const _thisMs=_chatMs;
@@ -846,10 +846,10 @@ Ask me anything:\
     return null;
   }
   function send(){const text=input.trim();if(!text)return;setInput("");setMsgs(p=>[...p,{role:"u",text}]);const t=text.toLowerCase();const isQ=t.includes("?")||/^(how|what|can|show|is|am|will|when|tell)/.test(t);if(isQ){const ans=handleQ(t);if(ans){setMsgs(p=>[...p,{role:"a",text:ans}]);return;}}const parsed=parseMsg(text,categories,debts);if(!parsed){setMsgs(p=>[...p,{role:"a",text:"Try: lunch 12 · groceries 85 · rent 1200 due 28th · checking 3200 · undo\nAsk: can I afford $200? · how am I doing? · my bills"}]);return;}
-    if(parsed.type==="undo"){if(!history.length){setMsgs(p=>[...p,{role:"a",text:"Nothing to undo!"}]);return;}const last=history[history.length-1];if(last.type==="expense")setExpenses(p=>p.filter(x=>x.id!==last.id));else if(last.type==="bill")setBills(p=>p.filter(x=>x.id!==last.id));else if(last.type==="debt")setDebts(p=>p.filter(x=>x.id!==last.id));else if(last.type==="trade")setTrades(p=>p.filter(x=>x.id!==last.id));else if(last.type==="account")setAccounts(p=>({...p,[last.key]:last.oldVal}));setHistory(p=>p.slice(0,-1));setMsgs(p=>[...p,{role:"a",text:"↩️ Undone: "+last.label}]);return;}
+    if(parsed.type==="undo"){if(!history.length){setMsgs(p=>[...p,{role:"a",text:"Nothing to undo!"}]);return;}const last=history[history.length-1];if(last.type==="expense"){setExpenses(p=>p.filter(x=>x.id!==last.id));const refund=last.amt!=null?last.amt:parseFloat(expenses.find(e=>e.id===last.id)?.amount)||0;if(adjustChecking&&refund)adjustChecking(refund);}else if(last.type==="bill")setBills(p=>p.filter(x=>x.id!==last.id));else if(last.type==="debt")setDebts(p=>p.filter(x=>x.id!==last.id));else if(last.type==="trade")setTrades(p=>p.filter(x=>x.id!==last.id));else if(last.type==="account")setAccounts(p=>({...p,[last.key]:last.oldVal}));setHistory(p=>p.slice(0,-1));setMsgs(p=>[...p,{role:"a",text:"↩️ Undone: "+last.label}]);return;}
     setPending(parsed);setMsgs(p=>[...p,{role:"a",text:"Confirm?"}]);}
   function confirm(){if(!pending)return;const id=Date.now();let lbl="";
-    if(pending.type==="expense"){setExpenses(p=>[...p,{id,...pending,notes:""}]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount)}]);lbl="✅ "+pending.name+" ("+fmt(pending.amount)+") logged!";}else if(pending.type==="bill"){setBills(p=>[...p,{id,...pending,paid:false,autoPay:false}]);setHistory(p=>[...p,{type:"bill",id,label:pending.name}]);lbl="✅ "+pending.name+" bill added!";}else if(pending.type==="debt"){if(pending.isUpdate){setDebts(p=>p.map(d=>d.id===pending.matchId?{...d,balance:pending.balance}:d));}else{setDebts(p=>[...p,{id,name:pending.name,balance:pending.balance,rate:pending.rate||"",minPayment:""}]);setHistory(p=>[...p,{type:"debt",id,label:pending.name}]);}lbl="✅ "+pending.name+" saved!";}else if(pending.type==="trade"){setTrades(p=>[{id,date:pending.date,symbol:pending.symbol,side:pending.side,contracts:"1",pnl:pending.pnl,entry:"",exit:"",note:""},...p]);setHistory(p=>[...p,{type:"trade",id,label:pending.symbol+" "+pending.side}]);lbl="✅ "+pending.symbol+" "+(parseFloat(pending.pnl)>=0?"+":"")+fmt(pending.pnl);}else if(pending.type==="account"){const oldVal=accounts[pending.key];setAccounts(p=>({...p,[pending.key]:pending.amount}));setHistory(p=>[...p,{type:"account",key:pending.key,oldVal,label:pending.key}]);lbl="✅ "+pending.key+": "+fmt(pending.amount);}
+    if(pending.type==="expense"){const _ea=parseFloat(pending.amount)||0;setExpenses(p=>[...p,{id,...pending,notes:""}]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount),amt:_ea}]);if(adjustChecking&&_ea)adjustChecking(-_ea);lbl="✅ "+pending.name+" ("+fmt(pending.amount)+") logged!";}else if(pending.type==="bill"){setBills(p=>[...p,{id,...pending,paid:false,autoPay:false}]);setHistory(p=>[...p,{type:"bill",id,label:pending.name}]);lbl="✅ "+pending.name+" bill added!";}else if(pending.type==="debt"){if(pending.isUpdate){setDebts(p=>p.map(d=>d.id===pending.matchId?{...d,balance:pending.balance}:d));}else{setDebts(p=>[...p,{id,name:pending.name,balance:pending.balance,rate:pending.rate||"",minPayment:""}]);setHistory(p=>[...p,{type:"debt",id,label:pending.name}]);}lbl="✅ "+pending.name+" saved!";}else if(pending.type==="trade"){setTrades(p=>[{id,date:pending.date,symbol:pending.symbol,side:pending.side,contracts:"1",pnl:pending.pnl,entry:"",exit:"",note:""},...p]);setHistory(p=>[...p,{type:"trade",id,label:pending.symbol+" "+pending.side}]);lbl="✅ "+pending.symbol+" "+(parseFloat(pending.pnl)>=0?"+":"")+fmt(pending.pnl);}else if(pending.type==="account"){const oldVal=accounts[pending.key];setAccounts(p=>({...p,[pending.key]:pending.amount}));setHistory(p=>[...p,{type:"account",key:pending.key,oldVal,label:pending.key}]);lbl="✅ "+pending.key+": "+fmt(pending.amount);}
     setMsgs(p=>[...p,{role:"a",text:lbl||"✅ Saved!"}]);setPending(null);}
   const cr=(l,v)=><div style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",background:C.bg,borderRadius:8,marginBottom:3}}><span style={{fontSize:12,color:C.textLight}}>{l}</span><span style={{fontSize:12,color:C.text,fontWeight:600}}>{v}</span></div>;
   return(<div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -860,7 +860,7 @@ Ask me anything:\
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,fontSize:11,color:C.textLight}}>
         <span>{fmt(burn)}/day</span>
-        {history.length>0&&<span style={{color:C.accent,cursor:"pointer"}} onClick={()=>{const text="undo";setInput("");const fakeE={key:"Enter"};setMsgs(p=>[...p,{role:"u",text:"undo"}]);const last=history[history.length-1];if(!last)return;if(last.type==="expense")setExpenses(p=>p.filter(x=>x.id!==last.id));else if(last.type==="bill")setBills(p=>p.filter(x=>x.id!==last.id));else if(last.type==="account")setAccounts(p=>({...p,[last.key]:last.oldVal}));setHistory(p=>p.slice(0,-1));setMsgs(p=>[...p,{role:"a",text:"↩️ Undone: "+last.label}]);}}>↩ Undo</span>}
+        {history.length>0&&<span style={{color:C.accent,cursor:"pointer"}} onClick={()=>{const text="undo";setInput("");const fakeE={key:"Enter"};setMsgs(p=>[...p,{role:"u",text:"undo"}]);const last=history[history.length-1];if(!last)return;if(last.type==="expense"){setExpenses(p=>p.filter(x=>x.id!==last.id));const refund=last.amt!=null?last.amt:parseFloat(expenses.find(e=>e.id===last.id)?.amount)||0;if(adjustChecking&&refund)adjustChecking(refund);}else if(last.type==="bill")setBills(p=>p.filter(x=>x.id!==last.id));else if(last.type==="account")setAccounts(p=>({...p,[last.key]:last.oldVal}));setHistory(p=>p.slice(0,-1));setMsgs(p=>[...p,{role:"a",text:"↩️ Undone: "+last.label}]);}}>↩ Undo</span>}
       </div>
     </div>
     <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:8,paddingBottom:10,minHeight:0}}>
@@ -1699,7 +1699,7 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
     </div>
   );
 }
-function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast,showUndoToast,household}){
+function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,setEditItem,onAdd,showToast,showUndoToast,household,adjustChecking}){
   const[showAdd,setShowAdd]=useState(false);const[bForm,setBForm]=useState({});
   const[dateFilter,setDateFilter]=useState("month");
   const[showChart,setShowChart]=useState(true);
@@ -1879,7 +1879,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         const cat=categories.find(c=>c.name===e.category);
         if(selectMode){const isSel=selected.has(e.id);return(<div key={e.id} onClick={()=>setSelected(p=>{const n=new Set(p);if(n.has(e.id))n.delete(e.id);else n.add(e.id);return n;})} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:isSel?C.accentBg:C.surface,border:`1.5px solid ${isSel?C.accent:C.border}`,borderRadius:16,marginBottom:8,cursor:"pointer"}}><div style={{width:22,height:22,borderRadius:"50%",background:isSel?C.accent:C.bg,border:`2px solid ${isSel?C.accent:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{isSel&&<Check size={12} color="#fff"/>}</div><div style={{width:34,height:34,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{cat?.icon||"💸"}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{e.name}</div><div style={{fontSize:11,color:C.textLight}}>{e.date} · {e.category}</div></div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red,flexShrink:0}}>-{fmt(e.amount)}</div></div>);}
         return(
-          <ExpenseRow key={e.id} e={e} cat={cat} onEdit={()=>setEditItem({type:"expense",data:e})} onDelete={()=>{const snap=e;setExpenses(p=>p.filter(x=>x.id!==snap.id));(showUndoToast||showToast)&&(showUndoToast?showUndoToast("Deleted — "+snap.name,()=>setExpenses(p=>[...p,snap])):showToast("Deleted","error"));}}/>
+          <ExpenseRow key={e.id} e={e} cat={cat} onEdit={()=>setEditItem({type:"expense",data:e})} onDelete={()=>{const snap=e;const ea=parseFloat(snap.amount)||0;setExpenses(p=>p.filter(x=>x.id!==snap.id));if(adjustChecking&&ea)adjustChecking(ea);(showUndoToast||showToast)&&(showUndoToast?showUndoToast("Deleted — "+snap.name,()=>{setExpenses(p=>[...p,snap]);if(adjustChecking&&ea)adjustChecking(-ea);}):showToast("Deleted","error"));}}/>
         );
       })}
       {showAdd&&<Modal title="Spending Envelope" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Add Envelope" accent={C.purple}><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.accent,lineHeight:1.5}}>
@@ -1888,7 +1888,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       <FS label="Category" options={categories.map(c=>c.name)} value={bForm.category||""} onChange={e=>setBForm(p=>({...p,category:e.target.value}))}/><FI label="Note (optional)" placeholder="e.g. haircuts ~2x/month, gas varies" value={bForm.note||""} onChange={e=>setBForm(p=>({...p,note:e.target.value}))}/><FI label="Monthly Budget ($)" type="number" placeholder="e.g. 150" value={bForm.limit||""} onChange={e=>setBForm(p=>({...p,limit:e.target.value}))}/></Modal>}
     </div>
   );
-}function BillsView({bills,setBills,setEditItem,onAdd,showToast,showUndoToast,household,requestNotifPermission}){
+}function BillsView({bills,setBills,setEditItem,onAdd,showToast,showUndoToast,household,requestNotifPermission,adjustChecking}){
   const[billTab,setBillTab]=useState("upcoming");
   const[notifPerm,setNotifPerm]=useState(()=>notifPermission());
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
@@ -1915,7 +1915,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Bills</div><div style={{fontSize:13,color:C.textLight}}>{unpaid.length} unpaid · {overdue.length} overdue</div></div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>setBills(p=>p.map(b=>{if(!overdue.some(o=>o.id===b.id))return b;if(b.recurring&&b.recurring!=="One-time"){const d=new Date((b.dueDate||todayStr())+"T00:00:00");if(b.recurring==="Weekly")d.setDate(d.getDate()+7);else if(b.recurring==="Bi-weekly")d.setDate(d.getDate()+14);else if(b.recurring==="Quarterly")d.setMonth(d.getMonth()+3);else if(b.recurring==="Annual")d.setFullYear(d.getFullYear()+1);else d.setMonth(d.getMonth()+1);const _ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");return{...b,paid:false,dueDate:_ds,paidDate:todayStr()};}return{...b,paid:true};}))} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>{const total=overdue.reduce((s,b)=>s+(parseFloat(b.amount)||0),0);if(adjustChecking&&total)adjustChecking(-total);setBills(p=>p.map(b=>{if(!overdue.some(o=>o.id===b.id))return b;if(b.recurring&&b.recurring!=="One-time"){const d=new Date((b.dueDate||todayStr())+"T00:00:00");if(b.recurring==="Weekly")d.setDate(d.getDate()+7);else if(b.recurring==="Bi-weekly")d.setDate(d.getDate()+14);else if(b.recurring==="Quarterly")d.setMonth(d.getMonth()+3);else if(b.recurring==="Annual")d.setFullYear(d.getFullYear()+1);else d.setMonth(d.getMonth()+1);const _ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");return{...b,paid:false,dueDate:_ds,paidDate:todayStr()};}return{...b,paid:true};}))}} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
       </div>
       {bills.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
@@ -1953,7 +1953,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         return(
           <div key={b.id} style={{marginBottom:8}}>
             <div className="rw" style={{display:"flex",alignItems:"center",gap:12,padding:"14px 14px",background:C.surface,border:`1.5px solid ${b.paid?C.border:d<0?C.redMid:d<=7?C.amberMid:C.border}`,borderRadius:14}}>
-              <button onClick={()=>{setBills(p=>p.map(x=>{if(x.id!==b.id)return x;const nowPaid=!x.paid;if(nowPaid){setTimeout(()=>showToast&&showToast("✓ Paid — "+x.name),0);try{navigator.vibrate&&navigator.vibrate([30,10,30]);}catch{}}if(nowPaid&&x.recurring&&x.recurring!=="One-time"){return{...x,paid:false,dueDate:(()=>{const d=new Date((x.dueDate||todayStr())+"T00:00:00");if(x.recurring==="Weekly"){d.setDate(d.getDate()+7);}else if(x.recurring==="Bi-weekly"){d.setDate(d.getDate()+14);}else if(x.recurring==="Quarterly"){d.setMonth(d.getMonth()+3);}else if(x.recurring==="Annual"){d.setFullYear(d.getFullYear()+1);}else{d.setMonth(d.getMonth()+1);}return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})(),paidDate:todayStr()};}return{...x,paid:nowPaid};}));}} style={{background:"none",border:"none",cursor:"pointer",color:b.paid?C.green:C.border,padding:0,display:"flex",flexShrink:0}}>{b.paid?<CheckCircle2 size={22}/>:<Circle size={22}/>}</button>
+              <button onClick={()=>{setBills(p=>p.map(x=>{if(x.id!==b.id)return x;const wasPaid=x.paid;const nowPaid=!wasPaid;const bamt=parseFloat(x.amount)||0;if(nowPaid&&!wasPaid&&adjustChecking)bamt&&adjustChecking(-bamt);else if(!nowPaid&&wasPaid&&adjustChecking)bamt&&adjustChecking(bamt);if(nowPaid){setTimeout(()=>showToast&&showToast("✓ Paid — "+x.name),0);try{navigator.vibrate&&navigator.vibrate([30,10,30]);}catch{}}if(nowPaid&&x.recurring&&x.recurring!=="One-time"){return{...x,paid:false,dueDate:(()=>{const d=new Date((x.dueDate||todayStr())+"T00:00:00");if(x.recurring==="Weekly"){d.setDate(d.getDate()+7);}else if(x.recurring==="Bi-weekly"){d.setDate(d.getDate()+14);}else if(x.recurring==="Quarterly"){d.setMonth(d.getMonth()+3);}else if(x.recurring==="Annual"){d.setFullYear(d.getFullYear()+1);}else{d.setMonth(d.getMonth()+1);}return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})(),paidDate:todayStr()};}return{...x,paid:nowPaid};}));}} style={{background:"none",border:"none",cursor:"pointer",color:b.paid?C.green:C.border,padding:0,display:"flex",flexShrink:0}}>{b.paid?<CheckCircle2 size={22}/>:<Circle size={22}/>}</button>
               <div style={{flex:1}}>
                 <div style={{fontSize:14,fontWeight:600,color:b.paid?C.textLight:C.text,textDecoration:b.paid?"line-through":"none"}}>{b.name}</div>
                 <div style={{fontSize:12,marginTop:2,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -4059,7 +4059,7 @@ function AuthScreen({onAuth,onSkip}){
   );
 }
 
-function RecurringView({expenses,setExpenses,categories,showToast,appReady,recurrings,setRecurrings}){
+function RecurringView({expenses,setExpenses,categories,showToast,appReady,recurrings,setRecurrings,adjustChecking}){
   const[showAdd,setShowAdd]=useState(false);
   const[form,setForm]=useState({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});
   const[formErr,setFormErr]=useState("");
@@ -4084,6 +4084,8 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
       return r;
     });
     if(newExps.length){
+      const tot=newExps.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+      if(adjustChecking&&tot)adjustChecking(-tot);
       setExpenses(p=>[...p,...newExps]);
       if(showToast){
         if(newExps.length===1)showToast("🔄 Auto-logged: "+newExps[0].name);
@@ -6049,6 +6051,12 @@ function AppInner(){
   const om=(t,d={})=>{setModal(t);setForm(d);setFormError("");};
   const cl=()=>{setModal(null);setForm({});setFormError("");};
   const ff=(k,v)=>{setFormError("");setForm(p=>({...p,[k]:v}));}
+  /** Positive delta increases checking (e.g. refund); negative decreases (spend, bill paid). */
+  const adjustChecking=useCallback((delta)=>{
+    const d=parseFloat(delta)||0;
+    if(d===0)return;
+    setAccounts(p=>{const cur=parseFloat(p.checking||0);const next=cur+d;return{...p,checking:String(Math.round(next*100)/100)};});
+  },[]);
 
   // ── THE FIX: submit function ──────────────────────────────────────────────
   function submit(){
@@ -6060,7 +6068,7 @@ function AppInner(){
       const now60=Date.now()-60000;
       const isDupe=expenses.some(e=>e.name?.toLowerCase()===form.name.toLowerCase()&&parseFloat(e.amount)===amt&&e.id>now60);
       if(isDupe&&!form.forceAdd){ff("forceAdd",true);setFormError("Already logged just now — tap Save again to add anyway.");return;}
-      setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:String(amt),category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[],owner:form.owner||"shared"}]);try{const mc=window._merchantCats||{};mc[form.name.toLowerCase().trim()]=form.category||"Misc";window._merchantCats=mc;ss("fv6:merchantCats",mc);}catch{}
+      setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:String(amt),category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[],owner:form.owner||"shared"}]);adjustChecking(-amt);try{const mc=window._merchantCats||{};mc[form.name.toLowerCase().trim()]=form.category||"Misc";window._merchantCats=mc;ss("fv6:merchantCats",mc);}catch{}
       showToast("✓ "+form.name+" — "+fmt(amt));try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
     }else if(modal==="bill"){
@@ -6718,7 +6726,7 @@ function AppInner(){
                   {l:"💳 Add Debt",a:()=>om("debt")},
                   {l:"🎯 Add Goal",a:()=>navTo("savings")},
                   {l:"💰 Paycheck Plan",a:()=>navTo("paycheck")},
-                  ...urgentPayBills.map(b=>({l:"✓ Pay "+b.name,a:()=>setBills(p=>p.map(x=>x.id===b.id?{...x,paid:true}:x))})),
+                  ...urgentPayBills.map(b=>({l:"✓ Pay "+b.name,a:()=>{const ba=parseFloat(b.amount)||0;if(ba)adjustChecking(-ba);setBills(p=>p.map(x=>x.id===b.id?{...x,paid:true}:x));}})),
                 ];
                 return chips.map((c,i)=>(
                   <div key={i} onClick={c.a} style={{flexShrink:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:99,padding:"6px 12px",fontSize:11,fontWeight:600,color:C.textMid,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 1px 2px rgba(10,22,40,.06)"}}>
@@ -6728,10 +6736,10 @@ function AppInner(){
               })()}
             </div>
           </div>
-          <div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals}/></div></div>}
+          <div style={{flex:1,minHeight:0}}><ChatView categories={categories} expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} trades={trades} tradingAccount={tradingAccount} budgetGoals={budgetGoals} setExpenses={setExpenses} setBills={setBills} setDebts={setDebts} setSGoals={setSGoals} setAccounts={setAccounts} setIncome={setIncome} setTrades={setTrades} setBGoals={setBGoals} adjustChecking={adjustChecking}/></div></div>}
         {tab==="categories"&&<CategoriesView categories={categories} setCategories={setCats} expenses={expenses} setExpenses={setExpenses} showToast={showToast}/>}
-        {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast} showUndoToast={showUndoToast} household={household}/>}
-        {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast} showUndoToast={showUndoToast} household={household} requestNotifPermission={requestNotifPermission}/>}
+        {tab==="spend"&&<SpendingView expenses={expenses} setExpenses={setExpenses} budgetGoals={budgetGoals} setBGoals={setBGoals} categories={categories} setEditItem={setEditItem} onAdd={()=>om("expense")} showToast={showToast} showUndoToast={showUndoToast} household={household} adjustChecking={adjustChecking}/>}
+        {tab==="bills"&&<BillsView bills={bills} setBills={setBills} setEditItem={setEditItem} onAdd={()=>om("bill")} showToast={showToast} showUndoToast={showUndoToast} household={household} requestNotifPermission={requestNotifPermission} adjustChecking={adjustChecking}/>}
         {tab==="more"&&!isMoreTab&&(
           <div className="fu">
             {/* Account pill at top of More */}
@@ -6883,7 +6891,7 @@ function AppInner(){
 
         {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setModal={setModal} setEditItem={setEditItem} showToast={showToast} extraPayDebt={extraPayDebt} setExtraPayDebt={setExtraPayDebt}/>}
         {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} accounts={accounts} accountRates={accountRates} setAccountRates={setAccountRates} showToast={showToast}/>}
-        {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready} recurrings={recurrings} setRecurrings={setRecurrings}/>}
+        {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready} recurrings={recurrings} setRecurrings={setRecurrings} adjustChecking={adjustChecking}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
         {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals}/>}
         {tab==="health"&&<HealthScoreView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} tradingAccount={tradingAccount} onNavigate={navTo}/>}
@@ -7054,7 +7062,7 @@ function AppInner(){
           </div>
         </div>
       )}
-      {editItem&&editItem.type==="expense"&&<EditModal item={editItem} categories={categories} household={household} onSave={u=>{setExpenses(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Expense updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Expense",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setExpenses(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
+      {editItem&&editItem.type==="expense"&&<EditModal item={editItem} categories={categories} household={household} onSave={u=>{const oldA=parseFloat(editItem.data.amount)||0;const newA=parseFloat(u.amount)||0;adjustChecking(oldA-newA);setExpenses(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Expense updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Expense",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{adjustChecking(parseFloat(editItem.data.amount)||0);setExpenses(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} onSave={u=>{setBills(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Bill updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setBills(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="debt"&&<EditModal item={editItem} categories={categories} onSave={u=>{setDebts(p=>p.map(x=>x.id===editItem.data.id?{...x,...u}:x));showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setDebts(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {modal==="quickactions"&&(()=>{
