@@ -351,6 +351,33 @@ function FS({label,options,...p}){
   );
 }
 
+/** Shared UI for `accounts.cashAccounts` — used on Accounts & Income and Settings → Money Setup */
+function CashAccountsBlock({accounts,setAccounts,showToast,variant="settings",onOpenSettings}){
+  const hint=variant==="settings"
+    ?"Optional: one row per real account. If you list more than one checking or more than one savings, you pick which account when logging expenses — or set defaults below."
+    :"Add each real bank account here. The totals in Checking / Savings cards above still count toward net worth; these rows split expenses when you have more than one of the same type.";
+  const titleMt=variant==="settings"?14:18;
+  return(
+    <>
+      <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:titleMt}}>Multiple checking & savings</div>
+      <div style={{fontSize:11,color:C.textLight,marginBottom:10,lineHeight:1.45}}>{hint}</div>
+      {variant==="accounts"&&onOpenSettings&&<div style={{fontSize:11,color:C.accent,marginBottom:10,lineHeight:1.45}}>💡 To set which account is pre-selected for new expenses, use <button type="button" onClick={onOpenSettings} style={{background:"none",border:"none",padding:0,cursor:"pointer",color:C.accent,fontWeight:700,textDecoration:"underline"}}>Settings → Money Setup → Defaults</button>.</div>}
+      {(accounts.cashAccounts||[]).map((row,idx)=>(
+        <div key={row.id||idx} style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:8,alignItems:"center"}}>
+          <input placeholder="Account name" value={row.name||""} onChange={e=>setAccounts(p=>{const ca=[...(p.cashAccounts||[])];ca[idx]={...ca[idx],name:e.target.value};return{...p,cashAccounts:ca};})} style={{flex:1,minWidth:140,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none"}}/>
+          <select value={row.kind||"checking"} onChange={e=>setAccounts(p=>{const ca=[...(p.cashAccounts||[])];ca[idx]={...ca[idx],kind:e.target.value};return{...p,cashAccounts:ca};})} style={{background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text}}>
+            <option value="checking">Checking</option>
+            <option value="savings">Savings</option>
+          </select>
+          <input type="number" placeholder="Bal" value={row.balance||""} onChange={e=>setAccounts(p=>{const ca=[...(p.cashAccounts||[])];ca[idx]={...ca[idx],balance:e.target.value};return{...p,cashAccounts:ca};})} onBlur={e=>{if(e.target.value)showToast&&showToast("✓ Balance saved");}} style={{width:110,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:14,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right"}}/>
+          <button type="button" className="ba" onClick={()=>setAccounts(p=>{const ca=[...(p.cashAccounts||[])];ca.splice(idx,1);return{...p,cashAccounts:ca};})} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,fontSize:12,color:C.textMid,cursor:"pointer"}}>Remove</button>
+        </div>
+      ))}
+      <button type="button" className="ba" onClick={()=>setAccounts(p=>({...p,cashAccounts:[...(p.cashAccounts||[]),{id:Date.now(),name:"",kind:"checking",balance:""}]}))} style={{marginBottom:variant==="accounts"?16:12,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,color:C.accent,cursor:"pointer"}}>+ Add checking / savings account</button>
+    </>
+  );
+}
+
 function Modal({title,icon:Icon,onClose,onSubmit,submitLabel="Save",accent=C.accent,children,wide,error}){
   return(
     <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(10,22,40,.5)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",animation:"fadeIn .2s ease"}}
@@ -3307,20 +3334,7 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
           <input type="number" placeholder={a.ph} value={accounts[a.k]||""} onChange={e=>setAccounts(p=>({...p,[a.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast&&showToast("✓ Balance saved");}} style={{width:120,background:C.surfaceAlt,border:`1.5px solid ${accounts[a.k]?C.accent:C.border}`,borderRadius:10,padding:"8px 10px",fontSize:14,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right",transition:"border-color .15s"}}/>
         </div>
       ))}
-      <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:14}}>Extra checking & savings</div>
-      <div style={{fontSize:11,color:C.textLight,marginBottom:10,lineHeight:1.45}}>Optional: one row per real account. If you list more than one checking or more than one savings, you pick which account when logging expenses — or set defaults below.</div>
-      {(accounts.cashAccounts||[]).map((row,idx)=>(
-        <div key={row.id||idx} style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:8,alignItems:"center"}}>
-          <input placeholder="Account name" value={row.name||""} onChange={e=>setAccounts(p=>{const ca=[...(p.cashAccounts||[])];ca[idx]={...ca[idx],name:e.target.value};return{...p,cashAccounts:ca};})} style={{flex:1,minWidth:140,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none"}}/>
-          <select value={row.kind||"checking"} onChange={e=>setAccounts(p=>{const ca=[...(p.cashAccounts||[])];ca[idx]={...ca[idx],kind:e.target.value};return{...p,cashAccounts:ca};})} style={{background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text}}>
-            <option value="checking">Checking</option>
-            <option value="savings">Savings</option>
-          </select>
-          <input type="number" placeholder="Bal" value={row.balance||""} onChange={e=>setAccounts(p=>{const ca=[...(p.cashAccounts||[])];ca[idx]={...ca[idx],balance:e.target.value};return{...p,cashAccounts:ca};})} onBlur={e=>{if(e.target.value)showToast&&showToast("✓ Balance saved");}} style={{width:110,background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:14,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right"}}/>
-          <button type="button" className="ba" onClick={()=>setAccounts(p=>{const ca=[...(p.cashAccounts||[])];ca.splice(idx,1);return{...p,cashAccounts:ca};})} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,fontSize:12,color:C.textMid,cursor:"pointer"}}>Remove</button>
-        </div>
-      ))}
-      <button type="button" className="ba" onClick={()=>setAccounts(p=>({...p,cashAccounts:[...(p.cashAccounts||[]),{id:Date.now(),name:"",kind:"checking",balance:""}]}))} style={{marginBottom:12,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,color:C.accent,cursor:"pointer"}}>+ Add checking / savings account</button>
+      <CashAccountsBlock accounts={accounts} setAccounts={setAccounts} showToast={showToast} variant="settings"/>
       <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:4}}>Defaults</div>
       <div style={{fontSize:11,color:C.textLight,marginBottom:8,lineHeight:1.45}}>Used for new expenses and bills (you can override per entry). <strong>Track only</strong> logs categories without moving balances — good for imports already reflected in your bank balance.</div>
       <FS label="Default: new expenses" options={PAID_FROM_OPTIONS.map(k=>({value:k,label:PAID_FROM_FS_LABELS[k]}))} value={normalizePaidFrom(settings.defaultExpensePaidFrom)} onChange={e=>setSettings(p=>({...p,defaultExpensePaidFrom:e.target.value}))}/>
@@ -7028,6 +7042,7 @@ function AppInner(){
                 </div>
               ))}
             </div>
+            <CashAccountsBlock accounts={accounts} setAccounts={setAccounts} showToast={showToast} variant="accounts" onOpenSettings={()=>navTo("settings")}/>
             {/* HYSA opportunity tip */}
             {(()=>{
               const liq=totalCheckingBalance(accounts)+totalSavingsBalance(accounts)+(parseFloat(accounts.cushion||0));
