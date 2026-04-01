@@ -5278,8 +5278,8 @@ function AppInner(){
   function goBack(){setTabHistory(h=>{if(!h.length)return h;const p=h[h.length-1];setTabRaw(p);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));return h.slice(0,-1);});}
   const canGoBack=tabHistory.length>0;
   const _startupParams=useRef((()=>{try{const sp=new URLSearchParams(window.location.search);return{action:sp.get("action"),tab:sp.get("tab")};}catch{return{};}})());
-  /** When returning from another app/tab, always pull cloud after debounce — avoids missing other devices' updates. */
-  const visibilitySyncTimerRef=useRef(null);
+  /** Throttle pulls when app becomes visible (visibility/pageshow can fire in bursts on mobile). */
+  const lastVisibilityPullRef=useRef(0);
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
   const[pwResetMode,setPwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
@@ -5327,11 +5327,18 @@ function AppInner(){
 
   // Auto-sync when user returns to the app (tab focus, phone unlock, etc.)
   useEffect(()=>{
+    function pullIfDue(){
+      if(!authSession)return;
+      const now=Date.now();
+      if(now-lastVisibilityPullRef.current<700)return;
+      lastVisibilityPullRef.current=now;
+      try{localStorage.setItem("fv_last_sync",String(now));}catch{}
+      void loadFromSupabase(authSession);
+    }
     function onFocus(){
       if(!authSession)return;
       const lastSync=parseInt(localStorage.getItem("fv_last_sync")||"0");
       const now=Date.now();
-      // Throttle duplicate pulls from focus alone (visibility handler does the main pull).
       if(now-lastSync>8000){
         try{localStorage.setItem("fv_last_sync",String(now));}catch{}
         loadFromSupabase(authSession);
@@ -5342,14 +5349,7 @@ function AppInner(){
       if(document.hidden){
         bgTimestamp=Date.now();
       } else {
-        if(authSession){
-          if(visibilitySyncTimerRef.current)clearTimeout(visibilitySyncTimerRef.current);
-          visibilitySyncTimerRef.current=setTimeout(()=>{
-            visibilitySyncTimerRef.current=null;
-            try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
-            loadFromSupabase(authSession);
-          },280);
-        }
+        pullIfDue();
         setTabRaw(t=>["home","bills","spending","debt","chat"].includes(t)?t:"home");
         if(bgTimestamp>0&&Date.now()-bgTimestamp>2*60*1000){
           setPinEnabled(pe=>{if(pe){setLocked(true);}return pe;});
@@ -5357,12 +5357,18 @@ function AppInner(){
         bgTimestamp=0;
       }
     }
+    /** BFCache restore (back/forward) — extra pull; normal opens rely on visibilitychange */
+    function onPageShow(e){
+      if(!authSession||!e.persisted)return;
+      pullIfDue();
+    }
     window.addEventListener("focus",onFocus);
     document.addEventListener("visibilitychange",onVis);
+    window.addEventListener("pageshow",onPageShow);
     return()=>{
       window.removeEventListener("focus",onFocus);
       document.removeEventListener("visibilitychange",onVis);
-      if(visibilitySyncTimerRef.current)clearTimeout(visibilitySyncTimerRef.current);
+      window.removeEventListener("pageshow",onPageShow);
     };
   },[authSession]);
 
