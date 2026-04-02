@@ -190,6 +190,54 @@ function totalSavingsBalance(accounts){
   if(list.length===0)return parseFloat(accounts.savings||0);
   return list.reduce((s,a)=>s+(parseFloat(a.balance)||0),0);
 }
+/** Safe-to-spend: checking + pro-rated other income − bills before next pay − projected checking burn − envelope reserve − $200 buffer. Shared by Home dashboard + AI Log header. */
+function computeSafeToSpend(accounts,income,bills,expenses,budgetGoals,now=new Date()){
+  const payFreq=income.payFrequency||"Biweekly";
+  const payPeriodDays=payFreq==="Weekly"?7:payFreq==="Biweekly"?14:payFreq==="Twice Monthly"?15:30;
+  const _now=now;
+  const _tod=_now.getDate();
+  const nextPayDate=(()=>{
+    if(income.lastPayDate){
+      const last=new Date(income.lastPayDate+"T00:00:00");
+      const next=new Date(last);
+      let safety=0;
+      while(next<=_now&&safety<60){
+        if(payFreq==="Weekly")next.setDate(next.getDate()+7);
+        else if(payFreq==="Twice Monthly"){if(next.getDate()<15)next.setDate(15);else next.setMonth(next.getMonth()+1,1);}
+        else if(payFreq==="Monthly")next.setMonth(next.getMonth()+1);
+        else next.setDate(next.getDate()+14);
+        safety++;
+      }
+      return next;
+    }
+    if(payFreq==="Twice Monthly"){return _tod<15?new Date(_now.getFullYear(),_now.getMonth(),15):new Date(_now.getFullYear(),_now.getMonth()+1,1);}
+    if(payFreq==="Monthly"){return new Date(_now.getFullYear(),_now.getMonth()+1,1);}
+    const d=new Date(_now);d.setDate(_now.getDate()+payPeriodDays);return d;
+  })();
+  const nextPayStr=nextPayDate.getFullYear()+"-"+String(nextPayDate.getMonth()+1).padStart(2,"0")+"-"+String(nextPayDate.getDate()).padStart(2,"0");
+  const daysUntilNextPay=Math.max(1,Math.ceil((nextPayDate-_now)/86400000));
+  const billsBeforeNextPayAmt=bills.reduce((s,b)=>{if(b.paid)return s;const d=(b.dueDate||"");return d&&d<=nextPayStr?s+(parseFloat(b.amount)||0):s;},0);
+  const envelopeMs=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
+  const thisMonthExpChecking=sumMtdCheckingSpend(expenses,envelopeMs);
+  const dom=_now.getDate();
+  const burnRateChecking=dom>0?thisMonthExpChecking/dom:0;
+  const projectedUntilPay=burnRateChecking*daysUntilNextPay;
+  const envelopeReserve=(budgetGoals||[]).reduce((s,g)=>{
+    const limit=parseFloat(g.limit||0);if(!limit)return s;
+    const spentCat=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(envelopeMs)).reduce((a,e)=>a+(parseFloat(e.amount)||0),0);
+    const remaining=Math.max(0,limit-spentCat);
+    const dayFraction=Math.min(1,daysUntilNextPay/30);
+    return s+(remaining*dayFraction);
+  },0);
+  const otherMonthly=(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const otherBeforeNextPay=otherMonthly*(daysUntilNextPay/30);
+  const checkingBalance=totalCheckingBalance(accounts);
+  const sts=Math.max(0,checkingBalance+otherBeforeNextPay-billsBeforeNextPayAmt-projectedUntilPay-envelopeReserve-200);
+  return{
+    sts,checkingBalance,billsBeforeNextPayAmt,projectedUntilPay,envelopeReserve,otherBeforeNextPay,otherMonthly,
+    daysUntilNextPay,nextPayDate,nextPayStr,burnRateChecking,thisMonthExpChecking,envelopeMonthKey:envelopeMs,payFreq,payPeriodDays,
+  };
+}
 function pickDefaultBankAccountId(paidFrom,accounts,settings){
   const pf=normalizePaidFrom(paidFrom);
   if(pf==="checking"){
@@ -851,31 +899,18 @@ Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · grocerie
   const chPick=cashAccountsByKind(accounts,"checking");
   const svPick=cashAccountsByKind(accounts,"savings");
   const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
-  const ck=totalCheckingBalance(accounts);
   const ccOwed=parseFloat(accounts.credit_card||0);
-  // Use real pay-frequency-aware safe-to-spend
-  const chatPayFreq=income.payFrequency||"Biweekly";
-  const chatPayDays=chatPayFreq==="Weekly"?7:chatPayFreq==="Biweekly"?14:chatPayFreq==="Twice Monthly"?15:30;
-  const chatNow=new Date();const chatTod=chatNow.getDate();
-  const chatNextPay=(()=>{
-    if(income.lastPayDate){const last=new Date(income.lastPayDate+"T00:00:00");const next=new Date(last);let safety=0;while(next<=chatNow&&safety<60){if(chatPayFreq==="Weekly")next.setDate(next.getDate()+7);else if(chatPayFreq==="Twice Monthly"){if(next.getDate()<15)next.setDate(15);else next.setMonth(next.getMonth()+1,1);}else if(chatPayFreq==="Monthly")next.setMonth(next.getMonth()+1);else next.setDate(next.getDate()+14);safety++;}return next;}
-    if(chatPayFreq==="Twice Monthly"){return chatTod<15?new Date(chatNow.getFullYear(),chatNow.getMonth(),15):new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}
-    if(chatPayFreq==="Monthly"){return new Date(chatNow.getFullYear(),chatNow.getMonth()+1,1);}
-    const d=new Date(chatNow);d.setDate(chatNow.getDate()+chatPayDays);return d;
-  })();
-  const chatNextPayStr=chatNextPay.getFullYear()+"-"+String(chatNextPay.getMonth()+1).padStart(2,"0")+"-"+String(chatNextPay.getDate()).padStart(2,"0");
-  const bs=bills.reduce((s,b)=>{if(b.paid)return s;const d=b.dueDate||"";return d&&d<=chatNextPayStr?s+(parseFloat(b.amount)||0):s;},0);
-  const _chatMs=chatNow.getFullYear()+"-"+String(chatNow.getMonth()+1).padStart(2,"0");
+  const chatNow=new Date();
+  const safeToSpendChat=computeSafeToSpend(accounts,income,bills,expenses,budgetGoals||[],chatNow);
+  const ck=safeToSpendChat.checkingBalance;
+  const sts=safeToSpendChat.sts;
+  const bs=safeToSpendChat.billsBeforeNextPayAmt;
+  const chatNextPay=safeToSpendChat.nextPayDate;
+  const chatPayFreq=safeToSpendChat.payFreq;
+  const burn=safeToSpendChat.burnRateChecking;
+  const _chatMs=safeToSpendChat.envelopeMonthKey;
   const _chatSplit=sumMtdByPaidFrom(expenses,_chatMs);
   const _chatMtd=_chatSplit.checking+_chatSplit.credit+_chatSplit.savings+_chatSplit.none;
-  const _mtdCk=_chatSplit.checking;
-  const burn=dayOfMonth()>0?_mtdCk/dayOfMonth():0;
-  const chatProjected=burn*Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
-  const chatOtherMonthly=(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
-  const _chatDaysUntilPay=Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
-  const chatOtherProRated=chatOtherMonthly*(_chatDaysUntilPay/30);
-  const _chatEnvReserve=(budgetGoals||[]).reduce((s,g)=>{const lim=parseFloat(g.limit||0);if(!lim)return s;const spent=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(_chatMs)).reduce((a,e)=>a+(parseFloat(e.amount)||0),0);return s+Math.max(0,lim-spent)*(Math.min(1,_chatDaysUntilPay/30));},0);
-  const sts=Math.max(0,ck+chatOtherProRated-bs-chatProjected-_chatEnvReserve-200);
   // Pre-compute reusable values for handleQ
   const _thisMs=_chatMs;
   const _thisExp=expenses.filter(e=>e.date?.startsWith(_thisMs));
@@ -6074,7 +6109,6 @@ function AppInner(){
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const totalDebt=useMemo(()=>debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0)+parseFloat(accounts.credit_card||0),[debts,accounts.credit_card]);
   const thisMonthExp=useMemo(()=>{const n=new Date();const ms=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");return expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);},[expenses]);
-  const thisMonthExpChecking=useMemo(()=>{const n=new Date();const ms=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");return sumMtdCheckingSpend(expenses,ms);},[expenses]);
   const cashflow=totalIncome-thisMonthExp;
   const netWorth=totalAssets-totalDebt;
   // Net Worth milestone checker — fire when assets cross thresholds
@@ -6098,58 +6132,16 @@ function AppInner(){
   const dueSoon=useMemo(()=>bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=7),[bills]);
   const billsSoonAmt=useMemo(()=>dueSoon.reduce((s,b)=>s+(parseFloat(b.amount)||0),0),[dueSoon]);
   const burnRate=dayOfMonth()>0?thisMonthExp/dayOfMonth():0;
-  const burnRateChecking=dayOfMonth()>0?thisMonthExpChecking/dayOfMonth():0;
   const projected=burnRate*daysInMonth();
-  // Pay frequency helpers — all plain computed values, no hooks needed
-  const payFreq=income.payFrequency||"Biweekly";
-  const payPeriodDays=payFreq==="Weekly"?7:payFreq==="Biweekly"?14:payFreq==="Twice Monthly"?15:30;
+  const stsCalc=computeSafeToSpend(accounts,income,bills,expenses,budgetGoals);
+  const sts=stsCalc.sts;
+  const nextPayDate=stsCalc.nextPayDate;
+  const nextPayStr=stsCalc.nextPayStr;
+  const payFreq=stsCalc.payFreq;
+  const payPeriodDays=stsCalc.payPeriodDays;
+  const burnRateChecking=stsCalc.burnRateChecking;
   // payPerPeriod = what lands in your account each paycheck (primary only)  
   const payPerPeriod=parseFloat(income.primary||0);
-  // Next payday — computed once, stable string for comparisons
-  const _now=new Date();const _tod=_now.getDate();
-  const nextPayDate=(()=>{
-    // If user set their last payday date, compute next from that anchor
-    if(income.lastPayDate){
-      const last=new Date(income.lastPayDate+"T00:00:00");
-      const next=new Date(last);
-      // Advance by pay period until we're past today
-      let safety=0;
-      while(next<=_now&&safety<60){
-        if(payFreq==="Weekly")next.setDate(next.getDate()+7);
-        else if(payFreq==="Twice Monthly"){if(next.getDate()<15)next.setDate(15);else next.setMonth(next.getMonth()+1,1);}
-        else if(payFreq==="Monthly")next.setMonth(next.getMonth()+1);
-        else next.setDate(next.getDate()+14);
-        safety++;
-      }
-      return next;
-    }
-    if(payFreq==="Twice Monthly"){return _tod<15?new Date(_now.getFullYear(),_now.getMonth(),15):new Date(_now.getFullYear(),_now.getMonth()+1,1);}
-    if(payFreq==="Monthly"){return new Date(_now.getFullYear(),_now.getMonth()+1,1);}
-    const d=new Date(_now);d.setDate(_now.getDate()+payPeriodDays);return d;
-  })();
-  const nextPayStr=nextPayDate.getFullYear()+"-"+String(nextPayDate.getMonth()+1).padStart(2,"0")+"-"+String(nextPayDate.getDate()).padStart(2,"0");
-  const daysUntilNextPay=Math.max(1,Math.ceil((nextPayDate-_now)/86400000));
-  // Bills due before next paycheck — simple filter, no hook
-  const billsBeforeNextPayAmt=bills.reduce((s,b)=>{if(b.paid)return s;const d=(b.dueDate||"");return d&&d<=nextPayStr?s+(parseFloat(b.amount)||0):s;},0);
-  // Projected spend until next pay
-  const projectedUntilPay=burnRateChecking*daysUntilNextPay;
-  // Budget envelopes: reduce sts by the portion of variable budgets remaining until next pay
-  // e.g. if haircut budget is $150/mo and next pay is 7 days away, reserve $35 (7/30 * $150)
-  const _envelopeMs=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
-  const envelopeReserve=budgetGoals.reduce((s,g)=>{
-    const limit=parseFloat(g.limit||0);if(!limit)return s;
-    // Subtract what's already been spent in this category this month
-    const spentCat=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(_envelopeMs)).reduce((a,e)=>a+(parseFloat(e.amount)||0),0);
-    const remaining=Math.max(0,limit-spentCat);
-    // Reserve the proportion of remaining budget that covers days until next pay
-    const dayFraction=Math.min(1,daysUntilNextPay/30);
-    return s+(remaining*dayFraction);
-  },0);
-  // Other income arriving before next pay (rental, dividends, freelance pro-rated to pay period)
-  const otherMonthly=(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
-  const otherBeforeNextPay=otherMonthly*(daysUntilNextPay/30);
-  // Real safe to spend: what's in checking + other income arriving soon, minus obligations
-  const sts=Math.max(0,(totalCheckingBalance(accounts))+otherBeforeNextPay-billsBeforeNextPayAmt-projectedUntilPay-envelopeReserve-200);
   const liquid=(totalSavingsBalance(accounts))+(parseFloat(accounts.cushion||0));
   const savingsRate=totalIncome>0?Math.min(100,Math.max(0,cashflow/totalIncome*100)):0;
   const spendingStreak=useMemo(()=>{
