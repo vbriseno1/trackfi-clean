@@ -871,7 +871,7 @@ Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · grocerie
   const _mtdCk=_chatSplit.checking;
   const burn=dayOfMonth()>0?_mtdCk/dayOfMonth():0;
   const chatProjected=burn*Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
-  const chatOtherMonthly=(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+  const chatOtherMonthly=(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const _chatDaysUntilPay=Math.max(1,Math.ceil((chatNextPay-chatNow)/86400000));
   const chatOtherProRated=chatOtherMonthly*(_chatDaysUntilPay/30);
   const _chatEnvReserve=(budgetGoals||[]).reduce((s,g)=>{const lim=parseFloat(g.limit||0);if(!lim)return s;const spent=expenses.filter(e=>e.category===g.category&&(e.date||"").startsWith(_chatMs)).reduce((a,e)=>a+(parseFloat(e.amount)||0),0);return s+Math.max(0,lim-spent)*(Math.min(1,_chatDaysUntilPay/30));},0);
@@ -5537,7 +5537,6 @@ function AppInner(){
         bgTimestamp=Date.now();
       } else {
         pullIfDue();
-        setTabRaw(t=>["home","bills","spending","debt","chat"].includes(t)?t:"home");
         if(bgTimestamp>0&&Date.now()-bgTimestamp>2*60*1000){
           setPinEnabled(pe=>{if(pe){setLocked(true);}return pe;});
         }
