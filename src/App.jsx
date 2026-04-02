@@ -401,7 +401,11 @@ function CashAccountsBlock({accounts,setAccounts,showToast,variant="settings",on
           <button type="button" className="ba" onClick={()=>setAccounts(p=>{const ca=[...(p.cashAccounts||[])];ca.splice(idx,1);return{...p,cashAccounts:ca};})} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,fontSize:12,color:C.textMid,cursor:"pointer"}}>Remove</button>
         </div>
       ))}
-      <button type="button" className="ba" onClick={()=>setAccounts(p=>({...p,cashAccounts:[...(p.cashAccounts||[]),{id:Date.now(),name:"",kind:"checking",balance:""}]}))} style={{marginBottom:variant==="accounts"?16:12,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,color:C.accent,cursor:"pointer"}}>+ Add checking / savings account</button>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center",marginBottom:8}}>
+        <button type="button" className="ba" onClick={()=>setAccounts(p=>({...p,cashAccounts:[...(p.cashAccounts||[]),{id:Date.now(),name:"",kind:"checking",balance:""}]}))} style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,color:C.accent,cursor:"pointer"}}>+ Add checking / savings account</button>
+        <button type="button" className="ba" onClick={()=>showToast&&showToast("✓ Accounts saved")} style={{background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,color:C.text,cursor:"pointer"}}>Save</button>
+      </div>
+      <div style={{fontSize:10,color:C.textFaint,marginBottom:variant==="accounts"?16:12,lineHeight:1.4}}>Edits save as you type; tap Save for confirmation.</div>
     </>
   );
 }
@@ -6318,16 +6322,18 @@ function AppInner(){
       const _cards=cardDebtsList(debts);
       const _ch=cashAccountsByKind(accounts,"checking");
       const _sv=cashAccountsByKind(accounts,"savings");
+      const _bankCh=String(form.bankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");
+      const _bankSv=String(form.bankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");
       if(_pf==="credit"){
         if(!_cards.length){setFormError("Add a credit card under Debt (type: Credit card), then pick which card.");return;}
         if(!form.creditDebtId){setFormError("Select which credit card.");return;}
       }
-      if(_pf==="checking"&&_ch.length>=2&&!form.bankAccountId){setFormError("Select which checking account.");return;}
-      if(_pf==="savings"&&_sv.length>=2&&!form.bankAccountId){setFormError("Select which savings account.");return;}
+      if(_pf==="checking"&&_ch.length>=2&&!_bankCh){setFormError("Select which checking account.");return;}
+      if(_pf==="savings"&&_sv.length>=2&&!_bankSv){setFormError("Select which savings account.");return;}
       const _cid=_pf==="credit"?String(form.creditDebtId):"";
       let _bid="";
-      if(_pf==="checking"){if(_ch.length>=2)_bid=String(form.bankAccountId);else if(_ch.length===1)_bid=String(_ch[0].id);}
-      else if(_pf==="savings"){if(_sv.length>=2)_bid=String(form.bankAccountId);else if(_sv.length===1)_bid=String(_sv[0].id);}
+      if(_pf==="checking"){if(_ch.length>=2)_bid=_bankCh;else if(_ch.length===1)_bid=String(_ch[0].id);}
+      else if(_pf==="savings"){if(_sv.length>=2)_bid=_bankSv;else if(_sv.length===1)_bid=String(_sv[0].id);}
       setExpenses(p=>[...p,{id:Date.now(),name:form.name,amount:String(amt),category:form.category||"Misc",date:form.date||todayStr(),notes:form.notes||"",tags:[],owner:form.owner||"shared",paidFrom:_pf,...(_cid?{creditDebtId:_cid}:{}),...(_bid?{bankAccountId:_bid}:{})}]);applySpend(_pf,amt,_cid||undefined,_bid||undefined);try{const mc=window._merchantCats||{};mc[form.name.toLowerCase().trim()]=form.category||"Misc";window._merchantCats=mc;ss("fv6:merchantCats",mc);}catch{}
       showToast("✓ "+form.name+" — "+fmt(amt));try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
@@ -6340,17 +6346,19 @@ function AppInner(){
       const _bc=cardDebtsList(debts);
       const _bch=cashAccountsByKind(accounts,"checking");
       const _bsv=cashAccountsByKind(accounts,"savings");
+      const _bbankCh=String(form.bankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");
+      const _bbankSv=String(form.bankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");
       if(_bpf==="credit"){
         if(!_bc.length){setFormError("Add a credit card under Debt (type: Credit card), then pick which card.");return;}
         if(_bc.length>=2&&!form.creditDebtId){setFormError("Select which credit card pays this bill.");return;}
       }
-      if(_bpf==="checking"&&_bch.length>=2&&!form.bankAccountId){setFormError("Select which checking account.");return;}
-      if(_bpf==="savings"&&_bsv.length>=2&&!form.bankAccountId){setFormError("Select which savings account.");return;}
+      if(_bpf==="checking"&&_bch.length>=2&&!_bbankCh){setFormError("Select which checking account.");return;}
+      if(_bpf==="savings"&&_bsv.length>=2&&!_bbankSv){setFormError("Select which savings account.");return;}
       let _bcid="";
       if(_bpf==="credit"){_bcid=_bc.length===1?String(_bc[0].id):String(form.creditDebtId||"");}
       let _bbid="";
-      if(_bpf==="checking"){if(_bch.length>=2)_bbid=String(form.bankAccountId);else if(_bch.length===1)_bbid=String(_bch[0].id);}
-      else if(_bpf==="savings"){if(_bsv.length>=2)_bbid=String(form.bankAccountId);else if(_bsv.length===1)_bbid=String(_bsv[0].id);}
+      if(_bpf==="checking"){if(_bch.length>=2)_bbid=_bbankCh;else if(_bch.length===1)_bbid=String(_bch[0].id);}
+      else if(_bpf==="savings"){if(_bsv.length>=2)_bbid=_bbankSv;else if(_bsv.length===1)_bbid=String(_bsv[0].id);}
       setBills(p=>[...p,{id:Date.now(),name:form.name,amount:String(billAmt),dueDate:form.dueDate||todayStr(),recurring:form.recurring||"Monthly",paid:false,autoPay:false,paidBy:form.paidBy||"me",paidFrom:_bpf,...(_bcid?{creditDebtId:_bcid}:{}),...(_bbid?{bankAccountId:_bbid}:{})}]);
       showToast("✓ "+form.name+" bill added");try{navigator.vibrate&&navigator.vibrate(40);}catch{}
       cl();
