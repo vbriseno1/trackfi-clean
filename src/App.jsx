@@ -5755,7 +5755,8 @@ function AppInner(){
     }
   }
   function handleSkip(){try{localStorage.setItem("fv_skip_auth","1");}catch{}setSkipAuth(true);}
-  function resetUserState(){
+  function resetUserState(opts={}){
+    const clearOnboarding=opts.clearOnboarding!==false;
     setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);
     setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setRecurrings([]);
     setSettlements([]);setHhBudgets([]);setNwGoal(null);setSubDismissed([]);
@@ -5769,8 +5770,11 @@ function AppInner(){
     setDashConfig(DEF_DASHCONFIG);
     setCalColors(DEF_CALCOLORS(C));
     setAccountRates({checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0});
-    setOnboarded(false);setIsDemoMode(false);setDarkMode(false);setHidden(false);
-    try{localStorage.removeItem("fv_onboarded");}catch{}
+    setIsDemoMode(false);setDarkMode(false);setHidden(false);
+    if(clearOnboarding){
+      setOnboarded(false);
+      try{localStorage.removeItem("fv_onboarded");}catch{}
+    }
     cloudLoadedRef.current=false;
   }
   async function handleSignOut(){
@@ -6434,9 +6438,14 @@ function AppInner(){
   useEffect(()=>{window._loadDemo=loadDemo;return()=>{delete window._loadDemo;};},[]);
 
   async function exitDemo(){
-    resetUserState();
+    const uid=authSession?.user?.id;
+    // Signed-in: don't clear onboarding — resetUserState() would drop fv_onboarded and show the wizard again.
+    resetUserState({clearOnboarding:!uid});
     setAppName("Trackfi");
-    setIsDemoMode(false);try{localStorage.removeItem("fv_demo");}catch{}
+    try{localStorage.removeItem("fv_demo");}catch{}
+    if(uid&&authSession){
+      await loadFromSupabase(authSession);
+    }
     navTo("home");
   }
 
