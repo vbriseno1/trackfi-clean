@@ -5805,6 +5805,8 @@ function AppInner(){
   // True once we've successfully loaded at least one round of cloud data.
   // Prevents empty boot state from overwriting real Supabase data on other devices.
   const cloudLoadedRef=useRef(false);
+  /** Prevents the monthly recap modal from opening twice in one session / before localStorage writes. */
+  const monthlyRecapShownRef=useRef(null);
   /** Increments on each loadFromSupabase call so stale responses never overwrite newer state. */
   const remotePullGenRef=useRef(0);
   const[accounts,setAccounts]=useState(DEF_ACCOUNTS);
@@ -6075,31 +6077,36 @@ function AppInner(){
     }catch(e){}
     return"granted";
   };
-  // Monthly summary: show on first open of new month if last month had data
+  // Monthly recap: once per calendar month per user; gate before setState so rapid re-runs / sync flicker can't reopen it
   useEffect(()=>{
     if(!ready)return;
     const now_ms=new Date();
     const curMonth=now_ms.getFullYear()+"-"+String(now_ms.getMonth()+1).padStart(2,"0");
-    const seenKey="fv6:lastSummaryMonth";
+    const uid=_getUserId()||"local";
+    const seenKey="fv_monthly_recap_"+uid;
     try{
+      if(monthlyRecapShownRef.current===curMonth)return;
       const seen=localStorage.getItem(seenKey);
-      if(seen===curMonth)return;// Already shown this month
+      if(seen===curMonth)return;
       const lastMs=new Date(now_ms.getFullYear(),now_ms.getMonth()-1,1);
       const lastKey=lastMs.getFullYear()+"-"+String(lastMs.getMonth()+1).padStart(2,"0");
       const lastExp=expenses.filter(e=>e.date?.startsWith(lastKey));
-      if(lastExp.length<2)return;// Not enough data
+      if(lastExp.length<2)return;
       const lastTotal=lastExp.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
       const prevMs=new Date(now_ms.getFullYear(),now_ms.getMonth()-2,1);
       const prevKey=prevMs.getFullYear()+"-"+String(prevMs.getMonth()+1).padStart(2,"0");
       const prevTotal=expenses.filter(e=>e.date?.startsWith(prevKey)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
       const catMap=lastExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
       const topCat=Object.entries(catMap).sort((a,b)=>b[1]-a[1])[0];
-      const lastInc=(parseFloat(income.primary||0)*paycheckMultiplier)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+      const pf=income.payFrequency||"Biweekly";
+      const pm=pf==="Weekly"?(52/12):pf==="Twice Monthly"?2:pf==="Monthly"?1:(26/12);
+      const lastInc=(parseFloat(income.primary||0)*pm)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
       const savRate=lastInc>0?Math.max(0,(lastInc-lastTotal)/lastInc*100):0;
+      monthlyRecapShownRef.current=curMonth;
+      try{localStorage.setItem(seenKey,curMonth);}catch{}
       setMonthlySummary({month:FULL_MOS[lastMs.getMonth()],total:lastTotal,prevTotal,topCat:topCat?.[0],topAmt:topCat?.[1],txnCount:lastExp.length,savRate});
-      localStorage.setItem(seenKey,curMonth);
     }catch(e){}
-  },[ready,expenses,income]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[ready,expenses,income]);
   useEffect(()=>{if(ready)ss("fv6:calColors",calColors);},[calColors,ready]);
   useEffect(()=>{if(ready)ss("fv6:taccount",tradingAccount);},[tradingAccount,ready]);
   useEffect(()=>{try{localStorage.setItem("fv_dark",darkMode?"1":"0");}catch{};document.body.classList.toggle("dark-mode",!!darkMode);},[darkMode]);
@@ -6127,11 +6134,19 @@ function AppInner(){
     prevNWRef.current=nw;
     if(nw<=prev)return;// only celebrate growth
     const crossed=NW_MILESTONES.filter(m=>prev<m&&nw>=m);
+    if(!crossed.length)return;
+    const uid=_getUserId()||"local";
+    const key="fv_nw_celebrated_"+uid;
+    let celebrated=new Set();
+    try{celebrated=new Set(JSON.parse(localStorage.getItem(key)||"[]"));}catch{}
     crossed.forEach(m=>{
+      if(celebrated.has(m))return;
+      celebrated.add(m);
       const label=m>=1000000?"$1M 🦄":m>=500000?"$500K":"$"+m.toLocaleString();
       if(settings.notifMilestones!==false){pushNotif("nw_"+m,"🎉 Net Worth Milestone!","You crossed "+label+" net worth — incredible!","success");showToast("🎉 "+label+" net worth milestone!","success");launchConfetti();}
+      try{localStorage.setItem(key,JSON.stringify([...celebrated]));}catch{}
     });
-  },[totalAssets,totalDebt,ready]);
+  },[totalAssets,totalDebt,ready,settings.notifMilestones]);
 
   const overdue=useMemo(()=>bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0),[bills]);
   const dueSoon=useMemo(()=>bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=7),[bills]);
@@ -6194,7 +6209,7 @@ function AppInner(){
     });
     const _now=new Date();const _ms=_now.getFullYear()+'-'+String(_now.getMonth()+1).padStart(2,'0');
     if(settings.notifBudget!==false&&Array.isArray(budgetGoals)&&Array.isArray(expenses))budgetGoals.forEach(g=>{if(!g.category||!g.limit)return;const spent=expenses.filter(e=>e.category===g.category&&e.date?.startsWith(_ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);const pct=parseFloat(g.limit)>0?(spent/parseFloat(g.limit)*100):0;if(pct>=100)pushNotif('bud_over_'+g.id,'🔴 Over budget: '+g.category,'Spent '+fmt(spent)+' of '+fmt(g.limit),'danger');else if(pct>=80)pushNotif('bud_warn_'+g.id,'🟡 '+Math.round(pct)+'% used: '+g.category,fmt(Math.max(0,parseFloat(g.limit)-spent))+' remaining','warning');});
-    if(settings.notifSavings!==false&&Array.isArray(savingsGoals))savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100){const alreadyNotified=notifs.some(n=>n.id==='goal_done_'+g.id);pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');if(!alreadyNotified)launchConfetti();}else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
+    if(settings.notifSavings!==false&&Array.isArray(savingsGoals))savingsGoals.forEach(g=>{const pct=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;if(pct>=100){pushNotif('goal_done_'+g.id,'🎉 Goal complete: '+g.name,'You hit your '+fmt(g.target)+' target!','success');const gCk="fv_goal_confetti_"+(_getUserId()||"local")+"_"+g.id;if(!localStorage.getItem(gCk)){try{localStorage.setItem(gCk,"1");}catch{}launchConfetti();}}else if(pct>=75)pushNotif('goal_75_'+g.id,'🎯 75% reached: '+g.name,fmt(Math.max(0,parseFloat(g.target)-parseFloat(g.saved||0)))+' left to go','info');});
     // Payday reminder: notify when payday is tomorrow or today
     const payReminderKey="payremind_"+nextPayStr;
     const daysUntil=Math.ceil((nextPayDate-new Date())/86400000);
@@ -6457,12 +6472,12 @@ function AppInner(){
       ||Math.abs(parseFloat(accounts.cushion||0))>0.009;
     const signedIn=!!authSession?.user?.id;
     setConfirm({
-      title:hasLocalData?"Load sample data?":"Load demo data",
-      message:hasLocalData
-        ?(signedIn
-          ?"This replaces what you see in the app with a year of sample expenses, bills, accounts, and goals. While signed in, updates can sync to your cloud backup — export a JSON backup in Settings → Data first if you want to keep your current data."
-          :"This replaces your current expenses, bills, accounts, and goals with sample data. Export a backup in Settings → Data first if you need to keep anything.")
-        :"Load a year of realistic sample data to explore every feature?",
+      title:"Try sample data?",
+      message:!hasLocalData
+        ?"Load a full year of sample expenses, bills, and goals so you can tap through every feature. Nothing changes until you confirm."
+        :signedIn
+          ?"You’ll explore with realistic demo numbers on this device. When you’re done, tap Exit demo on Home and your own synced data comes back. Export JSON under Settings → Data only if you want a snapshot of your data as it is right now."
+          :"Loads sample data locally so you can explore. If you already entered real numbers here, export a backup under Settings → Data first, then import it later if you need to.",
       onConfirm:()=>{loadDemo();setConfirm(null);},
       danger:false
     });
