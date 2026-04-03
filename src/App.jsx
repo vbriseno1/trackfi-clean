@@ -3331,7 +3331,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   </div>);
 }
 
-function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo,backupExport,backupImport}){
+function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo,backupExport,backupImport,onLoadDemo}){
   const[nm,setNm]=useState(appName||"");
   const[showPIN,setShowPIN]=useState(false);
   const[showEmailChange,setShowEmailChange]=useState(false);
@@ -3469,6 +3469,7 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
         <button className="ba" onClick={backupExport} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export JSON</button>
         <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)setPendingImport(f);e.target.value="";}}/></label>
       </div>
+      {onLoadDemo&&<button type="button" className="ba" onClick={onLoadDemo} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:10,padding:"11px 0",color:C.amber,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}>🧪 Load sample (demo) data</button>}
       {pendingImport&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
         <div style={{fontSize:13,fontWeight:700,color:C.amber,marginBottom:4}}>⚠️ Replace all current data with "{pendingImport.name}"?</div>
         <div style={{fontSize:12,color:C.textMid,marginBottom:10}}>Replaces expenses, bills, debts, goals, household, recurring, notifications, charts, and settings. Export a backup first if needed.</div>
@@ -6448,6 +6449,24 @@ function AppInner(){
     }
     navTo("home");
   }
+  /** Opens confirm dialog; safe for users who already have synced expenses (CTA is not limited to empty state). */
+  function requestLoadDemo(){
+    const hasLocalData=expenses.length>0||bills.length>0||debts.length>0||trades.length>0
+      ||savingsGoals.length>0||budgetGoals.length>0
+      ||Math.abs(parseFloat(accounts.checking||0))>0.009||Math.abs(parseFloat(accounts.savings||0))>0.009
+      ||Math.abs(parseFloat(accounts.cushion||0))>0.009;
+    const signedIn=!!authSession?.user?.id;
+    setConfirm({
+      title:hasLocalData?"Load sample data?":"Load demo data",
+      message:hasLocalData
+        ?(signedIn
+          ?"This replaces what you see in the app with a year of sample expenses, bills, accounts, and goals. While signed in, updates can sync to your cloud backup — export a JSON backup in Settings → Data first if you want to keep your current data."
+          :"This replaces your current expenses, bills, accounts, and goals with sample data. Export a backup in Settings → Data first if you need to keep anything.")
+        :"Load a year of realistic sample data to explore every feature?",
+      onConfirm:()=>{loadDemo();setConfirm(null);},
+      danger:false
+    });
+  }
 
   function backupExport(){
     const d={
@@ -6608,10 +6627,19 @@ function AppInner(){
                       style={{background:"none",border:"none",cursor:"pointer",color:C.amber,padding:"0 2px",fontSize:10,lineHeight:1,opacity:.6,marginLeft:2}}>×</button>
                   </div>
                 )}
-                <button onClick={()=>setConfirm({title:"Exit Demo",message:"Clear all demo data and start fresh.",onConfirm:()=>{exitDemo();setConfirm(null);},danger:false})}
+                <button onClick={()=>setConfirm({title:"Exit Demo",message:authSession?.user?.id?"Exit demo and restore your synced data from the cloud.":"Clear all demo data and start fresh.",onConfirm:()=>{exitDemo();setConfirm(null);},danger:false})}
                   style={{background:"rgba(217,119,6,.12)",border:"1px solid rgba(217,119,6,.2)",borderRadius:99,padding:"2px 10px",color:C.amber,fontWeight:700,fontSize:9,cursor:"pointer",lineHeight:1.6}}>
                   Exit Demo
                 </button>
+              </div>
+            )}
+            {!isDemoMode&&(
+              <div style={{marginBottom:14,textAlign:"center"}}>
+                <button type="button" className="ba" onClick={requestLoadDemo}
+                  style={{background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:99,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,color:C.textMid}}>
+                  🧪 Try sample data
+                </button>
+                <div style={{fontSize:10,color:C.textFaint,marginTop:6,lineHeight:1.4}}>Explore the app with a full year of demo transactions</div>
               </div>
             )}
 
@@ -6980,15 +7008,7 @@ function AppInner(){
               </div>
             </div>}
 
-            {/* ── 7. DEMO HINT (no data yet) ──────────────────────── */}
-            {expenses.length===0&&<div style={{textAlign:"center",marginBottom:10}}>
-              <button className="ba" onClick={()=>setConfirm({title:"Load Demo Data",message:"Load a year of realistic sample data to explore every feature?",onConfirm:()=>{loadDemo();setConfirm(null);},danger:false})}
-                style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.textFaint,fontWeight:500,padding:"4px 8px",textDecoration:"underline",textDecorationColor:"rgba(0,0,0,.15)"}}>
-                or try demo data →
-              </button>
-            </div>}
-
-            {/* ── 8. RECENT TRANSACTIONS ────────────────────────── */}
+            {/* ── 7. RECENT TRANSACTIONS ────────────────────────── */}
             {dashConfig.showRecent!==false&&expenses.length>0&&<div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Recent</div>
@@ -7209,7 +7229,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast} settlements={settlements} setSettlements={setSettlements} hhBudgets={hhBudgets} setHhBudgets={setHhBudgets}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast} onLoadDemo={isDemoMode?undefined:requestLoadDemo}/>}
 
         {tab==="notifs"&&(
           <div className="fu">
