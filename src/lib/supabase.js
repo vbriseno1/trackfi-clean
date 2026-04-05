@@ -129,6 +129,7 @@ export function getUserId() {
 export const _getUserId = getUserId;
 
 const _ssBuffer = {};
+let _lsQuotaWarned = false;
 
 async function _flushKey(uid, bare, v) {
   try {
@@ -168,7 +169,17 @@ export async function ss(k, v) {
   const bare = k.replace("fv6:", "");
   try {
     localStorage.setItem(getScope() + bare, JSON.stringify(v));
-  } catch {}
+  } catch (e) {
+    if (
+      !_lsQuotaWarned &&
+      (e?.name === "QuotaExceededError" || e?.code === 22 || /quota/i.test(String(e?.message || "")))
+    ) {
+      _lsQuotaWarned = true;
+      console.warn(
+        "[Trackfi] Storage is full — data may not save offline. Export JSON in Settings → Data, then free space or reset old data."
+      );
+    }
+  }
   if (uid) {
     if (_ssBuffer[bare]?.timer) clearTimeout(_ssBuffer[bare].timer);
     _ssBuffer[bare] = {
