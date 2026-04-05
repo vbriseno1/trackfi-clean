@@ -6,8 +6,6 @@ import { LayoutDashboard, Wallet, CalendarClock, CreditCard, Target, PiggyBank,
   ChevronRight, BarChart2, Menu, Calendar, Eye, EyeOff, HelpCircle, Search,
   Zap, FileText, Download, Clock, Moon, Sun, Lock,
   Filter, Database, RefreshCw, ChevronDown } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, BarChart, Bar, Cell, PieChart, Pie, ComposedChart } from "recharts";
 import {
   SUPA_URL,
   SUPA_KEY,
@@ -314,6 +312,63 @@ const DEF_HOUSEHOLD={enabled:false,name:"My Finances",members:[{id:"me",name:"Me
 const DEF_CALCOLORS=(C)=>({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
 const DEF_DASHCONFIG={showIncomeChart:true,showMetrics:true,showAccounts:true,showForecast:true,showBills:true,showRecent:true,showTradeCard:true};
 
+/** Single path for Supabase `user_data` rows → React state (pull + boot). Validates arrays to avoid corrupt snapshots. */
+function applyUserDataSnapshot(map,H,{bootDefaults=false}={}){
+  const setArr=(key,setter)=>{
+    if(map[key]===undefined)return;
+    const v=map[key];
+    if(v===null||v===undefined)return;
+    if(!Array.isArray(v))return;
+    setter(v);
+  };
+  const apply=(key,setter,merge=false)=>{
+    if(map[key]===undefined)return;
+    if(key==="nwGoal"){
+      const nv=map[key];
+      setter(nv===null||nv===undefined?null:nv);
+      return;
+    }
+    const v=map[key];
+    if(v===null||v===undefined)return;
+    if(merge)setter(prev=>({...prev,...v}));
+    else setter(v);
+  };
+  try{setArr("expenses",H.setExpenses);}catch{}
+  try{setArr("bills",H.setBills);}catch{}
+  try{setArr("debts",H.setDebts);}catch{}
+  try{setArr("bgoals",H.setBGoals);}catch{}
+  try{setArr("sgoals",H.setSGoals);}catch{}
+  try{setArr("cats",H.setCats);}catch{}
+  try{setArr("trades",H.setTrades);}catch{}
+  try{setArr("balHist",H.setBalHist);}catch{}
+  try{setArr("shifts",H.setShifts);}catch{}
+  try{setArr("recurrings",H.setRecurrings);}catch{}
+  try{setArr("notifs",H.setNotifs);}catch{}
+  try{setArr("settlements",H.setSettlements);}catch{}
+  try{setArr("hhBudgets",H.setHhBudgets);}catch{}
+  try{apply("nwGoal",H.setNwGoal);}catch{}
+  try{setArr("subDismissed",H.setSubDismissed);}catch{}
+  if(bootDefaults){
+    try{if(map.accounts!=null&&typeof map.accounts==="object")H.setAccounts(prev=>({...DEF_ACCOUNTS,...prev,...map.accounts}));}catch{}
+    try{if(map.income!=null&&typeof map.income==="object")H.setIncome(prev=>({...DEF_INCOME,...prev,...map.income}));}catch{}
+  }else{
+    try{apply("accounts",H.setAccounts,true);}catch{}
+    try{apply("income",H.setIncome,true);}catch{}
+  }
+  try{apply("settings",H.setSettings,true);}catch{}
+  try{apply("calColors",H.setCalColors,true);}catch{}
+  try{apply("dashConfig",H.setDashConfig,true);}catch{}
+  try{apply("household",H.setHousehold,true);}catch{}
+  try{if(map.taccount!==undefined&&map.taccount!==null)H.setTradingAccount(map.taccount);}catch{}
+  try{if(map.appName)H.setAppName(map.appName);}catch{}
+  try{if(map.greetName)H.setGreetName(map.greetName);}catch{}
+  try{if(map.prof)H.setProfCategory(map.prof);}catch{}
+  try{if(map.profSub)H.setProfSub(map.profSub);}catch{}
+  try{if(map.merchantCats)window._merchantCats=map.merchantCats;}catch{}
+  try{if(map.accountRates&&typeof map.accountRates==="object")H.setAccountRates(prev=>({...prev,...map.accountRates}));}catch{}
+  try{if(map.onboarded){localStorage.setItem("fv_onboarded","1");H.setOnboarded(true);}}catch{}
+}
+
 const notifSupported  = () => typeof window!=="undefined"&&"Notification" in window;
 const notifPermission = () => notifSupported()?window.Notification.permission:"denied";
 async function hashPIN(p) {
@@ -388,14 +443,23 @@ textarea:focus-visible,input:focus-visible,select:focus-visible{outline:2px soli
 button:focus-visible,a:focus-visible,.ba:focus-visible{outline:2px solid #6366F1;outline-offset:2px}
 input,select,textarea{-webkit-appearance:none;max-width:100%}
 button{-webkit-tap-highlight-color:transparent}
+.fv-rechart-skel{background:rgba(100,116,139,.1);animation:pulse 1.4s ease-in-out infinite}
 @media (prefers-reduced-motion: reduce){
   .fu,.si,.pop{animation:none!important}
   .ba,.card,.swipe-content,.blurred,.unblurred{transition:none!important}
   .ba:active{transform:none!important;opacity:1!important}
   .card:active{transform:none!important}
   .hl:hover{transform:none!important}
+  .fv-rechart-skel{animation:none!important}
 }
 `;
+
+const RechartsContext=React.createContext(null);
+function RechartsReady({minHeight,render}){
+  const R=React.useContext(RechartsContext);
+  if(!R)return <div className="fv-rechart-skel" style={{minHeight,width:"100%",borderRadius:12}} aria-busy="true"/>;
+  return render(R);
+}
 
 class ErrorBoundary extends React.Component {
   constructor(p){super(p);this.state={err:null};}
@@ -1381,7 +1445,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
           </div>);
         })}
       </div>}
-      {catSorted.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><BarChart data={catSorted.slice(0,5).map(([name,amt])=>({name,amt}))} layout="vertical" barSize={16} margin={{left:4,right:50}}><XAxis type="number" hide/><YAxis type="category" dataKey="name" tick={{fontSize:11,fill:C.textMid}} width={80} axisLine={false} tickLine={false}/><Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</Bar></BarChart></ResponsiveContainer></div>}
+      {catSorted.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><RechartsReady minHeight={Math.min(catSorted.length*38+20,220)} render={R=>(<R.ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><R.BarChart data={catSorted.slice(0,5).map(([name,amt])=>({name,amt}))} layout="vertical" barSize={16} margin={{left:4,right:50}}><R.XAxis type="number" hide/><R.YAxis type="category" dataKey="name" tick={{fontSize:11,fill:C.textMid}} width={80} axisLine={false} tickLine={false}/><R.Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><R.Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><R.Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</R.Bar></R.BarChart></R.ResponsiveContainer>)}/></div>}
 
       {/* 6-month spending trend */}
       {(()=>{
@@ -1408,14 +1472,16 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
                 </div>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={months} margin={{left:-10,right:4,top:4,bottom:0}} barSize={28}>
-                <XAxis dataKey="month" tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
-                <Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/>
-                <Bar dataKey="total" radius={[5,5,0,0]}>{months.map((m,i)=><Cell key={i} fill={m.isCurrent?C.accent:m.total>avgSpend?C.red+"88":C.accent+"55"}/>)}</Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <RechartsReady minHeight={160} render={R=>(
+            <R.ResponsiveContainer width="100%" height={160}>
+              <R.BarChart data={months} margin={{left:-10,right:4,top:4,bottom:0}} barSize={28}>
+                <R.XAxis dataKey="month" tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/>
+                <R.YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
+                <R.Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/>
+                <R.Bar dataKey="total" radius={[5,5,0,0]}>{months.map((m,i)=><R.Cell key={i} fill={m.isCurrent?C.accent:m.total>avgSpend?C.red+"88":C.accent+"55"}/>)}</R.Bar>
+              </R.BarChart>
+            </R.ResponsiveContainer>
+            )}/>
             <div style={{display:"flex",gap:12,marginTop:8,fontSize:11,color:C.textLight,justifyContent:"center"}}>
               <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.accent}}/> Current</div>
               <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.red+"88"}}/> Above average</div>
@@ -1695,19 +1761,21 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwG
       </div>
       {chartData.length>1?<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"18px 4px 12px",marginBottom:14}}>
         <div style={{paddingLeft:16,marginBottom:12,display:"flex",gap:16}}>{[[C.green,"Net Worth"],[C.accent,"Assets"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:3,background:c}}/><span style={{fontSize:12,color:C.textLight}}>{l}</span></div>)}</div>
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={chartData} margin={{left:8,right:8,top:4,bottom:0}}>
+        <RechartsReady minHeight={200} render={R=>(
+        <R.ResponsiveContainer width="100%" height={200}>
+          <R.AreaChart data={chartData} margin={{left:8,right:8,top:4,bottom:0}}>
             <defs>
               <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green} stopOpacity={.2}/><stop offset="95%" stopColor={C.green} stopOpacity={0}/></linearGradient>
               <linearGradient id="aGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.accent} stopOpacity={.15}/><stop offset="95%" stopColor={C.accent} stopOpacity={0}/></linearGradient>
             </defs>
-            <XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/>
-            <YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={50}/>
-            <Tooltip content={<TT/>}/>
-            <Area type="monotone" dataKey="assets" name="Assets" stroke={C.accent} strokeWidth={2} fill="url(#aGrad)" dot={false}/>
-            <Area type="monotone" dataKey="netWorth" name="Net Worth" stroke={C.green} strokeWidth={2.5} fill="url(#nwGrad)" dot={false}/>
-          </AreaChart>
-        </ResponsiveContainer>
+            <R.XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/>
+            <R.YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={50}/>
+            <R.Tooltip content={<TT/>}/>
+            <R.Area type="monotone" dataKey="assets" name="Assets" stroke={C.accent} strokeWidth={2} fill="url(#aGrad)" dot={false}/>
+            <R.Area type="monotone" dataKey="netWorth" name="Net Worth" stroke={C.green} strokeWidth={2.5} fill="url(#nwGrad)" dot={false}/>
+          </R.AreaChart>
+        </R.ResponsiveContainer>
+        )}/>
       </div>:<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:32,textAlign:"center",marginBottom:14}}><div style={{fontSize:32,marginBottom:10}}>📈</div><div style={{fontSize:14,fontWeight:600,color:C.text,marginBottom:4}}>Building your trend</div><div style={{fontSize:13,color:C.textLight}}>Update your balances regularly to see your net worth grow over time.</div></div>}
       {debts.length>0&&(()=>{
         // Liability vs asset breakdown stacked bar
@@ -2354,11 +2422,13 @@ function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,
           <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Debt Breakdown</div>
           <div style={{fontSize:12,color:C.textLight,marginBottom:12}}>Tap a slice to see details</div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <PieChart width={180} height={180}>
-              <Pie data={pieData} cx={85} cy={85} innerRadius={48} outerRadius={82} dataKey="value" labelLine={false} label={renderLabel} onClick={(entry)=>setSelectedDebt(selectedDebt?.debt?.id===entry.debt?.id?null:entry)}>
-                {pieData.map((entry,i)=>(<Cell key={i} fill={entry.color} stroke={selectedDebt?.debt?.id===entry.debt?.id?"#fff":"transparent"} strokeWidth={selectedDebt?.debt?.id===entry.debt?.id?3:0} style={{cursor:"pointer",opacity:selectedDebt&&selectedDebt.debt?.id!==entry.debt?.id?0.5:1}}/>))}
-              </Pie>
-            </PieChart>
+            <RechartsReady minHeight={180} render={R=>(
+            <R.PieChart width={180} height={180}>
+              <R.Pie data={pieData} cx={85} cy={85} innerRadius={48} outerRadius={82} dataKey="value" labelLine={false} label={renderLabel} onClick={(entry)=>setSelectedDebt(selectedDebt?.debt?.id===entry.debt?.id?null:entry)}>
+                {pieData.map((entry,i)=>(<R.Cell key={i} fill={entry.color} stroke={selectedDebt?.debt?.id===entry.debt?.id?"#fff":"transparent"} strokeWidth={selectedDebt?.debt?.id===entry.debt?.id?3:0} style={{cursor:"pointer",opacity:selectedDebt&&selectedDebt.debt?.id!==entry.debt?.id?0.5:1}}/>))}
+              </R.Pie>
+            </R.PieChart>
+            )}/>
             <div style={{flex:1,minWidth:0}}>
               {pieData.map((d,i)=>(
                 <div key={i} onClick={()=>setSelectedDebt(selectedDebt?.debt?.id===d.debt?.id?null:d)} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:10,marginBottom:3,cursor:"pointer",background:selectedDebt?.debt?.id===d.debt?.id?d.color+"18":"transparent",border:selectedDebt?.debt?.id===d.debt?.id?`1.5px solid ${d.color}33`:"1.5px solid transparent"}}>
@@ -2453,8 +2523,9 @@ function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,
                 return(
                   <div style={{marginBottom:16}}>
                     <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.6)",marginBottom:8}}>Payoff Timeline</div>
-                    <ResponsiveContainer width="100%" height={120}>
-                      <AreaChart data={chartData} margin={{left:-20,right:4,top:4,bottom:0}}>
+                    <RechartsReady minHeight={120} render={R=>(
+                    <R.ResponsiveContainer width="100%" height={120}>
+                      <R.AreaChart data={chartData} margin={{left:-20,right:4,top:4,bottom:0}}>
                         <defs>
                           <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#fca5a5" stopOpacity={.3}/>
@@ -2465,13 +2536,14 @@ function DebtView({debts,setDebts,setModal,setEditItem,showToast,extraPayDebt=0,
                             <stop offset="95%" stopColor={C.green} stopOpacity={0}/>
                           </linearGradient>
                         </defs>
-                        <XAxis dataKey="mo" tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v+"mo"}/>
-                        <YAxis tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
-                        <Tooltip formatter={(v,n)=>[fmt(v),n==="base"?"Min payments":"With extra"]} contentStyle={{background:C.navy,border:"1px solid rgba(255,255,255,.15)",borderRadius:10,fontSize:11}} labelFormatter={v=>v+"mo"}/>
-                        <Area type="monotone" dataKey="base" stroke="#fca5a5" strokeWidth={2} fill="url(#debtGrad)" dot={false} name="base"/>
-                        {withExtra&&<Area type="monotone" dataKey="extra" stroke={C.greenMid} strokeWidth={2} fill="url(#debtGradX)" dot={false} name="extra"/>}
-                      </AreaChart>
-                    </ResponsiveContainer>
+                        <R.XAxis dataKey="mo" tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v+"mo"}/>
+                        <R.YAxis tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
+                        <R.Tooltip formatter={(v,n)=>[fmt(v),n==="base"?"Min payments":"With extra"]} contentStyle={{background:C.navy,border:"1px solid rgba(255,255,255,.15)",borderRadius:10,fontSize:11}} labelFormatter={v=>v+"mo"}/>
+                        <R.Area type="monotone" dataKey="base" stroke="#fca5a5" strokeWidth={2} fill="url(#debtGrad)" dot={false} name="base"/>
+                        {withExtra&&<R.Area type="monotone" dataKey="extra" stroke={C.greenMid} strokeWidth={2} fill="url(#debtGradX)" dot={false} name="extra"/>}
+                      </R.AreaChart>
+                    </R.ResponsiveContainer>
+                    )}/>
                     {withExtra&&<div style={{display:"flex",gap:12,justifyContent:"center",marginTop:4}}>
                       <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"rgba(255,255,255,.5)"}}><div style={{width:12,height:2,background:"#fca5a5",borderRadius:1}}/> Min payments</div>
                       <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"rgba(255,255,255,.5)"}}><div style={{width:12,height:2,background:C.greenMid,borderRadius:1}}/> With extra</div>
@@ -2726,16 +2798,18 @@ function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAcc
           <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
             <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>12-Month Projection</div>
             <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>Where each goal lands if you contribute monthly</div>
-            <ResponsiveContainer width="100%" height={160}>
-              <LineChart data={chartData} margin={{left:-10,right:4,top:4,bottom:0}}>
-                <XAxis dataKey="month" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fill:C.textLight,fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={38}/>
-                <Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/>
+            <RechartsReady minHeight={160} render={R=>(
+            <R.ResponsiveContainer width="100%" height={160}>
+              <R.LineChart data={chartData} margin={{left:-10,right:4,top:4,bottom:0}}>
+                <R.XAxis dataKey="month" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/>
+                <R.YAxis tick={{fill:C.textLight,fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={38}/>
+                <R.Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/>
                 {goals.filter(g=>parseFloat(g.monthly||0)>0).map((g,i)=>(
-                  <Line key={g.id} type="monotone" dataKey={g.name} stroke={g.color||GOAL_COLORS[i%GOAL_COLORS.length]} strokeWidth={2.5} dot={false} strokeDasharray={i>0?"4 2":"none"}/>
+                  <R.Line key={g.id} type="monotone" dataKey={g.name} stroke={g.color||GOAL_COLORS[i%GOAL_COLORS.length]} strokeWidth={2.5} dot={false} strokeDasharray={i>0?"4 2":"none"}/>
                 ))}
-              </LineChart>
-            </ResponsiveContainer>
+              </R.LineChart>
+            </R.ResponsiveContainer>
+            )}/>
             <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>
               {goals.filter(g=>parseFloat(g.monthly||0)>0).map((g,i)=>{
                 const rem=Math.max(0,parseFloat(g.target||0)-parseFloat(g.saved||0));
@@ -3034,8 +3108,8 @@ function TradingView({trades,setTrades,account,setAccount,showToast}){
     </div>
     <div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.slate,marginBottom:10}}>Update Balances</div><div style={{display:"flex",gap:10,marginBottom:10}}><div style={{flex:1}}><div style={{fontSize:11,color:C.textLight,marginBottom:4}}>Total Deposited</div><input type="number" placeholder="0.00" value={account.deposit||""} onChange={e=>setAccount(p=>({...p,deposit:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ Deposit saved");}} style={{...iS(false),padding:"9px 12px",fontSize:13}}/></div><div style={{flex:1}}><div style={{fontSize:11,color:C.textLight,marginBottom:4}}>Current Balance</div><input type="number" placeholder="0.00" value={account.balance||""} onChange={e=>setAccount(p=>({...p,balance:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ Balance saved");}} style={{...iS(false),padding:"9px 12px",fontSize:13}}/></div></div><div style={{display:"flex",justifyContent:"center"}}><div style={{fontSize:11,color:C.green,fontWeight:600,display:"flex",alignItems:"center",gap:5}}><div style={{width:6,height:6,borderRadius:"50%",background:C.green}}/>Changes save automatically</div></div></div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>{[{l:"Win Rate",v:winRate+"%",c:parseFloat(winRate)>=50?C.green:C.red},{l:"Profit Factor",v:avgLoss>0?(avgWin/avgLoss).toFixed(2):"∞",c:C.accent},{l:"Avg Win",v:fmt(avgWin),c:C.green},{l:"Avg Loss",v:"-"+fmt(avgLoss),c:C.red}].map(s=><div key={s.l} style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:14}}><div style={{fontSize:11,fontWeight:600,color:C.slate,textTransform:"uppercase",letterSpacing:.4,marginBottom:4}}>{s.l}</div><div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:s.c}}>{s.v}</div></div>)}</div>
-    {chartData.length>0&&<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Monthly P&L</div><ResponsiveContainer width="100%" height={160}><BarChart data={chartData} margin={{left:-20,right:4,top:4,bottom:0}}><XAxis dataKey="month" tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/><YAxis tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/><Tooltip contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}} formatter={v=>[fmt(v),"P&L"]}/><Bar dataKey="pnl" radius={[6,6,0,0]}>{chartData.map((d,i)=><Cell key={i} fill={d.pnl>=0?C.green:C.red}/>)}</Bar></BarChart></ResponsiveContainer></div>}
-    {equityData.length>1&&<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Equity Curve</div><div style={{fontSize:12,color:C.textLight,marginBottom:14}}>Cumulative account value per trade</div><ResponsiveContainer width="100%" height={160}><AreaChart data={equityData} margin={{left:-20,right:4,top:4,bottom:0}}><defs><linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(account.deposit||0))?C.green:C.red} stopOpacity={.2}/><stop offset="95%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(account.deposit||0))?C.green:C.red} stopOpacity={0}/></linearGradient></defs><XAxis dataKey="i" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><Tooltip formatter={(v,n)=>n==="equity"?[fmt(v),"Account Value"]:[fmt(v),"Trade P&L"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Area type="monotone" dataKey="equity" name="equity" stroke={equityData[equityData.length-1]?.equity>=(parseFloat(account.deposit||0))?C.green:C.red} strokeWidth={2.5} fill="url(#eqGrad)" dot={false}/></AreaChart></ResponsiveContainer></div>}
+    {chartData.length>0&&<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Monthly P&L</div><RechartsReady minHeight={160} render={R=>(<R.ResponsiveContainer width="100%" height={160}><R.BarChart data={chartData} margin={{left:-20,right:4,top:4,bottom:0}}><R.XAxis dataKey="month" tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/><R.YAxis tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/><R.Tooltip contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}} formatter={v=>[fmt(v),"P&L"]}/><R.Bar dataKey="pnl" radius={[6,6,0,0]}>{chartData.map((d,i)=><R.Cell key={i} fill={d.pnl>=0?C.green:C.red}/>)}</R.Bar></R.BarChart></R.ResponsiveContainer>)}/></div>}
+    {equityData.length>1&&<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Equity Curve</div><div style={{fontSize:12,color:C.textLight,marginBottom:14}}>Cumulative account value per trade</div><RechartsReady minHeight={160} render={R=>(<R.ResponsiveContainer width="100%" height={160}><R.AreaChart data={equityData} margin={{left:-20,right:4,top:4,bottom:0}}><defs><linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(account.deposit||0))?C.green:C.red} stopOpacity={.2}/><stop offset="95%" stopColor={equityData[equityData.length-1]?.equity>=(parseFloat(account.deposit||0))?C.green:C.red} stopOpacity={0}/></linearGradient></defs><R.XAxis dataKey="i" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/><R.YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><R.Tooltip formatter={(v,n)=>n==="equity"?[fmt(v),"Account Value"]:[fmt(v),"Trade P&L"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><R.Area type="monotone" dataKey="equity" name="equity" stroke={equityData[equityData.length-1]?.equity>=(parseFloat(account.deposit||0))?C.green:C.red} strokeWidth={2.5} fill="url(#eqGrad)" dot={false}/></R.AreaChart></R.ResponsiveContainer>)}/></div>}
     <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:10}}>Trade Log</div>
     {trades.length===0&&<Empty text="No trades yet. Tap 'Log Trade' to start." icon={BarChart2}/>}
     {trades.map(t=>{const pnl=parseFloat(t.pnl)||0;return(<Row key={t.id} icon={pnl>=0?"📈":"📉"} title={t.symbol} sub={`${t.date} · ${t.side} · ${t.contracts} contract${t.contracts!=="1"?"s":""}${t.note?" · "+t.note:""}`} right={(pnl>=0?"+":"")+fmt(pnl)} rightColor={pnl>=0?C.green:C.red} rightSub={t.entry&&t.exit?t.entry+" - "+t.exit:""} onDelete={()=>{setTrades(p=>p.filter(x=>x.id!==t.id));showToast&&showToast("Trade removed","error");}} badge={pnl>=0?{label:"WIN",bg:C.greenBg,color:C.green}:{label:"LOSS",bg:C.redBg,color:C.red}}/>);})}
@@ -3155,7 +3229,7 @@ function ShiftView({shifts,setShifts,income,profCategory,profSub,showToast}){
     {shifts.slice(0,30).map(s=>{const mult=OT[s.type]||1;const col={Regular:C.accent,Overtime:C.amber,"Double Time":C.red,Night:C.purple,Weekend:C.green,Holiday:C.red}[s.type]||C.accent;return(<div key={s.id} className="rw" style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}><div style={{width:40,height:40,borderRadius:12,background:col+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Clock size={18} color={col}/></div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{s.type} {prof.shiftLabel}</div><div style={{fontSize:12,color:C.textLight,marginTop:2}}>{fmtDate(s.date)} · {s.hours}h @ ${s.rate}/hr{mult!==1&&<span style={{color:col,fontWeight:600}}> ×{mult}</span>}{s.note&&" · "+s.note}</div></div><div style={{textAlign:"right",flexShrink:0}}><div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.green}}>{fmt(s.gross)}</div><button className="db" onClick={()=>{setShifts(p=>p.filter(x=>x.id!==s.id));showToast&&showToast("Shift removed","error");}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:2,display:"flex",marginLeft:"auto",marginTop:4}}><Trash2 size={13}/></button></div></div>);})}
     {weeklyData.length>1&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 8px",marginBottom:14}}>
       <div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:10}}>Weekly Earnings</div>
-      <ResponsiveContainer width="100%" height={100}><BarChart data={weeklyData} barSize={24}><XAxis dataKey="label" tick={{fontSize:10,fill:C.textLight}} axisLine={false} tickLine={false}/><Tooltip formatter={v=>[fmt(v),"Gross"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><Bar dataKey="gross" fill={C.accent} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>
+      <RechartsReady minHeight={100} render={R=>(<R.ResponsiveContainer width="100%" height={100}><R.BarChart data={weeklyData} barSize={24}><R.XAxis dataKey="label" tick={{fontSize:10,fill:C.textLight}} axisLine={false} tickLine={false}/><R.Tooltip formatter={v=>[fmt(v),"Gross"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><R.Bar dataKey="gross" fill={C.accent} radius={[4,4,0,0]}/></R.BarChart></R.ResponsiveContainer>)}/>
     </div>}
     {showAdd&&<Modal title={`Log ${prof.shiftLabel}`} icon={Clock} onClose={()=>setShowAdd(false)} onSubmit={add} submitLabel={`Add ${prof.shiftLabel}`} accent={C.green}><FI label="Date" type="date" value={form.date} onChange={e=>ff("date",e.target.value)}/><FS label={`${prof.shiftLabel} Type`} options={Object.keys(OT)} value={form.type} onChange={e=>ff("type",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Hours Worked" type="number" placeholder="8" value={form.hours} onChange={e=>ff("hours",e.target.value)}/><FI half label="Hourly Rate ($)" type="number" placeholder={DEFAULT_RATE||"35.00"} value={form.rate} onChange={e=>ff("rate",e.target.value)}/></div>{form.hours&&form.rate&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:13,color:C.green,fontWeight:600}}>Gross pay: {fmt((parseFloat(form.hours)*parseFloat(form.rate)*(OT[form.type]||1)).toFixed(2))}</div>}<FI label="Note (optional)" placeholder={prof.notePlaceholder} value={form.note} onChange={e=>ff("note",e.target.value)}/></Modal>}
   </div>);
@@ -3219,9 +3293,9 @@ function TrendView({balHist,accounts,expenses,onNavigate}){
       </div>
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"20px 4px 8px",marginBottom:16}}>
         {!hasData&&<div style={{height:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",color:C.textLight,padding:20,textAlign:"center"}}><div style={{fontSize:32,marginBottom:10}}>📈</div><div style={{fontSize:14,fontWeight:600,marginBottom:4}}>Building your trend</div><div style={{fontSize:13}}>Update your balances regularly.</div></div>}
-        {hasData&&mode==="total"&&<ResponsiveContainer width="100%" height={200}><AreaChart data={chartData} margin={{left:8,right:8,top:4,bottom:0}}><defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={lineCol} stopOpacity={.2}/><stop offset="95%" stopColor={lineCol} stopOpacity={0}/></linearGradient></defs><XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><Tooltip formatter={(v)=>fmt(v)}/><Area type="monotone" dataKey="total" name="Balance" stroke={lineCol} strokeWidth={2.5} fill="url(#tg)" dot={false}/></AreaChart></ResponsiveContainer>}
-        {hasData&&mode==="breakdown"&&<ResponsiveContainer width="100%" height={200}><AreaChart data={chartData} margin={{left:8,right:8,top:4,bottom:0}}><XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><Tooltip formatter={(v)=>fmt(v)}/><Area type="monotone" dataKey="checking" name="Checking" stroke={C.navy} strokeWidth={2} fill="transparent"/><Area type="monotone" dataKey="savings" name="Savings" stroke={C.green} strokeWidth={2} fill="transparent"/><Area type="monotone" dataKey="cushion" name="Cushion" stroke={C.accent} strokeWidth={2} fill="transparent"/></AreaChart></ResponsiveContainer>}
-        {hasData&&mode==="spending"&&<ResponsiveContainer width="100%" height={200}><BarChart data={spendData} margin={{left:8,right:8,top:4,bottom:0}}><XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/><YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><Tooltip formatter={(v)=>fmt(v)}/><Bar dataKey="amount" name="Spent" fill={C.red} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>}
+        {hasData&&mode==="total"&&<RechartsReady minHeight={200} render={R=>(<R.ResponsiveContainer width="100%" height={200}><R.AreaChart data={chartData} margin={{left:8,right:8,top:4,bottom:0}}><defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={lineCol} stopOpacity={.2}/><stop offset="95%" stopColor={lineCol} stopOpacity={0}/></linearGradient></defs><R.XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/><R.YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><R.Tooltip formatter={(v)=>fmt(v)}/><R.Area type="monotone" dataKey="total" name="Balance" stroke={lineCol} strokeWidth={2.5} fill="url(#tg)" dot={false}/></R.AreaChart></R.ResponsiveContainer>)}/>}
+        {hasData&&mode==="breakdown"&&<RechartsReady minHeight={200} render={R=>(<R.ResponsiveContainer width="100%" height={200}><R.AreaChart data={chartData} margin={{left:8,right:8,top:4,bottom:0}}><R.XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/><R.YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><R.Tooltip formatter={(v)=>fmt(v)}/><R.Area type="monotone" dataKey="checking" name="Checking" stroke={C.navy} strokeWidth={2} fill="transparent"/><R.Area type="monotone" dataKey="savings" name="Savings" stroke={C.green} strokeWidth={2} fill="transparent"/><R.Area type="monotone" dataKey="cushion" name="Cushion" stroke={C.accent} strokeWidth={2} fill="transparent"/></R.AreaChart></R.ResponsiveContainer>)}/>}
+        {hasData&&mode==="spending"&&<RechartsReady minHeight={200} render={R=>(<R.ResponsiveContainer width="100%" height={200}><R.BarChart data={spendData} margin={{left:8,right:8,top:4,bottom:0}}><R.XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/><R.YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(1)+"k":v)} width={50}/><R.Tooltip formatter={(v)=>fmt(v)}/><R.Bar dataKey="amount" name="Spent" fill={C.red} radius={[4,4,0,0]}/></R.BarChart></R.ResponsiveContainer>)}/>}
       </div>
       {hasData&&(()=>{
         const avgBal=chartData.reduce((s,d)=>s+(d.total||0),0)/chartData.length;
@@ -3979,7 +4053,7 @@ function IncomeSpendingView({expenses,income,trades,bills=[]}){
         return(<div style={{background:C.surface,border:`1px solid ${C.borderLight}`,borderRadius:18,padding:18,marginBottom:14}}>
           <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Income Breakdown</div>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <PieChart width={120} height={120}><Pie data={sources.map(s=>({name:s.l,value:s.v}))} cx={55} cy={55} innerRadius={35} outerRadius={55} dataKey="value" paddingAngle={2}>{sources.map((s,i)=><Cell key={i} fill={s.c}/>)}</Pie></PieChart>
+            <RechartsReady minHeight={120} render={R=>(<R.PieChart width={120} height={120}><R.Pie data={sources.map(s=>({name:s.l,value:s.v}))} cx={55} cy={55} innerRadius={35} outerRadius={55} dataKey="value" paddingAngle={2}>{sources.map((s,i)=><R.Cell key={i} fill={s.c}/>)}</R.Pie></R.PieChart>)}/>
             <div style={{flex:1}}>{sources.map(s=>(<div key={s.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:8,height:8,borderRadius:"50%",background:s.c}}/><span style={{fontSize:12,color:C.textMid}}>{s.l}</span></div><div style={{textAlign:"right"}}><span style={{fontFamily:MF,fontWeight:700,fontSize:12,color:C.text}}>{fmt(s.v)}</span><span style={{fontSize:11,color:C.textFaint,marginLeft:4}}>{(s.v/total*100).toFixed(0)}%</span></div></div>))}</div>
           </div>
         </div>);
@@ -3993,18 +4067,20 @@ function IncomeSpendingView({expenses,income,trades,bills=[]}){
       </div>
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"20px 4px 12px",marginBottom:14}}>
         <div style={{display:"flex",gap:16,paddingLeft:16,marginBottom:12,flexWrap:"wrap"}}>{[[C.green,"Income"],[C.red,"Spending"],[C.accent,"Saved"],[C.teal,"Savings %"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:3,background:c}}/><span style={{fontSize:12,color:C.textLight}}>{l}</span></div>)}</div>
-        <ResponsiveContainer width="100%" height={220}>
-          <ComposedChart data={data.map(m=>({...m,savingsRate:m.income>0?Math.max(0,((m.income-m.spending)/m.income)*100):0}))} margin={{left:4,right:4,top:4,bottom:0}} barGap={3}>
-            <XAxis dataKey="month" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/>
-            <YAxis yAxisId="left" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
-            <YAxis yAxisId="right" orientation="right" tick={{fill:C.teal,fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v.toFixed(0)+"%"} width={32}/>
-            <Tooltip content={<TT/>}/>
-            <Bar yAxisId="left" dataKey="income" name="Income" fill={C.green} radius={[4,4,0,0]}/>
-            <Bar yAxisId="left" dataKey="spending" name="Spending" fill={C.red} radius={[4,4,0,0]}/>
-            <Bar yAxisId="left" dataKey="saved" name="Saved" fill={C.accent} radius={[4,4,0,0]}/>
-            <Line yAxisId="right" type="monotone" dataKey="savingsRate" name="Savings %" stroke={C.teal} strokeWidth={2.5} dot={{r:3,fill:C.teal}} activeDot={{r:5}}/>
-          </ComposedChart>
-        </ResponsiveContainer>
+        <RechartsReady minHeight={220} render={R=>(
+        <R.ResponsiveContainer width="100%" height={220}>
+          <R.ComposedChart data={data.map(m=>({...m,savingsRate:m.income>0?Math.max(0,((m.income-m.spending)/m.income)*100):0}))} margin={{left:4,right:4,top:4,bottom:0}} barGap={3}>
+            <R.XAxis dataKey="month" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/>
+            <R.YAxis yAxisId="left" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
+            <R.YAxis yAxisId="right" orientation="right" tick={{fill:C.teal,fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v.toFixed(0)+"%"} width={32}/>
+            <R.Tooltip content={<TT/>}/>
+            <R.Bar yAxisId="left" dataKey="income" name="Income" fill={C.green} radius={[4,4,0,0]}/>
+            <R.Bar yAxisId="left" dataKey="spending" name="Spending" fill={C.red} radius={[4,4,0,0]}/>
+            <R.Bar yAxisId="left" dataKey="saved" name="Saved" fill={C.accent} radius={[4,4,0,0]}/>
+            <R.Line yAxisId="right" type="monotone" dataKey="savingsRate" name="Savings %" stroke={C.teal} strokeWidth={2.5} dot={{r:3,fill:C.teal}} activeDot={{r:5}}/>
+          </R.ComposedChart>
+        </R.ResponsiveContainer>
+        )}/>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
         {data.map(m=>{const rate=m.income>0?Math.max(0,(m.income-m.spending)/m.income*100):0;return(<div key={m.month} style={{background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 14px",display:"flex",alignItems:"center",gap:12}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,width:32}}>{m.month}</div><div style={{flex:1}}><BarProg pct={m.income>0?m.spending/m.income*100:0} color={m.spending>m.income?C.red:C.green} h={5}/></div><div style={{textAlign:"right",minWidth:80}}><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(m.spending)}</div><div style={{fontSize:11,color:C.textLight}}>{rate.toFixed(0)}% saved</div></div></div>);})}
@@ -5578,6 +5654,8 @@ function AppInner(){
   function navTo(t){if(t===tab)return;setTabHistory(h=>[...h.slice(-19),tab]);setTabRaw(t);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));}
   function goBack(){setTabHistory(h=>{if(!h.length)return h;const p=h[h.length-1];setTabRaw(p);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));return h.slice(0,-1);});}
   const canGoBack=tabHistory.length>0;
+  const[rechartsMod,setRechartsMod]=useState(null);
+  useEffect(()=>{let c=false;import("recharts").then(m=>{if(!c)setRechartsMod(m);});return()=>{c=true;};},[]);
   const _startupParams=useRef((()=>{try{const sp=new URLSearchParams(window.location.search);return{action:sp.get("action"),tab:sp.get("tab")};}catch{return{};}})());
   /** Throttle pulls when app becomes visible (visibility/pageshow can fire in bursts on mobile). */
   const lastVisibilityPullRef=useRef(0);
@@ -5763,54 +5841,22 @@ function AppInner(){
     try {
       const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&select=key,value`);
       if (gen !== remotePullGenRef.current) return;
-      if (!res?.data || !Array.isArray(res.data)) return;
+      if (!res?.data || !Array.isArray(res.data)) {
+        if (navigator.onLine) setSyncRecoverableError(true);
+        return;
+      }
       // Drop any scheduled uploads from before this snapshot — they may target pre-pull state.
       cancelPendingDebouncedSync();
       const map = {};
       res.data.forEach(row => { map[row.key] = row.value; });
-      // Apply server snapshot: every key present in the response replaces local state (including []).
-      // Keys absent from Supabase leave local/React state unchanged — offline-first until first upload.
-      const apply = (key, setter, merge=false) => {
-        if (map[key] === undefined) return;
-        if (key === "nwGoal") {
-          const nv = map[key];
-          setter(nv === null || nv === undefined ? null : nv);
-          return;
-        }
-        const v = map[key];
-        if (v === null || v === undefined) return;
-        if (merge) setter(prev => ({...prev, ...v}));
-        else setter(v);
-      };
-      try { apply("expenses",  setExpenses); } catch {}
-      try { apply("bills",     setBills); } catch {}
-      try { apply("debts",     setDebts); } catch {}
-      try { apply("bgoals",    setBGoals); } catch {}
-      try { apply("sgoals",    setSGoals); } catch {}
-      try { apply("cats",      setCats); } catch {}
-      try { apply("trades",    setTrades); } catch {}
-      try { apply("balHist",   setBalHist); } catch {}
-      try { apply("shifts",    setShifts); } catch {}
-      try { apply("recurrings",setRecurrings); } catch {}
-      try { apply("notifs",    setNotifs); } catch {}
-      try { apply("settlements", setSettlements); } catch {}
-      try { apply("hhBudgets", setHhBudgets); } catch {}
-      try { apply("nwGoal",    setNwGoal); } catch {}
-      try { apply("subDismissed", setSubDismissed); } catch {}
-      try { apply("accounts",  setAccounts, true); } catch {}
-      try { apply("income",    setIncome,   true); } catch {}
-      try { apply("settings",  setSettings, true); } catch {}
-      try { apply("calColors", setCalColors,true); } catch {}
-      try { apply("dashConfig",setDashConfig,true); } catch {}
-      try { apply("household", setHousehold,true); } catch {}
-      try { apply("taccount",  setTradingAccount); } catch {}
-      try { if (map["appName"])  setAppName(map["appName"]); } catch {}
-      try { if (map["greetName"]) setGreetName(map["greetName"]); } catch {}
-      try { if (map["prof"])     setProfCategory(map["prof"]); } catch {}
-      try { if (map["profSub"])  setProfSub(map["profSub"]); } catch {}
-      try { if (map["merchantCats"]) window._merchantCats = map["merchantCats"]; } catch {}
-      try { if (map["accountRates"]) setAccountRates(prev => ({...prev,...map["accountRates"]})); } catch {}
-      try { if (map["onboarded"]) { localStorage.setItem("fv_onboarded","1"); setOnboarded(true); } } catch {}
+      setSyncRecoverableError(false);
+      applyUserDataSnapshot(map, {
+        setExpenses, setBills, setDebts, setBGoals, setSGoals, setCats, setTrades,
+        setBalHist, setShifts, setRecurrings, setNotifs, setSettlements, setHhBudgets,
+        setNwGoal, setSubDismissed, setAccounts, setIncome, setSettings, setCalColors,
+        setDashConfig, setHousehold, setTradingAccount, setAppName, setGreetName,
+        setProfCategory, setProfSub, setAccountRates, setOnboarded,
+      }, { bootDefaults: false });
       cloudLoadedRef.current=true;
       // Mirror Supabase data into scoped localStorage for offline use
       const scope = "fv6_" + uid.slice(0,8) + ":";
@@ -5818,7 +5864,11 @@ function AppInner(){
         try { localStorage.setItem(scope + row.key, JSON.stringify(row.value)); } catch {}
       });
       try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
-    } catch(e) { console.error("loadFromSupabase error", e); showToast("Sync failed — check your connection","error"); }
+    } catch(e) {
+      console.error("loadFromSupabase error", e);
+      if (gen === remotePullGenRef.current && navigator.onLine) setSyncRecoverableError(true);
+      showToast("Sync failed — check your connection","error");
+    }
     finally {
       if (gen === remotePullGenRef.current) {
         setSyncing(false);
@@ -5872,6 +5922,7 @@ function AppInner(){
     try{localStorage.removeItem("fv_session");}catch{}
     try{localStorage.removeItem("fv_skip_auth");}catch{}
     setSkipAuth(false);
+    setSyncRecoverableError(false);
   }
   const[ready,setReady]=useState(false);
   // True once we've successfully loaded at least one round of cloud data.
@@ -5916,9 +5967,11 @@ function AppInner(){
     return()=>window.removeEventListener("beforeinstallprompt",handler);
   },[]);
   const[isOnline,setIsOnline]=useState(()=>navigator.onLine);
+  const[syncRecoverableError,setSyncRecoverableError]=useState(false);
   useEffect(()=>{
     const goOnline=()=>{
       setIsOnline(true);
+      setSyncRecoverableError(false);
       showToast("Back online — syncing...","success");
       void flushPendingSync();
     };
@@ -5977,36 +6030,33 @@ function AppInner(){
         }
         const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName","fv6:merchantCats","fv6:recurrings","fv6:settlements","fv6:hhBudgets","fv6:nwGoal","fv6:subDismissed"];
         const vals=await Promise.all(keys.map(k=>_sg_boot(k.replace("fv6:",""))));
-        const[ac,inc,exp,bll,dbt,bg,sg2,cats,tr,ta,sett,cc,nts,bh,sh,prof,psub,dc,an,gn,mc,rec,stl,hhb,nwg,subd]=vals;
-        try{if(Array.isArray(exp))setExpenses(exp);}catch{}
-        try{if(Array.isArray(bll))setBills(bll);}catch{}
-        try{if(Array.isArray(dbt))setDebts(dbt);}catch{}
-        try{if(Array.isArray(bg))setBGoals(bg);}catch{}
-        try{if(Array.isArray(sg2))setSGoals(sg2);}catch{}
-        try{if(Array.isArray(cats))setCats(cats);}catch{}
-        try{if(Array.isArray(tr))setTrades(tr);}catch{}
-        try{if(ta)setTradingAccount(ta);}catch{}
-        try{if(ac)setAccounts(a=>({...DEF_ACCOUNTS,...a,...ac}));}catch{}
-        try{if(inc)setIncome(a=>({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...a,...inc}));}catch{}
-        try{if(sett)setSettings(a=>({...a,...sett}));}catch{}
-        try{const hh=_bulkMap["household"]!==undefined?_bulkMap["household"]:(await sg("fv6:household"));if(hh)setHousehold(h=>({...h,...hh}));}catch{}
-        try{if(cc)setCalColors(a=>({...a,...cc}));}catch{}
-        try{if(Array.isArray(nts))setNotifs(nts);}catch{}
-        try{if(Array.isArray(bh))setBalHist(bh);}catch{}
-        try{if(Array.isArray(sh))setShifts(sh);}catch{}
-        try{if(Array.isArray(rec))setRecurrings(rec);}catch{}
-        try{if(uid_boot&&("nwGoal" in _bulkMap))setNwGoal(_bulkMap["nwGoal"]);else if(nwg!==undefined&&nwg!==null)setNwGoal(nwg);}catch{}
-        try{if(Array.isArray(stl))setSettlements(stl);}catch{}
-        try{if(Array.isArray(hhb))setHhBudgets(hhb);}catch{}
-        try{if(Array.isArray(subd))setSubDismissed(subd);}catch{}
-        try{if(prof)setProfCategory(prof);}catch{}
-        try{if(psub)setProfSub(psub);}catch{}
-        try{if(dc)setDashConfig(a=>({...a,...dc}));}catch{}
-        try{if(an)setAppName(an);}catch{}
-        try{if(gn)setGreetName(gn);}catch{}
-        try{if(mc)window._merchantCats=mc;}catch{}
-        try{const ar=_bulkMap["accountRates"]||(await sg("fv6:accountRates"));if(ar)setAccountRates(prev=>({...prev,...ar}));}catch{}
-        try{const ob=_bulkMap["onboarded"]||(await sg("fv6:onboarded"));if(ob){localStorage.setItem("fv_onboarded","1");setOnboarded(true);}}catch{}
+        const bareKeys=["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName","merchantCats","recurrings","settlements","hhBudgets","nwGoal","subDismissed"];
+        const bootMap={};
+        bareKeys.forEach((k,i)=>{
+          const v=vals[i];
+          if(uid_boot&&(k in _bulkMap))bootMap[k]=_bulkMap[k];
+          else{if(v===undefined||v===null)return;bootMap[k]=v;}
+        });
+        try{
+          let hh=_bulkMap["household"];
+          if(hh===undefined){const h=await sg("fv6:household");if(h)hh=h;}
+          if(hh!=null&&typeof hh==="object")bootMap.household=hh;
+        }catch{}
+        try{
+          const ar=_bulkMap["accountRates"]!==undefined?_bulkMap["accountRates"]:(await sg("fv6:accountRates"));
+          if(ar&&typeof ar==="object")bootMap.accountRates=ar;
+        }catch{}
+        try{
+          const ob=_bulkMap["onboarded"]!==undefined?_bulkMap["onboarded"]:(await sg("fv6:onboarded"));
+          if(ob)bootMap.onboarded=ob;
+        }catch{}
+        applyUserDataSnapshot(bootMap,{
+          setExpenses,setBills,setDebts,setBGoals,setSGoals,setCats,setTrades,
+          setBalHist,setShifts,setRecurrings,setNotifs,setSettlements,setHhBudgets,
+          setNwGoal,setSubDismissed,setAccounts,setIncome,setSettings,setCalColors,
+          setDashConfig,setHousehold,setTradingAccount,setAppName,setGreetName,
+          setProfCategory,setProfSub,setAccountRates,setOnboarded,
+        },{bootDefaults:true});
         // After all boot setState calls so ss() effects never see cloudLoadedRef + stale [] (would overwrite Supabase).
         if(Object.keys(_bulkMap).length>0)cloudLoadedRef.current=true;
       }catch(e){console.error("Load error",e);}
@@ -6717,10 +6767,12 @@ function AppInner(){
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
 
   return(
+    <RechartsContext.Provider value={rechartsMod}>
     <div style={{flex:1,minHeight:0,width:"100%",maxWidth:640,margin:"0 auto",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden",boxSizing:"border-box",height:"100%",maxHeight:"100dvh"}}>
       <style>{CSS}</style>
       <div id="fv-scroll" style={{flex:1,minHeight:0,minWidth:0,width:"100%",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",padding:"max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-left)) max(110px, calc(88px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-right))",boxSizing:"border-box"}}>
         {!isOnline&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:"#1e293b",color:"#f1f5f9",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35}}>📡 No internet — changes sync when you’re back online</div>}
+        {syncRecoverableError&&isOnline&&authSession?.user?.id&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.red,border:`1px solid ${C.redMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Couldn’t refresh data from the cloud. You’re still using what’s on this device.</span><button type="button" className="ba" onClick={()=>{void loadFromSupabase(authSession);}} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Try again</button></div>}
         {["spend","home","bills"].includes(tab)&&<button className="ba" onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:16,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
@@ -7457,7 +7509,7 @@ function AppInner(){
           <button onClick={()=>setMonthlySummary(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.teal})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer"}}>Got it 👍</button>
         </div>
       </div>}
-      {toast&&<div style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 18px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:10,maxWidth:340,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}} onClick={()=>setToast(null)}>
+      {toast&&<div role="status" aria-live="polite" aria-atomic="true" style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 18px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:10,maxWidth:340,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}} onClick={()=>setToast(null)}>
         <span>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</span>
         {toast.action&&<button onClick={e=>{e.stopPropagation();toast.action.fn();setToast(null);}} style={{background:"rgba(255,255,255,.22)",border:"none",borderRadius:8,padding:"3px 10px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0,marginLeft:4}}>{toast.action.label}</button>}
       </div>}
@@ -7526,6 +7578,7 @@ function AppInner(){
         return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Customize Quick Actions</div><div style={{fontSize:13,color:C.textLight,marginBottom:18}}>Choose up to 8 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);return(<button key={q.id} onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"#fff",cursor:"pointer",textAlign:"left"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button onClick={()=>setModal(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button></div></div>);
       })()}
     </div>
+    </RechartsContext.Provider>
   );
 }
 
