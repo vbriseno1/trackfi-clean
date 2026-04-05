@@ -3560,9 +3560,19 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
 
   </div>);
 }
+
+/** Demo snapshot — keep in sync with `backupExport` / Supabase `user_data` keys.
+ * Bump DEMO_MODEL_VERSION when you add new persisted fields or major features.
+ * Stable cash account ids (9101–9103) must match `loadDemo` + `default*AccountId`. */
+const DEMO_MODEL_VERSION="2026-03-31";
+const DEMO_IDCHECK_PRIMARY=9101;
+const DEMO_IDCHECK_JOINT=9102;
+const DEMO_IDSAVINGS=9103;
+const DEMO_CC_DEBT_ID=2003;
+
 function generateDemoData(){
   const now=new Date(),yr=now.getFullYear();
-  const expenses=[],bills=[],debts=[],trades=[],shifts=[],savingsGoals=[],budgetGoals=[],balHist=[],recurrings=[],notifsSeed=[];
+  const expenses=[],bills=[],debts=[],trades=[],shifts=[],savingsGoals=[],budgetGoals=[],balHist=[],recurrings=[];
 
   // ── EXPENSES — uses all 21 real DEF_CATS category names ──────────────────
   const ET=[
@@ -3621,12 +3631,18 @@ function generateDemoData(){
       const day=1+Math.floor(Math.random()*Math.max(1,maxDay-1));
       const amt=(rng[0]+Math.random()*(rng[1]-rng[0])).toFixed(2);
       const ownerId=Math.random()>0.6?"shared":Math.random()>0.5?"partner":"me";
-      expenses.push({id:Date.now()+mo*10000+i+Math.floor(Math.random()*100),name:nm,category:cat,amount:amt,
+      const tagRoll=Math.random();
+      const tags=tagRoll<0.14?["food"]:tagRoll<0.22?["fun"]:tagRoll<0.28?["transport"]:tagRoll<0.34?["personal"]:[];
+      const rollPf=Math.random();
+      const paidFrom=rollPf>0.90?"credit":rollPf>0.97?"none":"checking";
+      const ex={id:Date.now()+mo*10000+i+Math.floor(Math.random()*100),name:nm,category:cat,amount:amt,
         date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(day).padStart(2,"0"),
-        notes:"",owner:ownerId,paidFrom:Math.random()>0.88?"credit":"checking"});
+        notes:"",owner:ownerId,paidFrom,tags};
+      if(paidFrom==="credit")ex.creditDebtId=String(DEMO_CC_DEBT_ID);
+      if(paidFrom==="checking")ex.bankAccountId=String(Math.random()>0.85?DEMO_IDCHECK_JOINT:DEMO_IDCHECK_PRIMARY);
+      expenses.push(ex);
     }
     // Guaranteed subscriptions each month for SubsView detection
-    const subDate=yr+"-"+String(mo+1).padStart(2,"0")+"-01";
     [["Netflix","Subscriptions","15.49"],["Spotify","Subscriptions","10.99"],
      ["Apple iCloud","Subscriptions","2.99"],["YouTube Premium","Subscriptions","13.99"],
      ["Disney+","Subscriptions","10.99"],["Gym Membership","Gym / Fitness","25.00"],
@@ -3634,39 +3650,43 @@ function generateDemoData(){
       if(isFuture)return;
       expenses.push({id:Date.now()+mo*5000+si+9000,name:nm,category:cat,amount:amt,
         date:yr+"-"+String(mo+1).padStart(2,"0")+"-"+String(1+si).padStart(2,"0"),
-        notes:"recurring",owner:"shared",paidFrom:"credit"});
+        notes:"recurring",owner:"shared",paidFrom:"credit",creditDebtId:String(DEMO_CC_DEBT_ID),tags:["recurring"]});
     });
   }
 
-  // ── BILLS — covers all recurring bill types ───────────────────────────────
+  // ── BILLS — recurring types + household paidBy + card vs bank (matches Log / pay flows) ──
   const BT=[
-    ["Rent",           "1450","01","Monthly",false],
-    ["Electric (FPL)", "94",  "15","Monthly",true],
-    ["Internet (Xfinity)","65","22","Monthly",true],
-    ["Phone (T-Mobile)","95", "08","Monthly",true],
-    ["Renters Insurance","22", "01","Monthly",false],
-    ["Car Insurance",  "148", "10","Monthly",false],
-    ["Car Payment",    "385", "05","Monthly",false],
-    ["Student Loan",   "320", "05","Monthly",false],
-    ["Hulu",           "17",  "18","Monthly",true],
-    ["Amazon Prime",   "15",  "23","Annual",  true],
-    ["Life Insurance", "38",  "01","Monthly",false],
+    ["Rent",           "1450","01","Monthly",false,"shared","checking",null],
+    ["Electric (FPL)", "94",  "15","Monthly",true, "me","checking",null],
+    ["Internet (Xfinity)","65","22","Monthly",true, "shared","checking",null],
+    ["Phone (T-Mobile)","95", "08","Monthly",true, "partner","checking",null],
+    ["Renters Insurance","22", "01","Monthly",false,"me","checking",null],
+    ["Car Insurance",  "148", "10","Monthly",false,"partner","checking",null],
+    ["Car Payment",    "385", "05","Monthly",false,"me","checking",null],
+    ["Student Loan",   "320", "05","Monthly",false,"me","checking",null],
+    ["Hulu",           "17",  "18","Monthly",true, "shared","credit",String(DEMO_CC_DEBT_ID)],
+    ["Amazon Prime",   "15",  "23","Annual",  true, "partner","credit",String(DEMO_CC_DEBT_ID)],
+    ["Life Insurance", "38",  "01","Monthly",false,"me","checking",null],
   ];
   const today2=new Date();
-  BT.forEach(([nm,amt,day,rec,auto],idx)=>{
+  BT.forEach(([nm,amt,day,rec,auto,paidBy,pf,billCid],idx)=>{
     for(let mo2=0;mo2<12;mo2++){
       const due=yr+"-"+String(mo2+1).padStart(2,"0")+"-"+day;
-      bills.push({id:(idx+1)*100+mo2,name:nm,amount:amt,dueDate:due,
-        paid:new Date(due+"T00:00:00")<today2,recurring:rec,autoPay:auto,notes:"",paidFrom:"checking"});
+      const row={id:(idx+1)*100+mo2,name:nm,amount:amt,dueDate:due,
+        paid:new Date(due+"T00:00:00")<today2,recurring:rec,autoPay:auto,notes:"",
+        paidFrom:pf,paidBy};
+      if(billCid)row.creditDebtId=billCid;
+      if(pf==="checking")row.bankAccountId=String(nm==="Rent"||nm==="Internet (Xfinity)"?DEMO_IDCHECK_JOINT:DEMO_IDCHECK_PRIMARY);
+      bills.push(row);
     }
   });
 
-  // ── DEBTS ─────────────────────────────────────────────────────────────────
+  // ── DEBTS — debtKind required for card routing (isCreditCardDebt) ─────────
   debts.push(
-    {id:2001,name:"Student Loans",balance:"18400",original:"24000",rate:"5.75",minPayment:"320",type:"Student Loan"},
-    {id:2002,name:"Car Loan (Honda)",balance:"9200",original:"15000",rate:"6.9",minPayment:"285",type:"Car Loan"},
-    {id:2003,name:"Capital One Visa",balance:"2340",original:"3500",rate:"22.99",minPayment:"58",type:"Credit Card"},
-    {id:2004,name:"Medical Bill",balance:"1200",original:"1200",rate:"0",minPayment:"100",type:"Medical"}
+    {id:2001,name:"Student Loans",balance:"18400",original:"24000",rate:"5.75",minPayment:"320",type:"Student Loan",debtKind:"loan"},
+    {id:2002,name:"Car Loan (Honda)",balance:"9200",original:"15000",rate:"6.9",minPayment:"285",type:"Car Loan",debtKind:"loan"},
+    {id:2003,name:"Capital One Visa",balance:"2340",original:"3500",rate:"22.99",minPayment:"58",type:"Credit Card",debtKind:"credit_card"},
+    {id:2004,name:"Medical Bill",balance:"1200",original:"1200",rate:"0",minPayment:"100",type:"Medical",debtKind:"loan"}
   );
 
   // ── TRADES ────────────────────────────────────────────────────────────────
@@ -3772,7 +3792,34 @@ function generateDemoData(){
     "gym membership":"Gym / Fitness",
   };
 
-  return{expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,balHist,merchantCats};
+  // ── RECURRING TEMPLATE ROWS (More → Recurring) ────────────────────────────
+  const _nd=n=>{const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+  recurrings.push(
+    {id:7201,name:"Dog walker",amount:"40",category:"Pets",frequency:"Weekly",nextDate:_nd(3),icon:"🐕",active:true},
+    {id:7202,name:"iPhone Upgrade Program",amount:"45",category:"Phone",frequency:"Monthly",nextDate:_nd(12),icon:"📱",active:true},
+    {id:7203,name:"Parking (work)",amount:"28",category:"Misc",frequency:"Monthly",nextDate:_nd(5),icon:"🅿️",active:true},
+    {id:7204,name:"Therapy co-pay",amount:"35",category:"Health / Medical",frequency:"Bi-weekly",nextDate:_nd(7),icon:"💬",active:true},
+    {id:7205,name:"Kids swim class",amount:"60",category:"Entertainment",frequency:"Monthly",nextDate:_nd(18),icon:"🏊",active:true}
+  );
+
+  // ── HOUSEHOLD: settle-up history + shared category caps ───────────────────
+  const settlements=[
+    {date:yr+"-03-14",month:yr+"-03",from:"Erin",to:"Victor",amount:"242.00"},
+    {date:yr+"-07-22",month:yr+"-07",from:"Victor",to:"Erin",amount:"198.50"},
+  ];
+  const hhBudgets=[
+    {category:"Groceries",limit:"520"},
+    {category:"Entertainment",limit:"160"},
+  ];
+
+  const nwGoal={target:150000};
+  const accountRates={checking:0.5,savings:4.15,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0};
+
+  return{
+    expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,balHist,merchantCats,
+    recurrings,settlements,hhBudgets,nwGoal,accountRates,
+    demoModelVersion:DEMO_MODEL_VERSION,
+  };
 }
 
 function HealthScoreView({income,expenses,debts,accounts,bills,tradingAccount,onNavigate}){
@@ -6431,16 +6478,26 @@ function AppInner(){
 
   async function loadDemo(){
     const d=generateDemoData();
-    // Full accounts including all investment + retirement fields
-    setAccounts({checking:"4280",savings:"11400",cushion:"1800",credit_card:"0",investments:"8400",
+    const _lpd=new Date();_lpd.setDate(_lpd.getDate()-11);
+    const lastPayDate=_lpd.getFullYear()+"-"+String(_lpd.getMonth()+1).padStart(2,"0")+"-"+String(_lpd.getDate()).padStart(2,"0");
+    // Legacy checking/savings empty when cashAccounts drive totals (matches real multi-account users)
+    setAccounts({checking:"",savings:"",cushion:"1800",credit_card:"0",investments:"8400",
       k401:"28500",roth_ira:"12000",brokerage:"8400",crypto:"1800",hsa:"3200",
-      property:"0",vehicles:"12000"});
-    // Income: biweekly RN paycheck + freelance side income
+      property:"0",vehicles:"12000",
+      cashAccounts:[
+        {id:DEMO_IDCHECK_PRIMARY,name:"Primary Checking",kind:"checking",balance:"3100"},
+        {id:DEMO_IDCHECK_JOINT,name:"Joint Bills",kind:"checking",balance:"1180"},
+        {id:DEMO_IDSAVINGS,name:"High-Yield Savings",kind:"savings",balance:"11400"},
+      ],
+    });
+    // Income: biweekly RN paycheck + freelance + lastPayDate for safe-to-spend / payday UI
     setIncome({primary:"4200",other:"300",trading:"",rental:"",dividends:"",freelance:"500",
-      payFrequency:"Biweekly",lastPayDate:""});
-    // Core data
+      payFrequency:"Biweekly",lastPayDate});
+    // Core data (+ sync-key-aligned extras: recurrings, settlements, hhBudgets, nwGoal, rates)
     setExpenses(d.expenses);setBills(d.bills);setDebts(d.debts);setSGoals(d.savingsGoals);
     setBGoals(d.budgetGoals);setTrades(d.trades);setShifts(d.shifts);setBalHist(d.balHist);
+    setRecurrings(d.recurrings||[]);setSettlements(d.settlements||[]);setHhBudgets(d.hhBudgets||[]);
+    setNwGoal(d.nwGoal??null);setAccountRates(d.accountRates||{checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0});
     // Profile
     setAppName("Trackfi");setGreetName("Victor");setProfCategory("healthcare");setProfSub("nurse_rn");
     // Trading account
@@ -6456,9 +6513,20 @@ function AppInner(){
     setCalColors({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"circle"});
     // Dashboard config — show everything
     setDashConfig(DEF_DASHCONFIG);
-    // Settings — enable all features
-    setSettings(p=>({...p,showTrading:true,showHealth:true,showSavings:true,showForecast:true,
+    // Settings — all product surfaces + default bank picks for multi cashAccounts
+    setSettings(p=>({...p,showTrading:true,showHealth:true,showSavings:true,showForecast:true,showCrypto:true,
+      defaultExpensePaidFrom:"checking",defaultBillPaidFrom:"checking",
+      defaultCheckingAccountId:String(DEMO_IDCHECK_PRIMARY),defaultSavingsAccountId:String(DEMO_IDSAVINGS),
       quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"]}));
+    setSubDismissed([]);
+    if(import.meta.env.DEV){
+      window.__trackfiDemoInfo={
+        modelVersion:d.demoModelVersion,
+        backupSchema:"3.1",
+        includes:["cashAccounts×3","debtKind+creditDebtId","bankAccountId on spends","bill paidBy+card bills","tags","track-only spends","recurrings","settlements","hhBudgets","nwGoal","accountRates","lastPayDate"],
+      };
+      console.info("[Trackfi demo] model "+d.demoModelVersion+" — inspect window.__trackfiDemoInfo");
+    }
     try{localStorage.setItem("fv_onboarded","1");localStorage.setItem("fv_demo","1");}catch{}
     ss("fv6:onboarded",true);
     setIsDemoMode(true);setOnboarded(true);
@@ -6476,7 +6544,7 @@ function AppInner(){
         const batch=[];
         for(let i=0;i<n;i++){
           const day=1+(i%28);
-          batch.push({id:"stress_"+t0+"_"+i,name:"Stress "+i,amount:String((i%250)+1),category:i%3===0?"Groceries":i%3===1?"Gas":"Misc",date:ms+"-"+pad(day),notes:"",tags:[],paidFrom:"checking"});
+          batch.push({id:"stress_"+t0+"_"+i,name:"Stress "+i,amount:String((i%250)+1),category:i%3===0?"Groceries":i%3===1?"Gas":"Misc",date:ms+"-"+pad(day),notes:"",tags:[],paidFrom:"checking",bankAccountId:String(DEMO_IDCHECK_PRIMARY)});
         }
         const t1=performance.now();
         setExpenses(p=>[...p,...batch]);
@@ -6492,6 +6560,7 @@ function AppInner(){
     // Signed-in: don't clear onboarding — resetUserState() would drop fv_onboarded and show the wizard again.
     resetUserState({clearOnboarding:!uid});
     setAppName("Trackfi");
+    try{delete window.__trackfiDemoInfo;}catch{}
     try{localStorage.removeItem("fv_demo");}catch{}
     if(uid&&authSession){
       await loadFromSupabase(authSession);
@@ -6503,7 +6572,8 @@ function AppInner(){
     const hasLocalData=expenses.length>0||bills.length>0||debts.length>0||trades.length>0
       ||savingsGoals.length>0||budgetGoals.length>0
       ||Math.abs(parseFloat(accounts.checking||0))>0.009||Math.abs(parseFloat(accounts.savings||0))>0.009
-      ||Math.abs(parseFloat(accounts.cushion||0))>0.009;
+      ||Math.abs(parseFloat(accounts.cushion||0))>0.009
+      ||(accounts.cashAccounts||[]).some(a=>Math.abs(parseFloat(a.balance||0))>0.009);
     const signedIn=!!authSession?.user?.id;
     setConfirm({
       title:"Try sample data?",
@@ -6520,7 +6590,8 @@ function AppInner(){
   function backupExport(){
     const d={
       exportedAt:new Date().toISOString(),
-      version:"3.0",
+      version:"3.1",
+      ...(typeof window!=="undefined"&&window.__trackfiDemoInfo?.modelVersion?{demoModelVersion:window.__trackfiDemoInfo.modelVersion}:{}),
       appName,greetName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,
       categories,settings,calColors,dashConfig,household,recurrings,settlements,hhBudgets,nwGoal,subDismissed,
       profCategory,profSub,tradingAccount,accountRates,balHist,notifs,
