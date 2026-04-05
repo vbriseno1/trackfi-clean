@@ -901,7 +901,11 @@ Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · grocerie
   const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
   const ccOwed=parseFloat(accounts.credit_card||0);
   const chatNow=new Date();
-  const safeToSpendChat=computeSafeToSpend(accounts,income,bills,expenses,budgetGoals||[],chatNow);
+  // Memoize on financial inputs only — recomputes whenever expenses/accounts/etc. change (responsive). Unrelated UI state does not rerun this.
+  const safeToSpendChat=useMemo(
+    ()=>computeSafeToSpend(accounts,income,bills,expenses,budgetGoals||[],new Date()),
+    [accounts,income,bills,expenses,budgetGoals]
+  );
   const ck=safeToSpendChat.checkingBalance;
   const sts=safeToSpendChat.sts;
   const bs=safeToSpendChat.billsBeforeNextPayAmt;
@@ -1898,7 +1902,7 @@ function ExpenseRow({e,cat,onEdit,onDelete}){
   function onTouchEnd(){if(swipeX<-threshold){onDelete();}setSwipeX(0);setSwiping(false);}
   const revealed=swipeX<-20;
   return(
-    <div style={{position:"relative",marginBottom:8,borderRadius:16,overflow:"hidden"}}>
+    <div style={{position:"relative",marginBottom:8,borderRadius:16,overflow:"hidden",contentVisibility:"auto",containIntrinsicSize:"72px"}}>
       <div style={{position:"absolute",right:0,top:0,bottom:0,width:68,background:C.red,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"0 16px 16px 0"}}>
         <Trash2 size={18} color="#fff"/>
       </div>
@@ -1926,7 +1930,9 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
   const[tagFilter,setTagFilter]=useState("all");
   const[selectMode,setSelectMode]=useState(false);
   const[selected,setSelected]=useState(new Set());
+  const[txVisibleCap,setTxVisibleCap]=useState(150);
   const now=new Date();
+  useEffect(()=>{setTxVisibleCap(150);},[dateFilter,searchQ,catFilter,tagFilter]);
   const filteredExp=useMemo(()=>{
     let base=expenses;
     if(dateFilter==="month"){const m=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");base=base.filter(e=>e.date?.startsWith(m));}
@@ -1946,6 +1952,8 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
   const momDiff=prevMonthTotal>0?((totalExp-prevMonthTotal)/prevMonthTotal*100):0;
   const catMap=filteredExp.reduce((a,e)=>{a[e.category]=(a[e.category]||0)+(parseFloat(e.amount)||0);return a},{});
   const catSorted=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+  const sortedForTx=useMemo(()=>[...filteredExp].sort((a,b)=>new Date(b.date)-new Date(a.date)),[filteredExp]);
+  const txList=sortedForTx.slice(0,txVisibleCap);
   return(
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}><div style={{display:"flex",gap:10,alignItems:"flex-start"}}><div style={{width:3,height:38,background:`linear-gradient(180deg,${C.accent},${C.purple}88)`,borderRadius:99,marginTop:2,flexShrink:0}}/><div><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4,lineHeight:1.2}}>Spending</div><div style={{fontSize:12,color:C.textLight,marginTop:3,fontWeight:500}}>Total: {fmt(totalExp)}</div></div></div><div style={{display:"flex",gap:6}}>{selectMode?<><button className="ba" onClick={()=>{if(selected.size>0){setExpenses(p=>p.filter(e=>!selected.has(e.id)));showToast("Deleted "+selected.size+" expense"+(selected.size!==1?"s":""),"error");setSelected(new Set());setSelectMode(false);}}} style={{background:selected.size>0?C.red:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:10,padding:"8px 12px",color:selected.size>0?"#fff":C.red,fontWeight:700,fontSize:12,cursor:"pointer"}}>Delete {selected.size>0?"("+selected.size+")":""}</button><button className="ba" onClick={()=>{setSelectMode(false);setSelected(new Set());}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",color:C.textMid,fontWeight:600,fontSize:12,cursor:"pointer"}}>Cancel</button></>:<><button className="ba" onClick={()=>setSelectMode(true)} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px",color:C.textMid,fontWeight:600,fontSize:12,cursor:"pointer"}}>Select</button><button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:`0 2px 8px ${C.accent}40`}}><Plus size={12}/>Expense</button></> }</div></div>
@@ -2092,13 +2100,14 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       })()}
             <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Transactions</div>
       {filteredExp.length===0&&<Empty text={expenses.length>0?"No expenses match your current filters — try adjusting the date range or search":"No expenses yet — use AI Logger or the + button"} icon={Wallet}/>}
-      {filteredExp.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e=>{
+      {txList.map(e=>{
         const cat=categories.find(c=>c.name===e.category);
-        if(selectMode){const isSel=selected.has(e.id);return(<div key={e.id} onClick={()=>setSelected(p=>{const n=new Set(p);if(n.has(e.id))n.delete(e.id);else n.add(e.id);return n;})} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:isSel?C.accentBg:C.surface,border:`1.5px solid ${isSel?C.accent:C.border}`,borderRadius:16,marginBottom:8,cursor:"pointer"}}><div style={{width:22,height:22,borderRadius:"50%",background:isSel?C.accent:C.bg,border:`2px solid ${isSel?C.accent:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{isSel&&<Check size={12} color="#fff"/>}</div><div style={{width:34,height:34,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{cat?.icon||"💸"}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{e.name}</div><div style={{fontSize:11,color:C.textLight}}>{e.date} · {e.category}</div></div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red,flexShrink:0}}>-{fmt(e.amount)}</div></div>);}
+        if(selectMode){const isSel=selected.has(e.id);return(<div key={e.id} onClick={()=>setSelected(p=>{const n=new Set(p);if(n.has(e.id))n.delete(e.id);else n.add(e.id);return n;})} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:isSel?C.accentBg:C.surface,border:`1.5px solid ${isSel?C.accent:C.border}`,borderRadius:16,marginBottom:8,cursor:"pointer",contentVisibility:"auto",containIntrinsicSize:"72px"}}><div style={{width:22,height:22,borderRadius:"50%",background:isSel?C.accent:C.bg,border:`2px solid ${isSel?C.accent:C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{isSel&&<Check size={12} color="#fff"/>}</div><div style={{width:34,height:34,borderRadius:10,background:C.accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{cat?.icon||"💸"}</div><div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{e.name}</div><div style={{fontSize:11,color:C.textLight}}>{e.date} · {e.category}</div></div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red,flexShrink:0}}>-{fmt(e.amount)}</div></div>);}
         return(
           <ExpenseRow key={e.id} e={e} cat={cat} onEdit={()=>setEditItem({type:"expense",data:e})} onDelete={()=>{const snap=e;const ea=parseFloat(snap.amount)||0;const pf=normalizePaidFrom(snap.paidFrom);const cid=snap.creditDebtId||undefined;const bid=resolveBankAccountIdForExpense(pf,snap.bankAccountId,accounts,settings)||undefined;setExpenses(p=>p.filter(x=>x.id!==snap.id));if(applyRefund&&ea)applyRefund(pf,ea,cid,bid);(showUndoToast||showToast)&&(showUndoToast?showUndoToast("Deleted — "+snap.name,()=>{setExpenses(p=>[...p,snap]);if(applySpend&&ea)applySpend(pf,ea,cid,bid);}):showToast("Deleted","error"));}}/>
         );
       })}
+      {sortedForTx.length>txVisibleCap&&<button type="button" className="ba" onClick={()=>setTxVisibleCap(c=>c+150)} style={{width:"100%",marginTop:4,marginBottom:8,padding:"12px",borderRadius:12,border:`1px solid ${C.border}`,background:C.surfaceAlt,color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}>Load more ({sortedForTx.length-txVisibleCap} left)</button>}
       {showAdd&&<Modal title="Spending Envelope" icon={Target} onClose={()=>setShowAdd(false)} onSubmit={()=>{if(!bForm.category||!bForm.limit)return;setBGoals(p=>[...p,{id:Date.now(),...bForm}]);setShowAdd(false);setBForm({});}} submitLabel="Add Envelope" accent={C.purple}><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.accent,lineHeight:1.5}}>
         💡 Set a monthly budget for <strong>variable expenses</strong> like gas, haircuts, groceries, dining. These reserve money in your safe-to-spend before you even log them.
       </div>
@@ -6153,7 +6162,10 @@ function AppInner(){
   const billsSoonAmt=useMemo(()=>dueSoon.reduce((s,b)=>s+(parseFloat(b.amount)||0),0),[dueSoon]);
   const burnRate=dayOfMonth()>0?thisMonthExp/dayOfMonth():0;
   const projected=burnRate*daysInMonth();
-  const stsCalc=computeSafeToSpend(accounts,income,bills,expenses,budgetGoals);
+  const stsCalc=useMemo(
+    ()=>computeSafeToSpend(accounts,income,bills,expenses,budgetGoals),
+    [accounts,income,bills,expenses,budgetGoals]
+  );
   const sts=stsCalc.sts;
   const nextPayDate=stsCalc.nextPayDate;
   const nextPayStr=stsCalc.nextPayStr;
@@ -6452,6 +6464,28 @@ function AppInner(){
     setIsDemoMode(true);setOnboarded(true);
   }
   useEffect(()=>{window._loadDemo=loadDemo;return()=>{delete window._loadDemo;};},[]);
+  // Dev-only: stress-test Spending + safe-to-spend with thousands of rows (console: __trackfiStress.add(5000))
+  useEffect(()=>{
+    if(!import.meta.env.DEV)return;
+    const pad=m=>String(m).padStart(2,"0");
+    window.__trackfiStress={
+      add(n=2000){
+        const d=new Date();
+        const ms=d.getFullYear()+"-"+pad(d.getMonth()+1);
+        const t0=performance.now();
+        const batch=[];
+        for(let i=0;i<n;i++){
+          const day=1+(i%28);
+          batch.push({id:"stress_"+t0+"_"+i,name:"Stress "+i,amount:String((i%250)+1),category:i%3===0?"Groceries":i%3===1?"Gas":"Misc",date:ms+"-"+pad(day),notes:"",tags:[],paidFrom:"checking"});
+        }
+        const t1=performance.now();
+        setExpenses(p=>[...p,...batch]);
+        console.info("[Trackfi stress] generated "+n+" rows in "+(t1-t0).toFixed(1)+"ms; appending to state… Open Spending → All Time, use Load more.");
+      },
+      clear(){setExpenses(p=>p.filter(e=>!String(e.id).startsWith("stress_")));console.info("[Trackfi stress] removed synthetic stress_* expenses");},
+    };
+    return()=>{try{delete window.__trackfiStress;}catch{}};
+  },[]);
 
   async function exitDemo(){
     const uid=authSession?.user?.id;

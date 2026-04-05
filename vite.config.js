@@ -20,6 +20,7 @@ export default defineConfig({
           'vendor-react':    ['react', 'react-dom'],
           'vendor-recharts': ['recharts'],
           'vendor-lucide':   ['lucide-react'],
+          'vendor-sentry':   ['@sentry/react'],
         },
       },
     },
