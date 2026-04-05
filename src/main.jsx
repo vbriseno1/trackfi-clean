@@ -3,6 +3,25 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 
+// Service worker uses cache-first for .js; on localhost that can serve stale Vite modules → white screen.
+if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    for (const reg of regs) void reg.unregister()
+  })
+  console.info('[Trackfi] Dev: service workers unregistered. If the page was blank, refresh once (⌘⇧R).')
+}
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        setInterval(() => reg.update(), 60 * 60 * 1000)
+      })
+      .catch(() => {})
+  })
+}
+
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN
 if (sentryDsn) {
   Sentry.init({
