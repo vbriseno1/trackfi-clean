@@ -384,8 +384,17 @@ input,select,button,textarea{font-family:'Inter',sans-serif}
 .swipe-content{transition:transform .22s cubic-bezier(.22,1,.36,1)}
 .swipe-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center}
 textarea:focus,input:focus,select:focus{outline:none}
+textarea:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #6366F1;outline-offset:1px}
+button:focus-visible,a:focus-visible,.ba:focus-visible{outline:2px solid #6366F1;outline-offset:2px}
 input,select,textarea{-webkit-appearance:none;max-width:100%}
 button{-webkit-tap-highlight-color:transparent}
+@media (prefers-reduced-motion: reduce){
+  .fu,.si,.pop{animation:none!important}
+  .ba,.card,.swipe-content,.blurred,.unblurred{transition:none!important}
+  .ba:active{transform:none!important;opacity:1!important}
+  .card:active{transform:none!important}
+  .hl:hover{transform:none!important}
+}
 `;
 
 class ErrorBoundary extends React.Component {
