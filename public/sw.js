@@ -1,7 +1,8 @@
 // Trackfi Service Worker — v1.0
 // Caches the app shell for offline use and fast loads
 
-const CACHE_NAME = 'trackfi-v2';
+// Bump when changing caching rules so clients drop old caches on activate.
+const CACHE_NAME = 'trackfi-v3';
 const SHELL = [
   '/',
   '/index.html',
@@ -38,6 +39,23 @@ self.addEventListener('fetch', e => {
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // Vite hashed chunks under /assets/ — network-first so new index.html never pairs with stale JS.
+  const sameOrigin = url.origin === self.location.origin;
+  if (sameOrigin && url.pathname.startsWith('/assets/')) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request))
     );
     return;
   }
