@@ -455,9 +455,16 @@ button{-webkit-tap-highlight-color:transparent}
 `;
 
 const RechartsContext=React.createContext(null);
+function TrackfiRechartsProvider({mod,failed,dark,children}){
+  const value=useMemo(()=>({mod,failed,dark:!!dark}),[mod,failed,dark]);
+  return <RechartsContext.Provider value={value}>{children}</RechartsContext.Provider>;
+}
 function RechartsReady({minHeight,render}){
   const ctx=React.useContext(RechartsContext);
-  if(ctx?.failed)return <div role="alert" style={{minHeight,width:"100%",borderRadius:12,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px 14px",fontSize:12,fontWeight:600,color:C.textMid,textAlign:"center",lineHeight:1.4}}>Charts didn’t load. Refresh the page or check your connection.</div>;
+  if(ctx?.failed){
+    const dk=!!ctx.dark;
+    return <div role="alert" style={{minHeight,width:"100%",borderRadius:12,background:dk?C.navyMid:C.surfaceAlt,border:`1px solid ${dk?"rgba(255,255,255,.14)":C.border}`,display:"flex",alignItems:"center",justifyContent:"center",padding:"12px 14px",fontSize:12,fontWeight:600,color:dk?"rgba(241,245,249,.9)":C.textMid,textAlign:"center",lineHeight:1.4}}>Charts didn’t load. Refresh the page or check your connection.</div>;
+  }
   if(!ctx?.mod)return <div className="fv-rechart-skel" style={{minHeight,width:"100%",borderRadius:12}} aria-busy="true"/>;
   return render(ctx.mod);
 }
@@ -3649,6 +3656,9 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
       {onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}
     </div>
 
+    <div style={{textAlign:"center",padding:"20px 8px 6px",fontSize:11,color:C.textLight,lineHeight:1.5,letterSpacing:.15}}>
+      Trackfi v {__TRACKFI_APP_VERSION__}{import.meta.env.DEV?" · dev":""}
+    </div>
   </div>);
 }
 
@@ -5664,7 +5674,7 @@ function AppInner(){
       .catch(e=>{console.error("[Trackfi] recharts load failed",e);if(!c)setRechartsLoadFailed(true);});
     return()=>{c=true;};
   },[]);
-  const rechartsCtxValue=useMemo(()=>({mod:rechartsMod,failed:rechartsLoadFailed}),[rechartsMod,rechartsLoadFailed]);
+  const[darkMode,setDarkMode]=useState(()=>{try{return localStorage.getItem("fv_dark")==="1";}catch{return false;}});
   const _startupParams=useRef((()=>{try{const sp=new URLSearchParams(window.location.search);return{action:sp.get("action"),tab:sp.get("tab")};}catch{return{};}})());
   /** Throttle pulls when app becomes visible (visibility/pageshow can fire in bursts on mobile). */
   const lastVisibilityPullRef=useRef(0);
@@ -5964,7 +5974,6 @@ function AppInner(){
   const[greetName,setGreetName]=useState("");
   const[profCategory,setProfCategory]=useState("healthcare");
   const[profSub,setProfSub]=useState("nurse_rn");
-  const[darkMode,setDarkMode]=useState(()=>{try{return localStorage.getItem("fv_dark")==="1";}catch{return false;}});
   const[hidden,setHidden]=useState(false);
   const[heroIdx,setHeroIdx]=useState(0);
   const[pwaPrompt,setPwaPrompt]=useState(null);
@@ -6015,12 +6024,6 @@ function AppInner(){
   const[toast,setToast]=useState(null);
   const showToast=(msg,type='success',action=null)=>{setToast({msg,type,action});const dur=type==='error'?4000:type==='info'?3000:action?4000:2500;setTimeout(()=>setToast(t=>t?.msg===msg?null:t),dur);};
   const showUndoToast=(msg,undoFn)=>showToast(msg,"error",{label:"Undo",fn:undoFn});
-  const rechartsFailToastRef=useRef(false);
-  useEffect(()=>{
-    if(!rechartsLoadFailed||rechartsFailToastRef.current)return;
-    rechartsFailToastRef.current=true;
-    showToast("Charts didn’t load. Refresh the page or check your connection.","error");
-  },[rechartsLoadFailed]);
 
   const[isDemoMode,setIsDemoMode]=useState(()=>{try{return localStorage.getItem("fv_demo")==="1";}catch{return false;}});
   const[demoBannerVisible,setDemoBannerVisible]=useState(true);
@@ -6782,7 +6785,7 @@ function AppInner(){
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
 
   return(
-    <RechartsContext.Provider value={rechartsCtxValue}>
+    <TrackfiRechartsProvider mod={rechartsMod} failed={rechartsLoadFailed} dark={darkMode}>
     <div style={{flex:1,minHeight:0,width:"100%",maxWidth:640,margin:"0 auto",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden",boxSizing:"border-box",height:"100%",maxHeight:"100dvh"}}>
       <style>{CSS}</style>
       <div id="fv-scroll" style={{flex:1,minHeight:0,minWidth:0,width:"100%",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",padding:"max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-left)) max(110px, calc(88px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-right))",boxSizing:"border-box"}}>
@@ -7593,7 +7596,7 @@ function AppInner(){
         return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Customize Quick Actions</div><div style={{fontSize:13,color:C.textLight,marginBottom:18}}>Choose up to 8 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);return(<button key={q.id} onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"#fff",cursor:"pointer",textAlign:"left"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button onClick={()=>setModal(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button></div></div>);
       })()}
     </div>
-    </RechartsContext.Provider>
+    </TrackfiRechartsProvider>
   );
 }
 

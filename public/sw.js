@@ -1,4 +1,4 @@
-// Trackfi Service Worker — v1.0
+// Trackfi Service Worker — caching v3 (see CACHE_NAME)
 // Caches the app shell for offline use and fast loads
 
 // Bump when changing caching rules so clients drop old caches on activate.

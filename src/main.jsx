@@ -3,7 +3,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 
-// Service worker uses cache-first for .js; on localhost that can serve stale Vite modules → white screen.
+// Prod SW caches /assets with network-first (see public/sw.js). Dev still unregisters SW so Vite HMR isn’t stale.
 if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then((regs) => {
     for (const reg of regs) void reg.unregister()
@@ -28,6 +28,15 @@ if (sentryDsn) {
     dsn: sentryDsn,
     environment: import.meta.env.MODE,
     sendDefaultPii: false,
+    /** Vite HMR can briefly violate hook order or TDZ while a module is mid-swap; full reload fixes it. */
+    beforeSend (event) {
+      if (!import.meta.env.DEV) return event
+      const msg = event.exception?.values?.[0]?.value ?? ''
+      if (msg.includes('Rendered more hooks than during the previous render')) {
+        return null
+      }
+      return event
+    },
   })
   // Call from browser console so Sentry receives a real event (Issues stays empty until then).
   window.__TRACKFI_SENTRY_TEST__ = () => {
