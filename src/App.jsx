@@ -702,7 +702,7 @@ function OnboardingWizard({onComplete}){
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div>
           <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Your Name</div>
-          <input autoFocus placeholder="Victor B" value={d.name||""} onChange={e=>setD(p=>({...p,name:e.target.value}))}
+          <input autoFocus placeholder="Your name" value={d.name||""} onChange={e=>setD(p=>({...p,name:e.target.value}))}
             style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${d.name?C.accent:C.border}`,borderRadius:12,padding:"12px 14px",fontSize:16,color:C.text,outline:"none",boxSizing:"border-box",transition:"border-color .15s"}}/>
           {firstName&&<div style={{marginTop:8,fontSize:13,color:C.accent,fontWeight:600}}>👋 Nice to meet you, {firstName}!</div>}
         </div>
@@ -3470,7 +3470,7 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
       <div style={{display:"flex",gap:8,marginBottom:14}}>
         <div style={{flex:1}}>
           <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Display Name</div>
-          <input value={greetName||""} onChange={e=>setGreetName(e.target.value)} placeholder="Victor B" style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:14,outline:"none"}}/>
+          <input value={greetName||""} onChange={e=>setGreetName(e.target.value)} placeholder="Your name" style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:14,outline:"none"}}/>
         </div>
         <div style={{flex:1}}>
           <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>App Name</div>
@@ -4948,7 +4948,7 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
 
           {/* Shared login info */}
           <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:"14px 16px",marginTop:16,fontSize:13,color:C.accent,lineHeight:1.6}}>
-            💡 <strong>Live household sync is active.</strong> Both Victor and Erin can log in from their own phones using the same Trackfi account — expenses, bills, and goals stay in sync automatically.
+            💡 <strong>Live household sync is active.</strong> Each member can log in on their own device with the same Trackfi account — expenses, bills, and goals stay in sync automatically.
           </div>
         </div>
       )}
@@ -5669,10 +5669,24 @@ function AppInner(){
   const[rechartsLoadFailed,setRechartsLoadFailed]=useState(false);
   useEffect(()=>{
     let c=false;
-    import("recharts")
-      .then(m=>{if(!c)setRechartsMod(m);})
-      .catch(e=>{console.error("[Trackfi] recharts load failed",e);if(!c)setRechartsLoadFailed(true);});
-    return()=>{c=true;};
+    function load(){
+      import("recharts")
+        .then(m=>{if(!c)setRechartsMod(m);})
+        .catch(e=>{console.error("[Trackfi] recharts load failed",e);if(!c)setRechartsLoadFailed(true);});
+    }
+    /** Defer to idle so first paint + critical handlers stay unblocked (charts show skeleton until ready). */
+    let idleId;
+    let tId;
+    if(typeof requestIdleCallback!=="undefined"){
+      idleId=requestIdleCallback(load,{timeout:2800});
+    }else{
+      tId=setTimeout(load,0);
+    }
+    return()=>{
+      c=true;
+      if(idleId!=null&&typeof cancelIdleCallback!=="undefined")cancelIdleCallback(idleId);
+      if(tId!=null)clearTimeout(tId);
+    };
   },[]);
   const[darkMode,setDarkMode]=useState(()=>{try{return localStorage.getItem("fv_dark")==="1";}catch{return false;}});
   const _startupParams=useRef((()=>{try{const sp=new URLSearchParams(window.location.search);return{action:sp.get("action"),tab:sp.get("tab")};}catch{return{};}})());
