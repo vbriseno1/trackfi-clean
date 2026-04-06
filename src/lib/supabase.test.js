@@ -118,6 +118,27 @@ describe('supabase helpers', () => {
     expect(fn).toHaveBeenCalledTimes(1)
   })
 
+  it('sg encodes user_id and key in REST filter', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem(
+      'fv_session',
+      JSON.stringify({ user: { id: 'abc&weird' }, access_token: 'tok' })
+    )
+    vi.resetModules()
+    const { sg } = await import('./supabase.js')
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ value: { ok: 1 } }],
+    })
+    await sg('fv6:expenses+special')
+    expect(globalThis.fetch).toHaveBeenCalled()
+    const url = globalThis.fetch.mock.calls[0][0]
+    expect(url).toContain(encodeURIComponent('abc&weird'))
+    expect(url).toContain(encodeURIComponent('expenses+special'))
+  })
+
   it('cancelPendingDebouncedSync clears without throwing', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')

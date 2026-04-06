@@ -63,7 +63,7 @@ function launchConfetti(){
 }
 
 const C = {
-  bg:"#F0F2F8",       surface:"#FFFFFF",    surfaceAlt:"#F7F8FC",
+  bg:"#F0F2F8",       surface:"#FFFFFF",    card:"#FFFFFF",    surfaceAlt:"#F7F8FC",
   border:"#E2E5EE",   borderLight:"#ECEEF5",
   navy:"#0A1628",     navyMid:"#1A2E50",    navyLight:"#243B6B",
   accent:"#6366F1",   accentBg:"#EEF2FF",   accentMid:"#C7D2FE",
@@ -3651,7 +3651,7 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
       </div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{darkMode?"🌙":"☀️"}</span><div style={{fontSize:14,fontWeight:600,color:C.text}}>Dark Mode</div></div>
-        <button onClick={()=>setDarkMode(d=>!d)} style={{background:"none",border:"none",cursor:"pointer",color:darkMode?C.accent:C.borderLight,padding:0}}>{darkMode?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button>
+        <button onClick={()=>setDarkMode(d=>{const n=!d;setSettings(s=>({...s,darkMode:n}));return n;})} style={{background:"none",border:"none",cursor:"pointer",color:darkMode?C.accent:C.borderLight,padding:0}}>{darkMode?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button>
       </div>
       <div style={{padding:"10px 0",borderBottom:`1px solid ${C.border}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -5293,7 +5293,7 @@ function AppInner(){
     await new Promise(r => setTimeout(r, 50));
     setSyncing(true);
     try {
-      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&select=key,value`);
+      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&select=key,value`);
       if (gen !== remotePullGenRef.current) return;
       if (!res?.data || !Array.isArray(res.data)) {
         if (navigator.onLine) setSyncRecoverableError(true);
@@ -5311,6 +5311,15 @@ function AppInner(){
         setDashConfig, setHousehold, setTradingAccount, setAppName, setGreetName,
         setProfCategory, setProfSub, setAccountRates, setOnboarded,
       }, { bootDefaults: false });
+      const pulledSettings = map.settings;
+      if (
+        pulledSettings &&
+        typeof pulledSettings === "object" &&
+        Object.prototype.hasOwnProperty.call(pulledSettings, "darkMode") &&
+        typeof pulledSettings.darkMode === "boolean"
+      ) {
+        setDarkMode(pulledSettings.darkMode);
+      }
       cloudLoadedRef.current=true;
       // Mirror Supabase data into scoped localStorage for offline use
       const scope = "fv6_" + uid.slice(0,8) + ":";
@@ -5363,7 +5372,7 @@ function AppInner(){
           reg.pushManager.getSubscription().then(sub=>{
             if(sub){
               const uid=_getUserId();
-              if(uid)supaFetch(`/rest/v1/push_subscriptions?user_id=eq.${uid}`,{method:"DELETE"});
+              if(uid)supaFetch(`/rest/v1/push_subscriptions?user_id=eq.${encodeURIComponent(uid)}`,{method:"DELETE"});
               sub.unsubscribe();
             }
           });
@@ -5475,7 +5484,7 @@ function AppInner(){
         let _bulkMap={};
         if(uid_boot){
           try{
-            const bulk=await supaFetch(`/rest/v1/user_data?user_id=eq.${uid_boot}&select=key,value`);
+            const bulk=await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid_boot)}&select=key,value`);
             if(Array.isArray(bulk?.data))bulk.data.forEach(r=>{_bulkMap[r.key]=r.value;});
           }catch{}
         }
@@ -5512,6 +5521,15 @@ function AppInner(){
           setDashConfig,setHousehold,setTradingAccount,setAppName,setGreetName,
           setProfCategory,setProfSub,setAccountRates,setOnboarded,
         },{bootDefaults:true});
+        const bootSettings = bootMap.settings;
+        if(
+          bootSettings &&
+          typeof bootSettings === "object" &&
+          Object.prototype.hasOwnProperty.call(bootSettings,"darkMode") &&
+          typeof bootSettings.darkMode === "boolean"
+        ){
+          setDarkMode(bootSettings.darkMode);
+        }
         // After all boot setState calls so ss() effects never see cloudLoadedRef + stale [] (would overwrite Supabase).
         if(Object.keys(_bulkMap).length>0)cloudLoadedRef.current=true;
       }catch(e){console.error("Load error",e);}
@@ -6255,7 +6273,7 @@ function AppInner(){
                   </button>);
                 })()}
                 {syncing&&<div style={{width:7,height:7,borderRadius:"50%",background:C.accent,flexShrink:0,animation:"pulse 1.2s ease-in-out infinite"}} title="Syncing..."/>}
-                <button className="ba" onClick={()=>setDarkMode(d=>!d)} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 9px",cursor:"pointer",display:"flex",color:C.textMid}}>{darkMode?<Sun size={15}/>:<Moon size={15}/>}</button>
+                <button className="ba" onClick={()=>setDarkMode(d=>{const n=!d;setSettings(s=>({...s,darkMode:n}));return n;})} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 9px",cursor:"pointer",display:"flex",color:C.textMid}}>{darkMode?<Sun size={15}/>:<Moon size={15}/>}</button>
                 <button className="ba" onClick={()=>setHidden(h=>!h)} style={{background:hidden?C.accentBg:C.bg,border:`1px solid ${hidden?C.accentMid:C.border}`,borderRadius:10,padding:"7px 9px",cursor:"pointer",display:"flex",color:hidden?C.accent:C.textMid}}>{hidden?<EyeOff size={15}/>:<Eye size={15}/>}</button>
               </div>
             </div>
@@ -6872,7 +6890,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast} settlements={settlements} setSettlements={setSettlements} hhBudgets={hhBudgets} setHhBudgets={setHhBudgets}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast} onLoadDemo={isDemoMode?undefined:requestLoadDemo}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast} onLoadDemo={isDemoMode?undefined:requestLoadDemo}/>}
 
         {tab==="notifs"&&(
           <div className="fu">

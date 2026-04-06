@@ -3,6 +3,12 @@ import { Download, X } from "lucide-react";
 import { C, MF } from "../lib/uiTokens.js";
 import { todayStr } from "../lib/moneyFormat.js";
 import { totalCheckingBalance, totalSavingsBalance } from "../lib/cashAccounts.js";
+import { escapeHtml } from "../lib/escapeHtml.js";
+
+function safeHexColor(c, fb = "#6366F1") {
+  if (typeof c !== "string" || !/^#[0-9A-Fa-f]{3,8}$/.test(c.trim())) return fb;
+  return c.trim();
+}
 
 export default function ExportModal({expenses,bills,debts,accounts,income,savingsGoals,budgetGoals,trades,shifts,categories,appName,greetName,tradingAccount,onClose}){
   const now=new Date();
@@ -156,30 +162,30 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
       const d=new Date(e.date+"T00:00:00");
       const dateStr=d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
       const amt=parseFloat(e.amount||0);
-      return`<tr><td>${dateStr}</td><td><strong>${(e.name||"").replace(/</g,"&lt;")}</strong></td><td><span class="cat-pill">${e.category||""}</span></td><td class="r debit">-$${amt.toFixed(2)}</td></tr>`;
+      return`<tr><td>${escapeHtml(dateStr)}</td><td><strong>${escapeHtml(e.name||"")}</strong></td><td><span class="cat-pill">${escapeHtml(e.category||"")}</span></td><td class="r debit">-$${amt.toFixed(2)}</td></tr>`;
     }).join("");
 
     const catRowsHtml=catSorted.map(([cat,amt])=>{
       const pct=mExp>0?(amt/mExp*100):0;
       const bar=`<div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%;background:#6366F1;"></div></div>`;
-      return`<tr><td>${cat}</td><td>${bar}</td><td class="r">${pct.toFixed(0)}%</td><td class="r debit">$${amt.toFixed(2)}</td></tr>`;
+      return`<tr><td>${escapeHtml(cat)}</td><td>${bar}</td><td class="r">${pct.toFixed(0)}%</td><td class="r debit">$${amt.toFixed(2)}</td></tr>`;
     }).join("");
 
-    const html=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Trackfi — ${monthName} Statement</title>
+    const html=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Trackfi — ${monthNameHtml} Statement</title>
     <style>${BASE_CSS}</style></head><body>
     <div class="page">
     <div class="hdr">
       <div><div class="hdr-logo">💰 <span>trackfi</span></div><div style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:6px;font-weight:500;">Personal Finance</div></div>
-      <div class="hdr-meta"><div class="report-type">Monthly Statement</div><div class="report-name">${monthName}</div><div class="report-date">Prepared ${reportDate}</div></div>
+      <div class="hdr-meta"><div class="report-type">Monthly Statement</div><div class="report-name">${monthNameHtml}</div><div class="report-date">Prepared ${escapeHtml(reportDate)}</div></div>
     </div>
     <div class="stmt-bar">
-      <div class="acct">Account holder: <strong>${userName}</strong></div>
-      <div class="period">Statement period: ${new Date(yr,now.getMonth(),1).toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${reportDate}</div>
+      <div class="acct">Account holder: <strong>${userNameHtml}</strong></div>
+      <div class="period">Statement period: ${escapeHtml(new Date(yr,now.getMonth(),1).toLocaleDateString("en-US",{month:"short",day:"numeric"}))} – ${escapeHtml(reportDate)}</div>
     </div>
     <div class="body">
 
     <div class="summary-grid">
-      <div class="metric indigo"><div class="lbl">Monthly Income</div><div class="val indigo">$${ti.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0})}</div><div class="sub">${income.payFrequency||"Monthly"} pay</div></div>
+      <div class="metric indigo"><div class="lbl">Monthly Income</div><div class="val indigo">$${ti.toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0})}</div><div class="sub">${escapeHtml(income.payFrequency||"Monthly")} pay</div></div>
       <div class="metric red"><div class="lbl">Total Spent</div><div class="val red">$${mExp.toFixed(0)}</div><div class="sub">${thisMonthExp.length} transactions</div></div>
       <div class="metric green"><div class="lbl">Remaining</div><div class="val green">$${Math.max(0,ti-mExp).toFixed(0)}</div><div class="sub">${sr.toFixed(0)}% savings rate</div></div>
       <div class="metric amber"><div class="lbl">Checking Balance</div><div class="val amber">$${totalCheckingBalance(accounts).toLocaleString()}</div><div class="sub">as of today</div></div>
@@ -203,13 +209,13 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
     <div class="sec-hdr"><div class="dot"></div><h2>Outstanding Bills</h2></div>
     <table>
       <thead><tr><th>Bill</th><th>Due Date</th><th>Frequency</th><th class="r">Amount</th></tr></thead>
-      <tbody>${unpaidBills.slice(0,10).map(b=>`<tr><td><strong>${(b.name||"").replace(/</g,"&lt;")}</strong></td><td>${b.dueDate||"—"}</td><td>${b.recurring||"Monthly"}</td><td class="r debit">$${parseFloat(b.amount||0).toFixed(2)}</td></tr>`).join("")}</tbody>
+      <tbody>${unpaidBills.slice(0,10).map(b=>`<tr><td><strong>${escapeHtml(b.name||"")}</strong></td><td>${escapeHtml(b.dueDate||"—")}</td><td>${escapeHtml(b.recurring||"Monthly")}</td><td class="r debit">$${parseFloat(b.amount||0).toFixed(2)}</td></tr>`).join("")}</tbody>
       <tfoot><tr><td colspan="3"><strong>Total Outstanding</strong></td><td class="r debit"><strong>$${totalUnpaid.toFixed(2)}</strong></td></tr></tfoot>
     </table>`:""}
 
     </div>
     <div class="footer">
-      <div class="left"><div class="brand">💰 trackfi</div><div>This document was generated on ${reportDate} and is for personal use only.</div></div>
+      <div class="left"><div class="brand">💰 trackfi</div><div>This document was generated on ${escapeHtml(reportDate)} and is for personal use only.</div></div>
       <div class="right"><div>Document ID: TF-${yr}${String(now.getMonth()+1).padStart(2,"0")}-${Math.random().toString(36).slice(2,8).toUpperCase()}</div><div>Confidential — not for distribution</div></div>
     </div>
     </div>
@@ -235,18 +241,19 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
       const deg=pct*3.6;
       const r=16,circ=2*Math.PI*r;
       const dash=circ*(pct/100);
+      const gc=safeHexColor(g.color,"#6366F1");
       return`<div class="goal-row">
         <svg width="44" height="44" viewBox="0 0 44 44" style="flex-shrink:0">
           <circle cx="22" cy="22" r="${r}" fill="none" stroke="#E2E5EE" stroke-width="5"/>
-          <circle cx="22" cy="22" r="${r}" fill="none" stroke="${g.color||"#6366F1"}" stroke-width="5"
+          <circle cx="22" cy="22" r="${r}" fill="none" stroke="${gc}" stroke-width="5"
             stroke-dasharray="${dash.toFixed(1)} ${circ.toFixed(1)}" stroke-linecap="round"
             transform="rotate(-90 22 22)"/>
-          <text x="22" y="26" text-anchor="middle" font-size="9" font-weight="800" fill="${g.color||"#6366F1"}" font-family="Inter,sans-serif">${pct.toFixed(0)}%</text>
+          <text x="22" y="26" text-anchor="middle" font-size="9" font-weight="800" fill="${gc}" font-family="Inter,sans-serif">${pct.toFixed(0)}%</text>
         </svg>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:700;color:#0A1628">${g.icon||"🎯"} ${(g.name||"").replace(/</g,"&lt;")}</div>
+          <div style="font-size:13px;font-weight:700;color:#0A1628">${escapeHtml(g.icon||"🎯")} ${escapeHtml(g.name||"")}</div>
           <div style="font-size:11px;color:#9CA3AF;margin-top:2px">$${parseFloat(g.saved||0).toLocaleString()} of $${parseFloat(g.target||0).toLocaleString()} · ${g.monthly?("$"+parseFloat(g.monthly).toFixed(0)+"/mo"):""}</div>
-          <div style="margin-top:5px"><div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%;background:${g.color||"#6366F1"};"></div></div></div>
+          <div style="margin-top:5px"><div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%;background:${gc};"></div></div></div>
         </div>
         <div style="font-size:15px;font-weight:800;color:${pct>=100?"#059669":"#6366F1"};flex-shrink:0">${pct>=100?"✓ Done":"$"+Math.max(0,parseFloat(g.target||0)-parseFloat(g.saved||0)).toLocaleString()+" left"}</div>
       </div>`;
@@ -257,11 +264,11 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
     <div class="page">
     <div class="hdr">
       <div><div class="hdr-logo">💰 <span>trackfi</span></div><div style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:6px;font-weight:500;">Personal Finance</div></div>
-      <div class="hdr-meta"><div class="report-type">Net Worth Report</div><div class="report-name">${userName}</div><div class="report-date">As of ${reportDate}</div></div>
+      <div class="hdr-meta"><div class="report-type">Net Worth Report</div><div class="report-name">${userNameHtml}</div><div class="report-date">As of ${escapeHtml(reportDate)}</div></div>
     </div>
     <div class="stmt-bar">
-      <div class="acct">Account holder: <strong>${userName}</strong></div>
-      <div class="period">Report date: <strong>${reportDate}</strong></div>
+      <div class="acct">Account holder: <strong>${userNameHtml}</strong></div>
+      <div class="period">Report date: <strong>${escapeHtml(reportDate)}</strong></div>
     </div>
     <div class="body">
 
@@ -282,7 +289,7 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
       </div>
       <div class="bal-group">
         <h3>Liabilities</h3>
-        ${debtItems.length?debtItems.map(d=>`<div class="bal-row"><span class="nm">💳 ${(d.l||"").replace(/</g,"&lt;")}${d.rate?" ("+d.rate+"%)":" "}</span><span class="amt" style="color:#DC2626">$${parseFloat(d.v||0).toLocaleString()}</span></div>`).join(""):"<div style='color:#9CA3AF;font-size:13px;padding:12px 0'>No debts — debt free! 🎉</div>"}
+        ${debtItems.length?debtItems.map(d=>`<div class="bal-row"><span class="nm">💳 ${escapeHtml(d.l||"")}${d.rate?" ("+escapeHtml(String(d.rate))+"%)":" "}</span><span class="amt" style="color:#DC2626">$${parseFloat(d.v||0).toLocaleString()}</span></div>`).join(""):"<div style='color:#9CA3AF;font-size:13px;padding:12px 0'>No debts — debt free! 🎉</div>"}
         ${td>0?`<div class="bal-total"><span>Total Debt</span><span style="color:#DC2626">$${td.toLocaleString()}</span></div>`:""}
       </div>
     </div>
@@ -295,13 +302,13 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
     <div class="sec-hdr"><div class="dot"></div><h2>Debt Detail</h2></div>
     <table>
       <thead><tr><th>Name</th><th>Type</th><th class="r">Rate</th><th class="r">Min Payment</th><th class="r">Monthly Interest</th><th class="r">Balance</th></tr></thead>
-      <tbody>${debts.map(d=>`<tr><td><strong>${(d.name||"").replace(/</g,"&lt;")}</strong></td><td>${d.type||"—"}</td><td class="r">${d.rate||0}% APR</td><td class="r">$${parseFloat(d.minPayment||0).toFixed(2)}</td><td class="r" style="color:#DC2626">$${(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)).toFixed(2)}</td><td class="r debit">$${parseFloat(d.balance||0).toLocaleString()}</td></tr>`).join("")}</tbody>
+      <tbody>${debts.map(d=>`<tr><td><strong>${escapeHtml(d.name||"")}</strong></td><td>${escapeHtml(d.type||"—")}</td><td class="r">${escapeHtml(String(d.rate||0))}% APR</td><td class="r">$${parseFloat(d.minPayment||0).toFixed(2)}</td><td class="r" style="color:#DC2626">$${(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)).toFixed(2)}</td><td class="r debit">$${parseFloat(d.balance||0).toLocaleString()}</td></tr>`).join("")}</tbody>
       <tfoot><tr><td colspan="4"><strong>Totals</strong></td><td class="r" style="color:#DC2626"><strong>$${debts.reduce((s,d)=>s+(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)),0).toFixed(2)}/mo</strong></td><td class="r debit"><strong>$${td.toLocaleString()}</strong></td></tr></tfoot>
     </table>`:""}
 
     </div>
     <div class="footer">
-      <div class="left"><div class="brand">💰 trackfi</div><div>Net worth snapshot as of ${reportDate}. Values reflect manually entered balances.</div></div>
+      <div class="left"><div class="brand">💰 trackfi</div><div>Net worth snapshot as of ${escapeHtml(reportDate)}. Values reflect manually entered balances.</div></div>
       <div class="right"><div>Document ID: TF-NW-${Math.random().toString(36).slice(2,10).toUpperCase()}</div><div>Confidential — personal use only</div></div>
     </div>
     </div>
@@ -343,11 +350,11 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
     <div class="page">
     <div class="hdr">
       <div><div class="hdr-logo">💰 <span>trackfi</span></div><div style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:6px;font-weight:500;">Personal Finance</div></div>
-      <div class="hdr-meta"><div class="report-type">Annual Summary</div><div class="report-name">${yr} Year to Date</div><div class="report-date">Through ${reportDate}</div></div>
+      <div class="hdr-meta"><div class="report-type">Annual Summary</div><div class="report-name">${yr} Year to Date</div><div class="report-date">Through ${escapeHtml(reportDate)}</div></div>
     </div>
     <div class="stmt-bar">
-      <div class="acct">Account holder: <strong>${userName}</strong></div>
-      <div class="period">Year: <strong>Jan – ${new Date(yr,now.getMonth(),1).toLocaleDateString("en-US",{month:"short"})} ${yr}</strong></div>
+      <div class="acct">Account holder: <strong>${userNameHtml}</strong></div>
+      <div class="period">Year: <strong>Jan – ${escapeHtml(new Date(yr,now.getMonth(),1).toLocaleDateString("en-US",{month:"short"}))} ${yr}</strong></div>
     </div>
     <div class="body">
 
@@ -371,19 +378,19 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
     <div class="sec-hdr"><div class="dot"></div><h2>Top Spending Categories — YTD</h2></div>
     <table>
       <thead><tr><th>Category</th><th>Breakdown</th><th class="r">% of Spending</th><th class="r">YTD Total</th></tr></thead>
-      <tbody>${ytdCats.map(([cat,amt])=>{const pct=ytdTotal>0?(amt/ytdTotal*100):0;return`<tr><td>${cat}</td><td><div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%;background:#6366F1;"></div></div></td><td class="r">${pct.toFixed(0)}%</td><td class="r debit">$${amt.toFixed(2)}</td></tr>`;}).join("")}</tbody>
+      <tbody>${ytdCats.map(([cat,amt])=>{const pct=ytdTotal>0?(amt/ytdTotal*100):0;return`<tr><td>${escapeHtml(cat)}</td><td><div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%;background:#6366F1;"></div></div></td><td class="r">${pct.toFixed(0)}%</td><td class="r debit">$${amt.toFixed(2)}</td></tr>`;}).join("")}</tbody>
       <tfoot><tr><td colspan="3"><strong>Total YTD</strong></td><td class="r debit"><strong>$${ytdTotal.toFixed(2)}</strong></td></tr></tfoot>
     </table>
 
     <div class="sec-hdr"><div class="dot"></div><h2>Month-by-Month Breakdown</h2></div>
     <table>
       <thead><tr><th>Month</th><th class="r">Transactions</th><th>Top Category</th><th class="r">vs Average</th><th class="r">Total</th></tr></thead>
-      <tbody>${months.map(m=>{const diff=avgMonth>0?((m.total-avgMonth)/avgMonth*100):0;const col=diff>15?"#DC2626":diff<-15?"#059669":"#6366F1";return`<tr><td><strong>${m.mn} ${yr}</strong></td><td class="r">${m.count}</td><td><span class="cat-pill">${m.top}</span></td><td class="r" style="color:${col};font-weight:700">${diff>0?"+":""}${diff.toFixed(0)}%</td><td class="r debit">$${m.total.toFixed(2)}</td></tr>`;}).join("")}</tbody>
+      <tbody>${months.map(m=>{const diff=avgMonth>0?((m.total-avgMonth)/avgMonth*100):0;const col=diff>15?"#DC2626":diff<-15?"#059669":"#6366F1";return`<tr><td><strong>${escapeHtml(m.mn)} ${yr}</strong></td><td class="r">${m.count}</td><td><span class="cat-pill">${escapeHtml(m.top)}</span></td><td class="r" style="color:${col};font-weight:700">${diff>0?"+":""}${diff.toFixed(0)}%</td><td class="r debit">$${m.total.toFixed(2)}</td></tr>`;}).join("")}</tbody>
     </table>
 
     </div>
     <div class="footer">
-      <div class="left"><div class="brand">💰 trackfi</div><div>Annual summary for ${yr}, generated ${reportDate}. All values manually tracked.</div></div>
+      <div class="left"><div class="brand">💰 trackfi</div><div>Annual summary for ${yr}, generated ${escapeHtml(reportDate)}. All values manually tracked.</div></div>
       <div class="right"><div>Document ID: TF-YTD-${yr}-${Math.random().toString(36).slice(2,8).toUpperCase()}</div><div>Confidential — personal use only</div></div>
     </div>
     </div>

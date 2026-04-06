@@ -2,6 +2,8 @@
 export const C = {
   bg: "#F0F2F8",
   surface: "#FFFFFF",
+  /** Modal / elevated card on overlays (session dialog, etc.) */
+  card: "#FFFFFF",
   surfaceAlt: "#F7F8FC",
   border: "#E2E5EE",
   borderLight: "#ECEEF5",

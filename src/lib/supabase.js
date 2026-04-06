@@ -150,7 +150,9 @@ export async function sg(k) {
   const bare = k.replace("fv6:", "");
   if (uid) {
     try {
-      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${uid}&key=eq.${bare}&select=value`);
+      const res = await supaFetch(
+        `/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&key=eq.${encodeURIComponent(bare)}&select=value`
+      );
       if (Array.isArray(res?.data) && res.data.length > 0) return res.data[0].value;
     } catch {}
   }
