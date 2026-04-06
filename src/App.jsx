@@ -863,11 +863,62 @@ function OnboardingWizard({onComplete}){
     </div>
   );
 }
-function parseMsg(text,categories,debts,opts={}){
+/** Loose bill name match for chat commands ("paid electric", "mark rent as paid"). */
+function chatMatchBill(bills,phrase){
+  if(!bills||!bills.length||!phrase)return null;
+  const q=String(phrase).toLowerCase().replace(/^(the|my|a)\s+/i,"").trim();
+  if(!q)return null;
+  const exact=bills.find(b=>(b.name||"").toLowerCase()===q);
+  if(exact)return exact;
+  return bills.find(b=>{
+    const n=(b.name||"").toLowerCase();
+    return n&&(n.includes(q)||q.includes(n));
+  })||null;
+}
+/** Expense date from natural language + optional ISO in message. */
+function chatPickExpenseDate(text){
+  const t=text.toLowerCase();
+  const dt=new Date();
+  const _localDs=d2=>d2.getFullYear()+"-"+String(d2.getMonth()+1).padStart(2,"0")+"-"+String(d2.getDate()).padStart(2,"0");
+  if(t.includes("tomorrow")){const d=new Date(dt);d.setDate(d.getDate()+1);return _localDs(d);}
+  if(t.includes("yesterday")){const d=new Date(dt);d.setDate(d.getDate()-1);return _localDs(d);}
+  const ago=text.match(/\b(\d{1,2})\s*days?\s*ago\b/i);
+  if(ago){const d=new Date(dt);d.setDate(d.getDate()-parseInt(ago[1],10));return _localDs(d);}
+  const iso=text.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+  if(iso){
+    const y=iso[1],mo=iso[2].padStart(2,"0"),da=iso[3].padStart(2,"0");
+    return y+"-"+mo+"-"+da;
+  }
+  const DAYS=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  const lastDayM=t.match(/last\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
+  if(lastDayM){const target=DAYS.indexOf(lastDayM[1].toLowerCase());const d=new Date(dt);const curr=d.getDay();const diff=curr>=target?curr-target:curr-target+7;d.setDate(d.getDate()-Math.max(diff,1));return _localDs(d);}
+  return todayStr();
+}
+/** Route stats questions before action parsing (includes phrases that are not real questions). */
+function chatIsStatsQuery(t){
+  const s=t.trim();
+  if(s.includes("?"))return true;
+  if(/^(how|what|when|where|why|can|could|should|would|is|are|am|do|does|did|will|tell|summarize|calculate|compare)\b/i.test(s))return true;
+  if(/^(show|list)\s+(me\s+)?(my\s+)?(balance|balances|bills|debts|goals|income|spending|budget|net|worth|payday|subscriptions|transactions|trades|health|categories|envelope|envelopes)/i.test(s))return true;
+  if(/^my\s+(balance|balances|bills|debts|goals|income|spending|budget|net|worth|payday|subscriptions|transactions|trades)/i.test(s))return true;
+  if(/\b(split spending|safe to spend|spending by paid|paid from breakdown|year to date|ytd spending)\b/i.test(s))return true;
+  return false;
+}
+
+function parseMsg(text,categories,debts,bills,opts={}){
   const defExp=normalizePaidFrom(opts.defaultExpensePaidFrom||"checking");
   const defBill=normalizePaidFrom(opts.defaultBillPaidFrom||"checking");
   const cards=cardDebtsList(debts);
   const t=text.toLowerCase().trim();
+  // Mark bill paid (before amount-based parsing)
+  if(bills&&bills.length){
+    let hit=null;
+    const tryPhrase=ph=>{const b=chatMatchBill(bills,ph);if(b&&!b.paid)hit=b;};
+    let m=text.match(/^\s*(?:mark\s+)?(.+?)\s+as\s+paid\s*\.?\s*$/i);if(m)tryPhrase(m[1]);
+    if(!hit){m=text.match(/^\s*paid\s+(?:my\s+|the\s+)?(.+?)\s*\.?\s*$/i);if(m&&!/^\d+$/.test(m[1].trim()))tryPhrase(m[1]);}
+    if(!hit){m=text.match(/^\s*(.+?)\s+paid\s*\.?\s*$/i);if(m&&!/^\d/.test(m[1].trim())&&m[1].trim().length>1)tryPhrase(m[1]);}
+    if(hit)return{type:"billPaid",billId:hit.id,name:hit.name};
+  }
   // Pre-process: split bill
   const splitM=t.match(/split\s*(\d+)/i);const splitBy=splitM?parseInt(splitM[1]):1;
   // Pre-process: tip/percentage
@@ -875,12 +926,8 @@ function parseMsg(text,categories,debts,opts={}){
   const am=text.match(/\$?([\d,]+(?:\.\d{1,2})?)/);
   const rawAmount=am?parseFloat(am[1].replace(/,/g,"")):null;
   const amount=rawAmount!=null?String(((rawAmount*(1+tipPct))/splitBy).toFixed(2)):null;
-  const dt=new Date();let date=todayStr();
-  const _localDs=d2=>{return d2.getFullYear()+"-"+String(d2.getMonth()+1).padStart(2,"0")+"-"+String(d2.getDate()).padStart(2,"0");};
-  if(t.includes("yesterday")){const d=new Date(dt);d.setDate(d.getDate()-1);date=_localDs(d);}
-  const DAYS=["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
-  const lastDayM=t.match(/last\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i);
-  if(lastDayM){const target=DAYS.indexOf(lastDayM[1].toLowerCase());const d=new Date(dt);const curr=d.getDay();const diff=curr>=target?curr-target:curr-target+7;d.setDate(d.getDate()-Math.max(diff,1));date=_localDs(d);}
+  const dt=new Date();
+  let date=chatPickExpenseDate(text);
   // Transfer detection (moved/transferred X to savings/checking)
   if((t.includes("moved")||t.includes("transferred")||t.includes("transfer"))&&amount){
     if(t.includes("saving"))return{type:"account",key:"savings",amount,text:"Moved to savings"};
@@ -890,9 +937,16 @@ function parseMsg(text,categories,debts,opts={}){
   let dueDate=null;
   if(dueM){const d=new Date(dt.getFullYear(),dt.getMonth(),parseInt(dueM[1]));if(d<dt)d.setMonth(d.getMonth()+1);dueDate=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
   if(t==="undo"||t.startsWith("undo last")||t.includes("undo that"))return{type:"undo"};
-  const acctKeys={checking:["checking","check"],savings:["savings","saving"],cushion:["cushion","buffer"]};
-  for(const[key,kws]of Object.entries(acctKeys)){if(kws.some(k=>t.includes(k))&&amount)return{type:"account",key,amount};}
-  if((t.includes("primary income")||t.includes("salary set")||t.includes("income set"))&&amount)return{type:"income",key:"primary",amount};
+  const acctKeys={checking:["checking","check","debit"],savings:["savings","saving"],cushion:["cushion","buffer","emergency fund","e-fund"],investments:["investments","investment account","mutual fund"],k401:["401","401k","four oh one"],roth_ira:["roth","roth ira"],brokerage:["brokerage","taxable"],crypto:["crypto","bitcoin","btc","ethereum"],hsa:["hsa","health savings"],property:["property","home value","house value"],vehicles:["vehicles","car value","auto value"]};
+  for(const[key,kws]of Object.entries(acctKeys)){if(kws.some(k=>t.includes(k))&&amount&&!/\b(bill|expense|spent|loan|debt|due)\b/.test(t))return{type:"account",key,amount};}
+  if(amount){
+    if(/\b(freelance|contracting|1099|side hustle|gig work)\b/.test(t))return{type:"income",key:"freelance",amount};
+    if(/\bdividend/.test(t))return{type:"income",key:"dividends",amount};
+    if(/\brental\b/.test(t))return{type:"income",key:"rental",amount};
+    if(/\btrading income|options income\b/.test(t)||(t.includes("trading")&&t.includes("income")))return{type:"income",key:"trading",amount};
+    if(/\bother income|bonus\b/.test(t)||(t.includes("other")&&/\bincome|month\b/.test(t)))return{type:"income",key:"other",amount};
+    if((t.includes("primary income")||t.includes("salary set")||t.includes("income set")||/\bpaycheck\b/.test(t)||/\bsalary\b/.test(t)||/\bprimary\b/.test(t)||/\btake[\s-]?home\b/.test(t)||/\bper pay\b/.test(t))&&!/\b(other|freelance|rental|dividend|trading income)\b/.test(t))return{type:"income",key:"primary",amount};
+  }
   const tradeKws=["traded","long ","short ","es ","nq ","cl ","gc ","futures","position"];
   if(tradeKws.some(k=>t.includes(k))&&amount){
     const sym=(text.match(/\b(ES|NQ|CL|GC|SI|ZB|YM|MES|MNQ|RTY)\b/i)||[])[1]?.toUpperCase()||"FUTURE";
@@ -913,7 +967,13 @@ function parseMsg(text,categories,debts,opts={}){
     name=name.split(" ").filter(Boolean).map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")||"Bill";
     let billPf=defBill;
     if(/\b(cc|credit card|on card|amex|visa|mastercard|discover)\b/i.test(t))billPf="credit";
-    return{type:"bill",name,amount,dueDate:dueDate||"",recurring:"Monthly",autoPay:false,paidFrom:billPf};
+    let recurring="Monthly";
+    if(/\bweekly\b/.test(t)&&!/\bbi-?weekly\b/.test(t))recurring="Weekly";
+    else if(/\bbi-?weekly\b|every other week\b/.test(t))recurring="Bi-weekly";
+    else if(/\bannual|yearly\b/.test(t))recurring="Annual";
+    else if(/\bquarterly\b/.test(t))recurring="Quarterly";
+    else if(/\bone[\s-]?time|single\b/.test(t))recurring="One-time";
+    return{type:"bill",name,amount,dueDate:dueDate||"",recurring,autoPay:false,paidFrom:billPf};
   }
   if(amount){
     const catMap={
@@ -941,7 +1001,7 @@ function parseMsg(text,categories,debts,opts={}){
     let category="Misc",best=0;
     for(const[cat,kws]of Object.entries(catMap)){const s=kws.filter(k=>t.includes(k)).length;if(s>best){best=s;category=cat;}}
     if(best===0){for(const c of categories){if(t.includes(c.name.toLowerCase())){category=c.name;break;}}}
-    let name=text.replace(/\$?[\d,]+(?:\.\d{1,2})?/g,"").replace(/\b(spent|bought|paid|got|for|on|the|a|my|at|to|today|yesterday)\b/gi,"").replace(/\s+/g," ").trim();
+    let name=text.replace(/\$?[\d,]+(?:\.\d{1,2})?/g,"").replace(/^\s*(?:add\s+)?(?:an?\s+)?(?:expense\s*:?\s*|log\s+|logged\s+|spent\s+|bought\s+|paid\s+)/gi,"").replace(/\b(for|on|the|a|my|at|to|today|yesterday|tomorrow)\b/gi,"").replace(/\s+/g," ").trim();
     name=name.split(" ").filter(Boolean).map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(" ")||"Expense";
     let expPf=defExp;
     if(/\b(cc|credit card|on card|amex|visa|mastercard|discover)\b/i.test(t))expPf="credit";
@@ -957,10 +1017,18 @@ function parseMsg(text,categories,debts,opts={}){
 }
 
 function ChatView({categories,expenses,bills,debts,accounts,income,savingsGoals,trades,tradingAccount,budgetGoals=[],setExpenses,setBills,setDebts,setSGoals,setAccounts,setIncome,setTrades,setBGoals,applySpend,applyRefund,defaultExpensePaidFrom,defaultBillPaidFrom,settings}){
-  const[msgs,setMsgs]=useState([{role:"a",text:"Hey! Log expenses here — you always confirm paid from (checking, credit, savings, or track-only) before saving.\
-• Credit charges go to a card you add under More → Debt (type: Credit card). Say \"lunch 12 on card\" or include the card name if you have several.\
-• \"rent 1200 due 28th\" → bill. \"checking 3200\" → balance · transfers · debt / trades / undo\
-Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · groceries · payday · goals"}]);
+  const[msgs,setMsgs]=useState([{role:"a",text:"Hey! Natural-language finance logger — confirm paid-from on expenses before saving.\n\n\
+WRITE:\n• Expense: lunch 12 · add expense coffee 5.50 · groceries 80 yesterday · starbucks 4 tomorrow · 15% tip\n\
+• Card: … on card · … chase visa (matches card name)\n\
+• Bill: rent 1500 due 1st · electric 90 weekly · gym 50 annual\n\
+• Paid: paid rent · mark electric as paid · netflix paid\n\
+• Balances: checking 3200 · savings 10k · roth 25000 · hsa 1200 · moved 200 to savings\n\
+• Income / mo: salary 4000 · freelance 800 · dividends 50 · other income 200\n\
+• Debt / trade: car loan 12000 at 6% · long ES +450\n\
+• Split: dinner 120 split 3\n\
+UNDO: undo\n\n\
+ASK: split spending · my balances · bills · can I afford $200? · spending on Groceries · goals · debt · net worth · \
+budget · trades · ytd · recent expenses · payday · help"}]);
   const[input,setInput]=useState("");const[pending,setPending]=useState(null);const[history,setHistory]=useState([]);
   const[expConfirm,setExpConfirm]=useState(null);
   const botRef=useRef();
@@ -1034,7 +1102,13 @@ Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · grocerie
       if(_topCats.length>0)return"Top spending this month:\n"+_topCats.slice(0,6).map(([cat,amt],i)=>(i+1)+". "+cat+": "+fmt(amt)).join("\n")+"\n\nTotal: "+fmt(_thisTotal);
       return"No spending logged this month yet.";
     }
-    if(t.includes("how am i")||t.includes("doing this month")||t.includes("this month")||(t.includes("spend")&&!t.includes("spend on"))){
+    if(t.includes("ytd")||t.includes("year to date")){
+      const y=chatNow.getFullYear();
+      const ytd=expenses.filter(e=>e.date&&e.date.startsWith(String(y))).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+      const n=expenses.filter(e=>e.date&&e.date.startsWith(String(y))).length;
+      return"\ud83d\udcc5 "+y+" YTD spending: "+fmt(ytd)+" ("+n+" transactions)";
+    }
+    if(t.includes("how am i")||t.includes("doing this month")||t.includes("this month")||(t.includes("spend")&&!t.includes("spend on")&&!t.includes("ytd")&&!t.includes("year to date"))){
       const dom=new Date().getDate();const dim=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).getDate();
       const projected=dom>0?(_thisTotal/dom)*dim:0;
       const diff=_prevTotal>0?((_thisTotal-_prevTotal)/_prevTotal*100):0;
@@ -1043,7 +1117,9 @@ Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · grocerie
     }
     if(t.includes("balance")||t.includes("checking")||(t.includes("account")&&!t.includes("health"))){
       const total=["checking","savings","cushion","investments","k401","roth_ira","brokerage","crypto","hsa"].reduce((s,k)=>s+(parseFloat(accounts[k]||0)),0);
-      return"\ud83d\udcb3 Checking: "+fmt(accounts.checking)+"\n\ud83d\udcb0 Savings: "+fmt(accounts.savings)+(parseFloat(accounts.cushion||0)>0?"\n\ud83d\udee1\ufe0f Cushion: "+fmt(accounts.cushion):"")+(ccOwed>0?"\n\ud83d\udcb3 Credit card owed (app): "+fmt(ccOwed):"")+(parseFloat(accounts.investments||0)>0?"\n\ud83d\udcc8 Investments: "+fmt(accounts.investments):"")+"\nTotal liquid (assets): "+fmt(total);
+      const tb=parseFloat(tradingAccount?.balance||0);
+      const tx=(tb>0||/\btrading (bal|balance|acct|account)\b/.test(t))?"\n\ud83d\udcc8 Trading (app): "+fmt(tradingAccount?.balance||0):"";
+      return"\ud83d\udcb3 Checking: "+fmt(accounts.checking)+"\n\ud83d\udcb0 Savings: "+fmt(accounts.savings)+(parseFloat(accounts.cushion||0)>0?"\n\ud83d\udee1\ufe0f Cushion: "+fmt(accounts.cushion):"")+(ccOwed>0?"\n\ud83d\udcb3 Credit card owed (app): "+fmt(ccOwed):"")+(parseFloat(accounts.investments||0)>0?"\n\ud83d\udcc8 Investments: "+fmt(accounts.investments):"")+tx+"\nTotal liquid (assets): "+fmt(total);
     }
     if(t.includes("payday")||t.includes("paycheck")||t.includes("pay day")||t.includes("next pay")||t.includes("get paid")){
       const days=Math.max(0,Math.ceil((chatNextPay-chatNow)/86400000));
@@ -1053,12 +1129,42 @@ Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · grocerie
       const sources=[];
       if(income.primary)sources.push("\ud83d\udcb5 Paycheck ("+income.payFrequency+"): "+fmt(income.primary));
       if(income.other)sources.push("\ud83d\udccb Other: "+fmt(income.other)+"/mo");
+      if(income.trading)sources.push("\ud83d\udcc8 Trading: "+fmt(income.trading)+"/mo");
       if(income.rental)sources.push("\ud83c\udfe0 Rental: "+fmt(income.rental)+"/mo");
-      if(income.dividends)sources.push("\ud83d\udcc8 Dividends: "+fmt(income.dividends)+"/mo");
+      if(income.dividends)sources.push("\ud83d\udcca Dividends: "+fmt(income.dividends)+"/mo");
       if(income.freelance)sources.push("\ud83d\udcbb Freelance: "+fmt(income.freelance)+"/mo");
-      const mult=chatPayFreq==="Weekly"?(52/12):chatPayFreq==="Twice Monthly"?2:chatPayFreq==="Monthly"?1:(26/12);
-      const monthly=(parseFloat(income.primary||0)*mult)+(parseFloat(income.other||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
+      const monthly=ti;
       return(sources.length?sources.join("\n"):"No income set yet")+"\n\nMonthly total: "+fmt(monthly)+"\nAnnual est: "+fmt(monthly*12);
+    }
+    if(t.includes("budget")||t.includes("envelope")||(t.includes("category")&&t.includes("limit"))){
+      if(!budgetGoals||!budgetGoals.length)return"No budget envelopes yet — add them under Budget in the menu.";
+      const lines=budgetGoals.map(g=>{
+        const lim=parseFloat(g.limit||0);if(!lim)return(g.category||"Cat")+": no limit set";
+        const spent=_thisExp.filter(e=>e.category===g.category).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+        const pct=Math.min(100,lim>0?(spent/lim)*100:0);
+        return(g.category||"—")+": "+fmt(spent)+" / "+fmt(lim)+" ("+pct.toFixed(0)+"%)";
+      });
+      return"\ud83d\udccb Budget vs MTD spend:\n"+lines.join("\n");
+    }
+    if(t.includes("trade")||t.includes("p&l")||t.includes("pnl")||t.includes("win rate")||(t.includes("futures")&&t.includes("how"))){
+      if(!trades.length)return"No trades logged. Example: long ES +450";
+      const pnls=trades.map(x=>parseFloat(x.pnl)||0);const wins=pnls.filter(p=>p>0).length;
+      const total=pnls.reduce((s,p)=>s+p,0);
+      return"\ud83d\udcc8 Trades: "+trades.length+" · Win rate: "+(pnls.length?((wins/pnls.length)*100).toFixed(0):"0")+"%\nNet P&L: "+(total>=0?"+":"")+fmt(total)+"\nLast: "+(trades[0]?trades[0].symbol+" "+trades[0].side+" "+fmt(trades[0].pnl):"—");
+    }
+    if(t.includes("recent")&&(t.includes("expense")||t.includes("transaction")||t.includes("purchase")||t.includes("spent"))){
+      const last=[...expenses].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,8);
+      if(!last.length)return"No expenses yet.";
+      return"Latest expenses:\n"+last.map(e=>(e.date||"—")+" · "+e.name+" · "+fmt(e.amount)+" · "+(e.category||"")).join("\n");
+    }
+    if(t.includes("liquid")||t.includes("cash on hand")||(t.includes("how much")&&t.includes("cash"))){
+      const liq=totalCheckingBalance(accounts)+totalSavingsBalance(accounts)+parseFloat(accounts.cushion||0);
+      return"\ud83d\udcb0 Liquid (checking + savings + cushion): "+fmt(liq);
+    }
+    if((t.includes("unpaid")||t.includes("outstanding"))&&t.includes("bill")){
+      const u=bills.filter(b=>!b.paid);
+      if(!u.length)return"\u2705 No unpaid bills.";
+      return"\ud83d\udccb Unpaid bills ("+u.length+"): "+fmt(u.reduce((s,b)=>s+(parseFloat(b.amount)||0),0))+"\n"+u.slice(0,10).map(b=>"\u2022 "+b.name+" "+fmt(b.amount)+" due "+(b.dueDate||"—")).join("\n");
     }
     if(t.includes("goal")||t.includes("saving for")||t.includes("savings goal")){
       if(!savingsGoals.length)return"No savings goals set yet. Tap Goals in the menu to add one!";
@@ -1139,16 +1245,22 @@ Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · grocerie
       if(!_topCats.length)return"No spending logged yet this month.";
       return"💸 Where you're spending most:\n"+_topCats.slice(0,5).map(([c,a],i)=>(i+1)+". "+c+": "+fmt(a)).join("\n")+"\nTotal: "+fmt(_thisTotal);
     }
-    if(t.includes("help")||t.includes("what can")||t.includes("commands")||t.includes("how do")){
-      return"\ud83d\udcac Try:\n\u2022 \"lunch 12\" / \"groceries 40 on card\" \u2192 paid-from (checking vs credit)\n\u2022 \"split spending\" \u2192 MTD by paid-from\n\u2022 \"rent 1200 due 28th\" \u2192 bill\n\u2022 \"checking 3200\" \u2192 balance\n\u2022 \"can I afford $200?\" \u00b7 \"my balances\" \u00b7 payday \u00b7 goals \u00b7 debt\n\u2022 \"undo\"";
+    if(t.includes("help")||t.includes("what can")||t.includes("commands")||t.includes("how do")||t.includes("examples")){
+      return"\ud83d\udcac Quick ref —\n\
+\u2022 Expense: lunch 12 · add expense uber 23 on card · gas 45 yesterday\n\
+\u2022 Bill: internet 70 due 15th weekly · paid netflix\n\
+\u2022 Balance: checking 2500 · roth 40000 · moved 100 to savings\n\
+\u2022 Income: salary 5000 · freelance 1200 · dividends 25\n\
+\u2022 Ask: split spending · my bills · budget · trades · ytd · recent expenses · liquid · net worth · can I afford $80?\n\
+\u2022 undo";
     }
     return null;
   }
-  function send(){const text=input.trim();if(!text)return;setInput("");setMsgs(p=>[...p,{role:"u",text}]);const t=text.toLowerCase();const isQ=t.includes("?")||/^(how|what|can|show|is|am|will|when|tell)/.test(t);if(isQ){const ans=handleQ(t);if(ans){setMsgs(p=>[...p,{role:"a",text:ans}]);return;}}const parsed=parseMsg(text,categories,debts,{defaultExpensePaidFrom,defaultBillPaidFrom});if(!parsed){setMsgs(p=>[...p,{role:"a",text:"Try: lunch 12 · lunch 20 on card · split spending · rent 1200 due 28th · checking 3200 · undo\nAsk: can I afford $200? · my balances · my bills"}]);return;}
+  function send(){const text=input.trim();if(!text)return;setInput("");setMsgs(p=>[...p,{role:"u",text}]);const t=text.toLowerCase();const isQ=chatIsStatsQuery(t);if(isQ){const ans=handleQ(t);if(ans){setMsgs(p=>[...p,{role:"a",text:ans}]);return;}}const parsed=parseMsg(text,categories,debts,bills,{defaultExpensePaidFrom,defaultBillPaidFrom});if(parsed?.type==="billPaid"){const b=bills.find(x=>x.id===parsed.billId);if(!b){setMsgs(p=>[...p,{role:"a",text:"Couldn\u2019t find that bill."}]);return;}if(b.paid){setMsgs(p=>[...p,{role:"a",text:parsed.name+" is already marked paid."}]);return;}setBills(p=>p.map(x=>x.id===parsed.billId?{...x,paid:true}:x));setMsgs(p=>[...p,{role:"a",text:"\u2705 Marked "+parsed.name+" as paid."}]);return;}if(!parsed){setMsgs(p=>[...p,{role:"a",text:"I didn\u2019t catch that. Try: lunch 12 · paid electric · rent 900 due 1st · checking 3200 · split spending\nOr tap help for a full list."}]);return;}
     if(parsed.type==="undo"){if(!history.length){setMsgs(p=>[...p,{role:"a",text:"Nothing to undo!"}]);return;}const last=history[history.length-1];if(last.type==="expense"){setExpenses(p=>p.filter(x=>x.id!==last.id));const refund=last.amt!=null?last.amt:parseFloat(expenses.find(e=>e.id===last.id)?.amount)||0;const rp=normalizePaidFrom(last.paidFrom);if(applyRefund&&refund)applyRefund(rp,refund,last.creditDebtId||undefined,last.bankAccountId||undefined);}else if(last.type==="bill")setBills(p=>p.filter(x=>x.id!==last.id));else if(last.type==="debt")setDebts(p=>p.filter(x=>x.id!==last.id));else if(last.type==="trade")setTrades(p=>p.filter(x=>x.id!==last.id));else if(last.type==="account")setAccounts(p=>({...p,[last.key]:last.oldVal}));setHistory(p=>p.slice(0,-1));setMsgs(p=>[...p,{role:"a",text:"↩️ Undone: "+last.label}]);return;}
-    setPending(parsed);setMsgs(p=>[...p,{role:"a",text:parsed.type==="expense"?"Review paid-from below, then Save.":"Confirm?"}]);}
+    setPending(parsed);setMsgs(p=>[...p,{role:"a",text:parsed.type==="expense"?"Review paid-from below, then Save.":parsed.type==="income"?"Confirm income field update below.":"Confirm?"}]);}
   function confirm(){if(!pending)return;const id=Date.now();let lbl="";
-    if(pending.type==="expense"){const _ea=parseFloat(pending.amount)||0;const _pf=normalizePaidFrom(expConfirm?.paidFrom??pending.paidFrom??defaultExpensePaidFrom);const _cards=cardDebtsList(debts);const _ch=cashAccountsByKind(accounts,"checking");const _sv=cashAccountsByKind(accounts,"savings");if(_pf==="credit"){if(!_cards.length){setMsgs(p=>[...p,{role:"a",text:"Add a credit card under More → Debt (type: Credit card), then try again."}]);return;}const _cid=String(expConfirm?.creditDebtId||"");if(!_cid||!_cards.some(c=>String(c.id)===_cid)){setMsgs(p=>[...p,{role:"a",text:"Tap which card below."}]);return;}setExpenses(p=>[...p,{id,name:pending.name,amount:pending.amount,category:pending.category,date:pending.date,notes:"",paidFrom:_pf,creditDebtId:_cid}]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount),amt:_ea,paidFrom:_pf,creditDebtId:_cid}]);if(applySpend&&_ea)applySpend(_pf,_ea,_cid,undefined);lbl="✅ "+pending.name+" ("+fmt(pending.amount)+") on "+(_cards.find(c=>String(c.id)===_cid)?.name||"card")+"!";}else{const _bid=resolveBankAccountIdForExpense(_pf,expConfirm?.bankAccountId,accounts,settings);if((_pf==="checking"&&_ch.length>=2||_pf==="savings"&&_sv.length>=2)&&!_bid){setMsgs(p=>[...p,{role:"a",text:_pf==="checking"?"Tap which checking account below.":"Tap which savings account below."}]);return;}const row={id,name:pending.name,amount:pending.amount,category:pending.category,date:pending.date,notes:"",paidFrom:_pf};if(_bid)row.bankAccountId=_bid;setExpenses(p=>[...p,row]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount),amt:_ea,paidFrom:_pf,...(_bid?{bankAccountId:_bid}:{})}]);if(applySpend&&_ea)applySpend(_pf,_ea,undefined,_bid||undefined);const _cn=_ch.find(c=>String(c.id)===_bid)?.name;const _sn=_sv.find(c=>String(c.id)===_bid)?.name;lbl="✅ "+pending.name+" ("+fmt(pending.amount)+")"+(_cn?" — "+_cn:_sn?" — "+_sn:"")+"!";}}else if(pending.type==="bill"){setBills(p=>[...p,{id,...pending,paid:false,autoPay:false,paidFrom:normalizePaidFrom(pending.paidFrom||defaultBillPaidFrom)}]);setHistory(p=>[...p,{type:"bill",id,label:pending.name}]);lbl="✅ "+pending.name+" bill added!";}else if(pending.type==="debt"){if(pending.isUpdate){setDebts(p=>p.map(d=>d.id===pending.matchId?{...d,balance:pending.balance}:d));}else{setDebts(p=>[...p,{id,name:pending.name,balance:pending.balance,rate:pending.rate||"",minPayment:""}]);setHistory(p=>[...p,{type:"debt",id,label:pending.name}]);}lbl="✅ "+pending.name+" saved!";}else if(pending.type==="trade"){setTrades(p=>[{id,date:pending.date,symbol:pending.symbol,side:pending.side,contracts:"1",pnl:pending.pnl,entry:"",exit:"",note:""},...p]);setHistory(p=>[...p,{type:"trade",id,label:pending.symbol+" "+pending.side}]);lbl="✅ "+pending.symbol+" "+(parseFloat(pending.pnl)>=0?"+":"")+fmt(pending.pnl);}else if(pending.type==="account"){const oldVal=accounts[pending.key];setAccounts(p=>({...p,[pending.key]:pending.amount}));setHistory(p=>[...p,{type:"account",key:pending.key,oldVal,label:pending.key}]);lbl="✅ "+pending.key+": "+fmt(pending.amount);}
+    if(pending.type==="expense"){const _ea=parseFloat(pending.amount)||0;const _pf=normalizePaidFrom(expConfirm?.paidFrom??pending.paidFrom??defaultExpensePaidFrom);const _cards=cardDebtsList(debts);const _ch=cashAccountsByKind(accounts,"checking");const _sv=cashAccountsByKind(accounts,"savings");if(_pf==="credit"){if(!_cards.length){setMsgs(p=>[...p,{role:"a",text:"Add a credit card under More → Debt (type: Credit card), then try again."}]);return;}const _cid=String(expConfirm?.creditDebtId||"");if(!_cid||!_cards.some(c=>String(c.id)===_cid)){setMsgs(p=>[...p,{role:"a",text:"Tap which card below."}]);return;}setExpenses(p=>[...p,{id,name:pending.name,amount:pending.amount,category:pending.category,date:pending.date,notes:"",paidFrom:_pf,creditDebtId:_cid}]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount),amt:_ea,paidFrom:_pf,creditDebtId:_cid}]);if(applySpend&&_ea)applySpend(_pf,_ea,_cid,undefined);lbl="✅ "+pending.name+" ("+fmt(pending.amount)+") on "+(_cards.find(c=>String(c.id)===_cid)?.name||"card")+"!";}else{const _bid=resolveBankAccountIdForExpense(_pf,expConfirm?.bankAccountId,accounts,settings);if((_pf==="checking"&&_ch.length>=2||_pf==="savings"&&_sv.length>=2)&&!_bid){setMsgs(p=>[...p,{role:"a",text:_pf==="checking"?"Tap which checking account below.":"Tap which savings account below."}]);return;}const row={id,name:pending.name,amount:pending.amount,category:pending.category,date:pending.date,notes:"",paidFrom:_pf};if(_bid)row.bankAccountId=_bid;setExpenses(p=>[...p,row]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount),amt:_ea,paidFrom:_pf,...(_bid?{bankAccountId:_bid}:{})}]);if(applySpend&&_ea)applySpend(_pf,_ea,undefined,_bid||undefined);const _cn=_ch.find(c=>String(c.id)===_bid)?.name;const _sn=_sv.find(c=>String(c.id)===_bid)?.name;lbl="✅ "+pending.name+" ("+fmt(pending.amount)+")"+(_cn?" — "+_cn:_sn?" — "+_sn:"")+"!";}}else if(pending.type==="bill"){setBills(p=>[...p,{id,...pending,paid:false,autoPay:false,paidFrom:normalizePaidFrom(pending.paidFrom||defaultBillPaidFrom)}]);setHistory(p=>[...p,{type:"bill",id,label:pending.name}]);lbl="✅ "+pending.name+" bill added!";}else if(pending.type==="debt"){if(pending.isUpdate){setDebts(p=>p.map(d=>d.id===pending.matchId?{...d,balance:pending.balance}:d));}else{setDebts(p=>[...p,{id,name:pending.name,balance:pending.balance,rate:pending.rate||"",minPayment:""}]);setHistory(p=>[...p,{type:"debt",id,label:pending.name}]);}lbl="✅ "+pending.name+" saved!";}else if(pending.type==="trade"){setTrades(p=>[{id,date:pending.date,symbol:pending.symbol,side:pending.side,contracts:"1",pnl:pending.pnl,entry:"",exit:"",note:""},...p]);setHistory(p=>[...p,{type:"trade",id,label:pending.symbol+" "+pending.side}]);lbl="✅ "+pending.symbol+" "+(parseFloat(pending.pnl)>=0?"+":"")+fmt(pending.pnl);}else if(pending.type==="income"){const k=pending.key;setIncome(p=>({...p,[k]:pending.amount}));lbl="✅ Income · "+String(k).replace(/_/g," ")+": "+fmt(pending.amount)+" (per pay period where applicable — adjust in Accounts & Income).";}else if(pending.type==="account"){const oldVal=accounts[pending.key];setAccounts(p=>({...p,[pending.key]:pending.amount}));setHistory(p=>[...p,{type:"account",key:pending.key,oldVal,label:pending.key}]);lbl="✅ "+pending.key+": "+fmt(pending.amount);}
     setMsgs(p=>[...p,{role:"a",text:lbl||"✅ Saved!"}]);setPending(null);}
   const cr=(l,v)=><div style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",background:C.bg,borderRadius:8,marginBottom:3}}><span style={{fontSize:12,color:C.textLight}}>{l}</span><span style={{fontSize:12,color:C.text,fontWeight:600}}>{v}</span></div>;
   return(<div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -1165,11 +1277,11 @@ Ask: \"split spending\" · \"my balances\" · \"can I afford $200?\" · grocerie
     </div>
     <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:8,paddingBottom:pending?88:10,minHeight:0}}>
       {msgs.map((m,i)=><div key={i} style={{display:"flex",justifyContent:m.role==="u"?"flex-end":"flex-start",minWidth:0}}><div style={{maxWidth:"86%",minWidth:0,padding:"11px 14px",borderRadius:m.role==="u"?"18px 18px 4px 18px":"18px 18px 18px 4px",background:m.role==="u"?C.accent:"#fff",color:m.role==="u"?"#fff":C.text,fontSize:14,lineHeight:1.55,border:m.role==="a"?"1px solid "+C.border:"none",whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{m.text}</div></div>)}
-      {pending&&<div style={{background:C.surface,border:"1.5px solid "+C.accentMid,borderRadius:16,padding:18}}><div style={{fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Confirm</div>{pending.name&&cr("Name",pending.name)}{(pending.amount||pending.balance)&&cr("Amount",fmt(pending.amount||pending.balance))}{pending.type==="expense"&&expConfirm&&(<><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:4}}>Paid from</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>{[{k:"checking",l:"🏦 Checking"},{k:"credit",l:"💳 Credit"},{k:"savings",l:"💰 Savings"},{k:"none",l:"📋 Track only"}].map(({k,l})=><button key={k} type="button" className="ba" onClick={()=>setExpConfirm(p=>{const next={...(p||{}),paidFrom:k};if(k==="credit"){const cds=cardDebtsList(debts);if(cds.length)next.creditDebtId=String(cds[0].id);}next.bankAccountId=pickDefaultBankAccountId(k,accounts,settings)||"";return next;})} style={{padding:"8px 12px",borderRadius:10,border:`1.5px solid ${normalizePaidFrom(expConfirm.paidFrom)===k?C.accent:C.border}`,background:normalizePaidFrom(expConfirm.paidFrom)===k?C.accentBg:C.bg,color:normalizePaidFrom(expConfirm.paidFrom)===k?C.accent:C.textMid,fontWeight:normalizePaidFrom(expConfirm.paidFrom)===k?700:600,fontSize:12,cursor:"pointer"}}>{l}</button>)}</div>{normalizePaidFrom(expConfirm.paidFrom)==="credit"&&cardDebtsList(debts).length>0&&<><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Which card</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:4}}>{cardDebtsList(debts).map(d=><button key={d.id} type="button" className="ba" onClick={()=>setExpConfirm(p=>({...p,creditDebtId:String(d.id)}))} style={{padding:"8px 12px",borderRadius:10,border:`1.5px solid ${String(expConfirm.creditDebtId)===String(d.id)?C.accent:C.border}`,background:String(expConfirm.creditDebtId)===String(d.id)?C.accentBg:C.bg,color:String(expConfirm.creditDebtId)===String(d.id)?C.accent:C.textMid,fontWeight:String(expConfirm.creditDebtId)===String(d.id)?700:600,fontSize:12,cursor:"pointer",maxWidth:"100%"}}>{d.name} <span style={{opacity:.75}}>({fmt(parseFloat(d.balance||0))})</span></button>)}</div></>}{normalizePaidFrom(expConfirm.paidFrom)==="credit"&&cardDebtsList(debts).length===0&&<div style={{fontSize:12,color:C.red,marginBottom:10,lineHeight:1.45}}>Add each card under <strong>More → Debt</strong> (type: <strong>Credit card</strong>). You can't charge a card until at least one is listed.</div>}{normalizePaidFrom(expConfirm.paidFrom)==="checking"&&chPick.length>1&&<><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Which checking</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:4}}>{chPick.map(a=><button key={a.id} type="button" className="ba" onClick={()=>setExpConfirm(p=>({...p,bankAccountId:String(a.id)}))} style={{padding:"8px 12px",borderRadius:10,border:`1.5px solid ${String(expConfirm.bankAccountId)===String(a.id)?C.accent:C.border}`,background:String(expConfirm.bankAccountId)===String(a.id)?C.accentBg:C.bg,color:String(expConfirm.bankAccountId)===String(a.id)?C.accent:C.textMid,fontWeight:String(expConfirm.bankAccountId)===String(a.id)?700:600,fontSize:12,cursor:"pointer",maxWidth:"100%"}}>{a.name||"Checking"} <span style={{opacity:.75}}>({fmt(parseFloat(a.balance||0))})</span></button>)}</div></>}{normalizePaidFrom(expConfirm.paidFrom)==="savings"&&svPick.length>1&&<><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Which savings</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:4}}>{svPick.map(a=><button key={a.id} type="button" className="ba" onClick={()=>setExpConfirm(p=>({...p,bankAccountId:String(a.id)}))} style={{padding:"8px 12px",borderRadius:10,border:`1.5px solid ${String(expConfirm.bankAccountId)===String(a.id)?C.accent:C.border}`,background:String(expConfirm.bankAccountId)===String(a.id)?C.accentBg:C.bg,color:String(expConfirm.bankAccountId)===String(a.id)?C.accent:C.textMid,fontWeight:String(expConfirm.bankAccountId)===String(a.id)?700:600,fontSize:12,cursor:"pointer",maxWidth:"100%"}}>{a.name||"Savings"} <span style={{opacity:.75}}>({fmt(parseFloat(a.balance||0))})</span></button>)}</div></>}</>)}{pending.type==="expense"&&!expConfirm&&pending.paidFrom&&cr("Paid from",PAID_FROM_FS_LABELS[normalizePaidFrom(pending.paidFrom)])}{pending.type==="bill"&&pending.paidFrom&&cr("Pay from",PAID_FROM_FS_LABELS[normalizePaidFrom(pending.paidFrom)])}{pending.category&&cr("Category",pending.category)}{pending.symbol&&cr("Trade",pending.symbol+" "+(parseFloat(pending.pnl)>=0?"+":"")+fmt(pending.pnl))}<div style={{display:"flex",gap:8,marginTop:12}}><button className="ba" onClick={confirm} style={{flex:1,background:C.green,border:"none",borderRadius:10,padding:"11px 0",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>✅ Save</button><button className="ba" onClick={()=>setPending(null)} style={{flex:1,background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancel</button></div></div>}
+      {pending&&<div style={{background:C.surface,border:"1.5px solid "+C.accentMid,borderRadius:16,padding:18}}><div style={{fontSize:11,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Confirm</div>{pending.type==="income"&&cr("Income line",String(pending.key||"").replace(/_/g," "))}{pending.name&&cr("Name",pending.name)}{(pending.amount||pending.balance)&&cr("Amount",fmt(pending.amount||pending.balance))}{pending.type==="expense"&&expConfirm&&(<><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:4}}>Paid from</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>{[{k:"checking",l:"🏦 Checking"},{k:"credit",l:"💳 Credit"},{k:"savings",l:"💰 Savings"},{k:"none",l:"📋 Track only"}].map(({k,l})=><button key={k} type="button" className="ba" onClick={()=>setExpConfirm(p=>{const next={...(p||{}),paidFrom:k};if(k==="credit"){const cds=cardDebtsList(debts);if(cds.length)next.creditDebtId=String(cds[0].id);}next.bankAccountId=pickDefaultBankAccountId(k,accounts,settings)||"";return next;})} style={{padding:"8px 12px",borderRadius:10,border:`1.5px solid ${normalizePaidFrom(expConfirm.paidFrom)===k?C.accent:C.border}`,background:normalizePaidFrom(expConfirm.paidFrom)===k?C.accentBg:C.bg,color:normalizePaidFrom(expConfirm.paidFrom)===k?C.accent:C.textMid,fontWeight:normalizePaidFrom(expConfirm.paidFrom)===k?700:600,fontSize:12,cursor:"pointer"}}>{l}</button>)}</div>{normalizePaidFrom(expConfirm.paidFrom)==="credit"&&cardDebtsList(debts).length>0&&<><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Which card</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:4}}>{cardDebtsList(debts).map(d=><button key={d.id} type="button" className="ba" onClick={()=>setExpConfirm(p=>({...p,creditDebtId:String(d.id)}))} style={{padding:"8px 12px",borderRadius:10,border:`1.5px solid ${String(expConfirm.creditDebtId)===String(d.id)?C.accent:C.border}`,background:String(expConfirm.creditDebtId)===String(d.id)?C.accentBg:C.bg,color:String(expConfirm.creditDebtId)===String(d.id)?C.accent:C.textMid,fontWeight:String(expConfirm.creditDebtId)===String(d.id)?700:600,fontSize:12,cursor:"pointer",maxWidth:"100%"}}>{d.name} <span style={{opacity:.75}}>({fmt(parseFloat(d.balance||0))})</span></button>)}</div></>}{normalizePaidFrom(expConfirm.paidFrom)==="credit"&&cardDebtsList(debts).length===0&&<div style={{fontSize:12,color:C.red,marginBottom:10,lineHeight:1.45}}>Add each card under <strong>More → Debt</strong> (type: <strong>Credit card</strong>). You can't charge a card until at least one is listed.</div>}{normalizePaidFrom(expConfirm.paidFrom)==="checking"&&chPick.length>1&&<><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Which checking</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:4}}>{chPick.map(a=><button key={a.id} type="button" className="ba" onClick={()=>setExpConfirm(p=>({...p,bankAccountId:String(a.id)}))} style={{padding:"8px 12px",borderRadius:10,border:`1.5px solid ${String(expConfirm.bankAccountId)===String(a.id)?C.accent:C.border}`,background:String(expConfirm.bankAccountId)===String(a.id)?C.accentBg:C.bg,color:String(expConfirm.bankAccountId)===String(a.id)?C.accent:C.textMid,fontWeight:String(expConfirm.bankAccountId)===String(a.id)?700:600,fontSize:12,cursor:"pointer",maxWidth:"100%"}}>{a.name||"Checking"} <span style={{opacity:.75}}>({fmt(parseFloat(a.balance||0))})</span></button>)}</div></>}{normalizePaidFrom(expConfirm.paidFrom)==="savings"&&svPick.length>1&&<><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Which savings</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:4}}>{svPick.map(a=><button key={a.id} type="button" className="ba" onClick={()=>setExpConfirm(p=>({...p,bankAccountId:String(a.id)}))} style={{padding:"8px 12px",borderRadius:10,border:`1.5px solid ${String(expConfirm.bankAccountId)===String(a.id)?C.accent:C.border}`,background:String(expConfirm.bankAccountId)===String(a.id)?C.accentBg:C.bg,color:String(expConfirm.bankAccountId)===String(a.id)?C.accent:C.textMid,fontWeight:String(expConfirm.bankAccountId)===String(a.id)?700:600,fontSize:12,cursor:"pointer",maxWidth:"100%"}}>{a.name||"Savings"} <span style={{opacity:.75}}>({fmt(parseFloat(a.balance||0))})</span></button>)}</div></>}</>)}{pending.type==="expense"&&!expConfirm&&pending.paidFrom&&cr("Paid from",PAID_FROM_FS_LABELS[normalizePaidFrom(pending.paidFrom)])}{pending.type==="bill"&&pending.paidFrom&&cr("Pay from",PAID_FROM_FS_LABELS[normalizePaidFrom(pending.paidFrom)])}{pending.category&&cr("Category",pending.category)}{pending.symbol&&cr("Trade",pending.symbol+" "+(parseFloat(pending.pnl)>=0?"+":"")+fmt(pending.pnl))}<div style={{display:"flex",gap:8,marginTop:12}}><button className="ba" onClick={confirm} style={{flex:1,background:C.green,border:"none",borderRadius:10,padding:"11px 0",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>✅ Save</button><button className="ba" onClick={()=>setPending(null)} style={{flex:1,background:C.bg,border:"1px solid "+C.border,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancel</button></div></div>}
       <div ref={botRef}/>
     </div>
     <div style={{display:"flex",gap:8,paddingTop:10,borderTop:"1px solid "+C.border,flexShrink:0,minWidth:0,alignItems:"center"}}>
-      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder='e.g. lunch 12 · lunch 20 chase · on card · split spending' style={{flex:1,minWidth:0,maxWidth:"100%",background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box"}}/>
+      <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="e.g. coffee 6 · paid electric · ytd · budget · salary 5200 · help" style={{flex:1,minWidth:0,maxWidth:"100%",background:C.bg,border:"1.5px solid "+C.border,borderRadius:12,padding:"11px 14px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box"}}/>
       <button className="ba" onClick={send} disabled={!input.trim()} style={{background:input.trim()?C.accent:C.border,border:"none",borderRadius:12,padding:"0 16px",cursor:input.trim()?"pointer":"default",display:"flex",alignItems:"center",color:input.trim()?"#fff":C.textLight}}><Send size={17}/></button>
     </div>
   </div>);
