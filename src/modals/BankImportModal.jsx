@@ -3,8 +3,7 @@ import { FileText, X } from "lucide-react";
 import { C, MF } from "../lib/uiTokens.js";
 import { fmt } from "../lib/moneyFormat.js";
 
-export default 
-function BankImportModal({categories,expenses,setExpenses,household,showToast,onClose}){
+export default function BankImportModal({categories,expenses,setExpenses,household,showToast,onClose}){
   const[step,setStep]=useState("paste");// paste | preview | done
   const[rawText,setRawText]=useState("");
   const[parsed,setParsed]=useState([]);
