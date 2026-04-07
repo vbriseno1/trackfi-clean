@@ -139,6 +139,28 @@ describe('supabase helpers', () => {
     expect(url).toContain(encodeURIComponent('expenses+special'))
   })
 
+  it('ss does not schedule cloud upload while demo flag is set', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem(
+      'fv_session',
+      JSON.stringify({ user: { id: 'user1234567890' }, access_token: 'tok' })
+    )
+    localStorage.setItem('fv_demo', '1')
+    vi.useFakeTimers()
+    vi.resetModules()
+    const { ss } = await import('./supabase.js')
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    })
+    await ss('fv6:expenses', [{ id: 1 }])
+    await vi.runAllTimersAsync()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
   it('cancelPendingDebouncedSync clears without throwing', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')

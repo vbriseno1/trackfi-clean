@@ -128,6 +128,15 @@ export function getUserId() {
 /** Kept for minimal churn in callers that used the old name */
 export const _getUserId = getUserId;
 
+/** Sample-data mode: cloud sync must not read or write so demo never overwrites a real account. */
+export function isTrackfiDemoMode() {
+  try {
+    return localStorage.getItem("fv_demo") === "1";
+  } catch {
+    return false;
+  }
+}
+
 const _ssBuffer = {};
 let _lsQuotaWarned = false;
 
@@ -148,7 +157,7 @@ async function _flushKey(uid, bare, v) {
 export async function sg(k) {
   const uid = getUserId();
   const bare = k.replace("fv6:", "");
-  if (uid) {
+  if (uid && !isTrackfiDemoMode()) {
     try {
       const res = await supaFetch(
         `/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&key=eq.${encodeURIComponent(bare)}&select=value`
@@ -182,7 +191,7 @@ export async function ss(k, v) {
       );
     }
   }
-  if (uid) {
+  if (uid && !isTrackfiDemoMode()) {
     if (_ssBuffer[bare]?.timer) clearTimeout(_ssBuffer[bare].timer);
     _ssBuffer[bare] = {
       value: v,
@@ -205,18 +214,20 @@ export function cancelPendingDebouncedSync() {
 
 export async function flushPendingSync() {
   const uid = getUserId();
-  if (!uid) return;
+  const allowCloud = !!uid && !isTrackfiDemoMode();
   const keys = Object.keys(_ssBuffer);
   for (const bare of keys) {
     const buf = _ssBuffer[bare];
     if (!buf) continue;
     if (buf.timer) clearTimeout(buf.timer);
-    let val = buf.value;
-    try {
-      const raw = localStorage.getItem(getScope() + bare);
-      if (raw !== null) val = JSON.parse(raw);
-    } catch {}
-    if (val !== undefined) await _flushKey(uid, bare, val);
+    if (allowCloud) {
+      let val = buf.value;
+      try {
+        const raw = localStorage.getItem(getScope() + bare);
+        if (raw !== null) val = JSON.parse(raw);
+      } catch {}
+      if (val !== undefined) await _flushKey(uid, bare, val);
+    }
     delete _ssBuffer[bare];
   }
 }

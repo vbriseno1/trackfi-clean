@@ -21,6 +21,7 @@ import {
   ss,
   flushPendingSync,
   cancelPendingDebouncedSync,
+  isTrackfiDemoMode,
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import BankImportModal from "./modals/BankImportModal.jsx";
@@ -5537,6 +5538,7 @@ function AppInner(){
     setTimeout(()=>loadFromSupabase(sess), 150);
   }
   async function loadFromSupabase(sess) {
+    if (isTrackfiDemoMode()) return;
     const uid = sess?.user?.id;
     if (!uid) return;
     const gen = ++remotePullGenRef.current;
@@ -5731,10 +5733,20 @@ function AppInner(){
   useEffect(()=>{
     (async()=>{
       try{
-        // Bulk fetch all keys in one query when logged in (1 read vs N)
+        // Bulk fetch all keys in one query when logged in (1 read vs N).
+        // Demo mode: never hydrate from cloud (avoids replacing sample data + contaminating pulls).
         const uid_boot=_getUserId();
+        const _demoHydrateKeys=["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName","merchantCats","recurrings","settlements","hhBudgets","nwGoal","subDismissed","household","accountRates","onboarded"];
         let _bulkMap={};
-        if(uid_boot){
+        if(isTrackfiDemoMode()){
+          const scope=getScope();
+          for(const bare of _demoHydrateKeys){
+            try{
+              const raw=localStorage.getItem(scope+bare);
+              if(raw!==null)_bulkMap[bare]=JSON.parse(raw);
+            }catch{}
+          }
+        }else if(uid_boot){
           try{
             const bulk=await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid_boot)}&select=key,value`);
             if(Array.isArray(bulk?.data))bulk.data.forEach(r=>{_bulkMap[r.key]=r.value;});
@@ -6388,7 +6400,7 @@ function AppInner(){
       message:!hasLocalData
         ?"Load a full year of sample expenses, bills, and goals so you can tap through every feature. Nothing changes until you confirm."
         :signedIn
-          ?"You’ll explore with realistic demo numbers on this device. When you’re done, tap Exit demo on Home and your own synced data comes back. Export JSON under Settings → Data only if you want a snapshot of your data as it is right now."
+          ?"Sample data stays on this device only — it does not sync to your account. When you’re done, tap Exit demo on Home and your cloud data loads again."
           :"Loads sample data locally so you can explore. If you already entered real numbers here, export a backup under Settings → Data first, then import it later if you need to.",
       onConfirm:()=>{loadDemo();setConfirm(null);},
       danger:false
@@ -6447,7 +6459,7 @@ function AppInner(){
       if(d.appName)setAppName(d.appName);
       if(d.greetName!==undefined)setGreetName(d.greetName);
       if(d.merchantCats)try{window._merchantCats=d.merchantCats;ss("fv6:merchantCats",d.merchantCats);}catch{}
-      showToast&&showToast("✅ Backup imported — saving to your account…");
+      showToast&&showToast(isTrackfiDemoMode()?"✅ Backup imported (on this device — sample mode doesn\u2019t sync to the cloud).":"✅ Backup imported — saving to your account\u2026");
     }catch(e){showToast&&showToast("❌ "+e.message,"error");}
   }
 
