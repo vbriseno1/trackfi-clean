@@ -198,6 +198,16 @@ function isCreditCardDebt(d){return d&&d.debtKind==="credit_card";}
 function isLoanDebt(d){return d&&!isCreditCardDebt(d);}
 function cardDebtsList(debts){return(debts||[]).filter(isCreditCardDebt);}
 function loanDebtsList(debts){return(debts||[]).filter(isLoanDebt);}
+/** Principal + accrued-interest carry for loans (matches paydown math). Credit cards: balance only. */
+function debtOwedForBreakdown(d){
+  const b=parseFloat(d?.balance)||0;
+  return b+(isLoanDebt(d)?parseFloat(d?.loanAccruedInterest)||0:0);
+}
+function sumDebtsPrincipalAndAccrued(debts){return(debts||[]).reduce((s,d)=>s+debtOwedForBreakdown(d),0);}
+/** ~APR/12 × owed principal+accrual; not actual/365 — labeled as approximate in UI/copy. */
+function approxMonthlyInterestOnDebts(debts){
+  return(debts||[]).reduce((s,d)=>s+debtOwedForBreakdown(d)*(parseFloat(d.rate||0)/100/12),0);
+}
 /** Original / starting balance for progress metrics: stable baseline, never shrinks with paydown. */
 function debtOriginalBaseline(d){
   const b=parseFloat(d?.balance)||0;
@@ -1281,17 +1291,17 @@ budget · trades · ytd · recent expenses · payday · help"}]);
       return"\ud83c\udfaf Savings Goals:\n"+savingsGoals.map(g=>{const pct=Math.min(100,(parseFloat(g.saved||0)/parseFloat(g.target||1))*100);const rem=Math.max(0,parseFloat(g.target||0)-parseFloat(g.saved||0));const mo=parseFloat(g.monthly||0);const months=mo>0?Math.ceil(rem/mo):null;return(g.icon||"\ud83c\udfaf")+" "+g.name+": "+fmt(g.saved||0)+" / "+fmt(g.target)+" ("+pct.toFixed(0)+"%)"+( months?" \u00b7 "+months+"mo to go":"");}).join("\n");
     }
     if(t.includes("debt")||t.includes("loan")||(t.includes("credit card")&&!t.includes("split"))||t.includes("owe")){
-      const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0)+ccOwed;
-      const monthlyInt=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)),0);
+      const td=sumDebtsPrincipalAndAccrued(debts)+ccOwed;
+      const monthlyInt=approxMonthlyInterestOnDebts(debts);
       const lines=[];
       if(ccOwed>0)lines.push("\ud83d\udcb3 Credit card (app balance): "+fmt(ccOwed));
-      if(debts.length)lines.push(...debts.map(d=>"\u2022 "+d.name+": "+fmt(d.balance)+(d.rate?" @ "+d.rate+"%":"")));
+      if(debts.length)lines.push(...debts.map(d=>"\u2022 "+d.name+": "+fmt(debtOwedForBreakdown(d))+(d.rate?" @ "+d.rate+"%":"")));
       if(!lines.length)return"\u2705 No debt or card balance in the app. Add loans with e.g. 'car loan 15000 at 6%'. Card charges from \"Credit card\" add to Settings \u2192 Credit card owed.";
-      return"\ud83d\udcb3 Total owed: "+fmt(td)+(ccOwed>0&&debts.length?" (includes app card + debt list)":"")+"\nMonthly interest (debts): "+fmt(monthlyInt)+"\n\n"+lines.join("\n");
+      return"\ud83d\udcb3 Total owed: "+fmt(td)+(ccOwed>0&&debts.length?" (includes app card + debt list)":"")+"\n~\u2248 monthly interest on debts (APR\u00f712): "+fmt(monthlyInt)+"\n\n"+lines.join("\n");
     }
     if(t.includes("net worth")||t.includes("worth")){
       const ta=["checking","savings","cushion","investments","k401","roth_ira","brokerage","crypto","hsa","property","vehicles"].reduce((s,k)=>s+(parseFloat(accounts[k]||0)),0);
-      const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0)+ccOwed;
+      const td=sumDebtsPrincipalAndAccrued(debts)+ccOwed;
       return"\ud83d\udcca Net Worth: "+fmt(ta-td)+"\nAssets: "+fmt(ta)+" \u00b7 Debts (loans + app card): "+fmt(td);
     }
     if(t.includes("biggest")||t.includes("largest")||t.includes("most spent")){
@@ -1329,7 +1339,7 @@ budget · trades · ytd · recent expenses · payday · help"}]);
       const sr=monthly>0?Math.max(0,(monthly-_thisTotal)/monthly*100):0;
       const liquid=totalSavingsBalance(accounts)+parseFloat(accounts.cushion||0);
       const moExpH=_thisTotal||1;const ef=liquid/moExpH;
-      const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0)+ccOwed;
+      const td=sumDebtsPrincipalAndAccrued(debts)+ccOwed;
       const s1=sr>=20?100:sr>=15?85:sr>=10?70:sr>=5?50:30;
       const s2=ef>=6?100:ef>=3?80:ef>=1?55:30;
       const s3=td===0?100:60;
@@ -1966,13 +1976,15 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwG
   const[goalInput,setGoalInput]=useState("");
   function saveGoal(){const v=parseFloat(goalInput);if(v>0){const g={target:v,created:Date.now()};setNwGoal(g);setShowGoalInput(false);}}
 
-  const totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
+  const ccOwedNw=parseFloat(accounts.credit_card||0);
+  const loanOwedNw=sumDebtsPrincipalAndAccrued(debts);
+  const totalDebt=loanOwedNw+ccOwedNw;
   const totalOriginal=debts.reduce((s,d)=>s+debtOriginalBaseline(d),0);
-  const totalPaidDown=Math.max(0,totalOriginal-totalDebt);
+  const totalPaidDown=Math.max(0,totalOriginal-loanOwedNw);
   const overallPct=totalOriginal>0?Math.round(totalPaidDown/totalOriginal*100):0;
   const totalAssets=totalCheckingBalance(accounts)+totalSavingsBalance(accounts)+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount?.balance||0));
   const currentNW=totalAssets-totalDebt;
-  const chartData=balHist.map(h=>{const a=(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0)+(h.hsa||0)+(h.property||0)+(h.vehicles||0);const debtAtPoint=h.totalDebt!=null?h.totalDebt:totalDebt;return{date:h.date,assets:a,netWorth:a-debtAtPoint};}).slice(-52);
+  const chartData=balHist.map(h=>{const a=(h.checking||0)+(h.savings||0)+(h.cushion||0)+(h.investments||0)+(h.k401||0)+(h.roth_ira||0)+(h.brokerage||0)+(h.crypto||0)+(h.hsa||0)+(h.property||0)+(h.vehicles||0);const debtAtPoint=h.totalDebt!=null?h.totalDebt:loanOwedNw+ccOwedNw;return{date:h.date,assets:a,netWorth:a-debtAtPoint};}).slice(-52);
   const firstNW=chartData[0]?.netWorth||currentNW;
   const change=currentNW-firstNW;
   const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return FULL_MOS[d.getMonth()]+" "+d.getDate();};
@@ -2007,7 +2019,7 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwG
         </R.ResponsiveContainer>
         )}/>
       </div>:<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:32,textAlign:"center",marginBottom:14}}><div style={{fontSize:32,marginBottom:10}}>📈</div><div style={{fontSize:14,fontWeight:600,color:C.text,marginBottom:4}}>Building your trend</div><div style={{fontSize:13,color:C.textLight}}>Update your balances regularly to see your net worth grow over time.</div></div>}
-      {debts.length>0&&(()=>{
+      {(debts.length>0||ccOwedNw>0)&&(()=>{
         // Liability vs asset breakdown stacked bar
         const assetBreakdown=[
           {name:"Liquid",value:totalCheckingBalance(accounts)+totalSavingsBalance(accounts)+parseFloat(accounts.cushion||0),color:C.teal},
@@ -2019,7 +2031,7 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwG
           {name:"Investments",value:parseFloat(accounts.investments||0),color:"#8b5cf6"},
           {name:"Property",value:parseFloat(accounts.property||0)+parseFloat(accounts.vehicles||0),color:"#64748b"},
         ].filter(a=>a.value>0);
-        const debtBreakdown=debts.map((d,i)=>({name:d.name,value:parseFloat(d.balance||0),type:d.type||"Debt",color:["#ef4444","#f97316","#eab308","#ec4899","#f43f5e"][i%5]})).filter(d=>d.value>0);
+        const debtBreakdown=[...debts.map((d,i)=>({name:d.name,value:debtOwedForBreakdown(d),type:d.type||"Debt",color:["#ef4444","#f97316","#eab308","#ec4899","#f43f5e"][i%5]})),...(ccOwedNw>0?[{name:"Credit card (app)",value:ccOwedNw,type:"",color:"#dc2626"}]:[])].filter(d=>d.value>0);
         const maxBar=Math.max(totalAssets,totalDebt,1);
         return(
           <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
@@ -2102,13 +2114,13 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwG
       {totalDebt>0&&(
         <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
           <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Liability Breakdown</div>
-          <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>What you owe — {debts.length} debt{debts.length!==1?"s":""}</div>
+          <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>What you owe — {debts.length} debt{debts.length!==1?"s":""}{ccOwedNw>0?` · card ${fmt(ccOwedNw)}`:""}</div>
           {debts.map((d)=>{
-            const bal=parseFloat(d.balance||0);
-            const pct=totalDebt>0?(bal/totalDebt*100):0;
+            const owed=debtOwedForBreakdown(d);
+            const pct=totalDebt>0?(owed/totalDebt*100):0;
             const minPay=parseFloat(d.minPayment||0);
             const rate=parseFloat(d.rate||0);
-            const monthlyInt=bal*(rate/100/12);
+            const monthlyInt=owed*(rate/100/12);
             return(
               <div key={d.id} style={{marginBottom:12}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
@@ -2117,18 +2129,33 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwG
                     <span style={{fontSize:13,fontWeight:600,color:C.text}}>{d.name}</span>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(bal)}</span>
+                    <span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(owed)}</span>
                     {rate>0&&<span style={{fontSize:11,color:C.textLight,marginLeft:6}}>{rate}% APR</span>}
                   </div>
                 </div>
                 <BarProg pct={pct} color={debtDisplayColor(d,debts)} h={5}/>
                 {(minPay>0||monthlyInt>0)&&<div style={{display:"flex",gap:12,marginTop:4,fontSize:11,color:C.textLight}}>
                   {minPay>0&&<span>Min: {fmt(minPay)}/mo</span>}
-                  {monthlyInt>0&&<span style={{color:C.red}}>Interest: {fmt(monthlyInt)}/mo</span>}
+                  {monthlyInt>0&&<span style={{color:C.red}}>\u2248 {fmt(monthlyInt)}/mo (APR\u00f712)</span>}
                 </div>}
               </div>
             );
           })}
+          {ccOwedNw>0&&(()=>{
+            const pct=totalDebt>0?(ccOwedNw/totalDebt*100):0;
+            return(
+              <div style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:"#dc2626"}}/>
+                    <span style={{fontSize:13,fontWeight:600,color:C.text}}>Credit card (app balance)</span>
+                  </div>
+                  <span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.red}}>{fmt(ccOwedNw)}</span>
+                </div>
+                <BarProg pct={pct} color="#dc2626" h={5}/>
+              </div>
+            );
+          })()}
           <div style={{display:"flex",justifyContent:"space-between",paddingTop:10,marginTop:4,borderTop:`1px solid ${C.border}`}}>
             <span style={{fontSize:13,fontWeight:600,color:C.text}}>Total debt</span>
             <div style={{textAlign:"right"}}>
@@ -2683,8 +2710,6 @@ function ExtraPayModal({debt,onConfirm,onClose}){
   );
 }
 
-
-function debtOwedForBreakdown(d){return(parseFloat(d.balance)||0)+(isLoanDebt(d)?parseFloat(d.loanAccruedInterest)||0:0);}
 function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt,onAddDebt}){
   const[selectedDebt,setSelectedDebt]=useState(null);
   const[strategy,setStrategy]=useState("avalanche");
@@ -2939,7 +2964,7 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
         </div>
         {prioritized.map(d=>{
           const bal=parseFloat(d.balance)||0,orig=parseFloat(d.original)||bal,pct=Math.min(100,((orig-bal)/orig)*100);
-          const mi=(parseFloat(d.rate)||0)/100/12*bal;
+          const mi=(parseFloat(d.rate)||0)/100/12*debtOwedForBreakdown(d);
           const color=debtDisplayColor(d,debts);
           return(
             <div key={d.id} style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:8}}>
@@ -2951,7 +2976,7 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
                     <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap"}}>
                       {d.type&&<span style={{fontSize:11,fontWeight:600,background:C.accentBg,color:C.accent,padding:"2px 6px",borderRadius:99}}>{d.type}</span>}
                       {d.rate&&<span style={{fontSize:11,color:C.textLight}}>{d.rate}% APR</span>}
-                      {!isCreditCardDebt(d)&&mi>0&&<span style={{fontSize:11,color:C.textLight}}>~{fmt(mi)}/mo interest</span>}
+                      {!isCreditCardDebt(d)&&mi>0&&<span style={{fontSize:11,color:C.textLight}}>~\u2248 {fmt(mi)}/mo (APR\u00f712)</span>}
                     </div>
                   </div>
                 </div>
@@ -3725,7 +3750,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const annualIncome=ti*12;
   const te=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-  const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
+  const td=sumDebtsPrincipalAndAccrued(debts)+parseFloat(accounts.credit_card||0);
   const tm=debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0);
   const liq=(totalSavingsBalance(accounts))+(parseFloat(accounts.cushion||0));
   const ta=(totalCheckingBalance(accounts))+(totalSavingsBalance(accounts))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
@@ -3735,14 +3760,14 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   const dti=ti>0?(tm/ti)*100:0;
   const nw=ta-td;
   const ov=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0).length;
-  const mi=debts.reduce((s,d)=>s+(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)),0);
+  const mi=approxMonthlyInterestOnDebts(debts);
   const priorities=[];
   if(ov)priorities.push({ic:"🚨",c:C.red,t:"Pay overdue bills",d:ov+" bill"+(ov!==1?"s":" ")+"past due"});
   if(liq<1000)priorities.push({ic:"🛡️",c:C.amber,t:"Build $1,000 emergency fund",d:"Have "+fmt(liq)+" — need "+fmt(Math.max(0,1000-liq))+" more"});
   if(dti>36)priorities.push({ic:"💳",c:C.red,t:"Reduce debt load",d:"DTI "+dti.toFixed(1)+"% — target under 28%"});
   if(sr<5&&ti>0)priorities.push({ic:"📉",c:C.amber,t:"Boost savings rate",d:"Currently "+sr.toFixed(1)+"% — target 15-20%"});
   if(efMo<3)priorities.push({ic:"💰",c:C.amber,t:"Grow emergency fund",d:efMo.toFixed(1)+" months saved — target 3-6"});
-  if(mi>100)priorities.push({ic:"⚡",c:C.accent,t:"Tackle interest costs",d:"Paying "+fmt(mi)+"/mo in interest"});
+  if(mi>100)priorities.push({ic:"⚡",c:C.accent,t:"Tackle interest costs",d:"~\u2248 "+fmt(mi)+"/mo at APR\u00f712 on listed debts"});
   return(<div className="fu">
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
       <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Financial Physical</div>
@@ -4266,7 +4291,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills,tradingAccount,on
   const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const _hsAllMs=new Set(expenses.map(e=>e.date?.slice(0,7)).filter(Boolean));
   const te=_hsAllMs.size>0?expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)/Math.max(1,_hsAllMs.size):0;
-  const td=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);
+  const td=sumDebtsPrincipalAndAccrued(debts)+parseFloat(accounts.credit_card||0);
   const ta=(totalCheckingBalance(accounts))+(totalSavingsBalance(accounts))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount?.balance||0));
   const liquid=(totalSavingsBalance(accounts))+(parseFloat(accounts.cushion||0));
   const _hsNow=new Date();const _hsMs=_hsNow.getFullYear()+"-"+String(_hsNow.getMonth()+1).padStart(2,"0");
@@ -5775,7 +5800,7 @@ function AppInner(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[ready]);
 
-  useEffect(()=>{if(!ready)return;if(!cloudLoadedRef.current&&!accountsHasPositiveBalance(accounts))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
+  useEffect(()=>{if(!ready)return;if(!cloudLoadedRef.current&&!accountsHasPositiveBalance(accounts))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=sumDebtsPrincipalAndAccrued(debts)+parseFloat(accounts.credit_card||0);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
   useEffect(()=>{if(!ready)return;if(!balHist.length&&!cloudLoadedRef.current)return;ss("fv6:balHist",balHist);},[balHist,ready]);
   useEffect(()=>{if(!ready)return;if(!expenses.length&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
@@ -5939,7 +5964,7 @@ function AppInner(){
   const totalIncome=monthlyIncome;
   const totalAssets=useMemo(()=>totalCheckingBalance(accounts)+totalSavingsBalance(accounts)+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount.balance||0)),[accounts,tradingAccount]);
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
-  const totalDebt=useMemo(()=>debts.reduce((s,d)=>s+(parseFloat(d.balance)||0),0)+parseFloat(accounts.credit_card||0),[debts,accounts.credit_card]);
+  const totalDebt=useMemo(()=>sumDebtsPrincipalAndAccrued(debts)+parseFloat(accounts.credit_card||0),[debts,accounts.credit_card]);
   const thisMonthExp=useMemo(()=>{const n=new Date();const ms=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");return expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);},[expenses]);
   const cashflow=totalIncome-thisMonthExp;
   const netWorth=totalAssets-totalDebt;
@@ -6761,7 +6786,7 @@ function AppInner(){
                 topCat&&`Biggest category: ${topCat[0]} at ${fmt(topCat[1])}`,
                 nextBill&&`Next bill: ${nextBill.name} ${fmt(nextBill.amount)} in ${dueIn(nextBill.dueDate)}d`,
                 savingsRate>0&&`Saving ${savingsRate.toFixed(1)}% of income — ${savingsRate>=20?"great":"keep going"}`,
-                totalDebt>0&&`${fmt(debts.reduce((s,d)=>s+(parseFloat(d.balance||0)*(parseFloat(d.rate||0)/100/12)),0))}/mo in interest costs`,
+                totalDebt>0&&`~\u2248 ${fmt(approxMonthlyInterestOnDebts(debts))}/mo interest (APR\u00f712 on balances)`,
                 overdue.length>0&&`⚠ ${overdue.length} bill${overdue.length!==1?"s":""} overdue — take action now`,
                 spendingStreak>2&&`🔥 ${spendingStreak}-day streak — checking spend below your daily average`,
                 savingsGoals.length>0&&`${savingsGoals.filter(g=>parseFloat(g.saved||0)>=parseFloat(g.target||1)).length}/${savingsGoals.length} savings goals complete`,
