@@ -22,6 +22,7 @@ import {
   flushPendingSync,
   cancelPendingDebouncedSync,
 } from "./lib/supabase.js";
+import { splitLoanPaymentCalc, round2 } from "./lib/loanSplit.js";
 import BankImportModal from "./modals/BankImportModal.jsx";
 import ExportModal from "./modals/ExportModal.jsx";
 
@@ -174,7 +175,6 @@ const DEF_SETTINGS={showTrading:true,showCrypto:false,showHealth:true,showSaving
 const DEF_ACCOUNTS={checking:"",savings:"",cushion:"",credit_card:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:"",cashAccounts:[]};
 /** Where a spend hits: checking ↓, savings ↓, credit ↑ (owed), none = categories only */
 function normalizePaidFrom(pf){if(pf==="credit"||pf==="checking"||pf==="savings"||pf==="none")return pf;return "checking";}
-function round2(n){return Math.round(n*100)/100;}
 const PAID_FROM_OPTIONS=["checking","credit","savings","none"];
 const PAID_FROM_FS_LABELS={checking:"🏦 Checking (debit/cash)",credit:"💳 Credit card (adds to balance owed)",savings:"💰 Savings",none:"📋 Track only — no balance change"};
 /** MTD spend that affects checking cash flow (legacy rows without paidFrom count as checking). */
@@ -207,21 +207,14 @@ function debtOriginalBaseline(d){
 }
 /** Actual/365 simple interest accrued since `debt.loanInterestAsOfDate` (balance accurate through that date). */
 function splitLoanPayment(debt,payment,paymentDateStr){
-  const bal=parseFloat(debt?.balance)||0;
-  const pay=parseFloat(payment)||0;
-  const apr=parseFloat(debt?.rate)||0;
-  if(bal<=0||pay<=0)return{principal:0,interest:0,days:0};
-  const payDay=(paymentDateStr&&/^\d{4}-\d{2}-\d{2}$/.test(paymentDateStr))?paymentDateStr:todayStr();
-  const raw=debt?.loanInterestAsOfDate;
-  const anchor=(typeof raw==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(raw))?raw:payDay;
-  const t0=new Date(anchor+"T12:00:00").getTime();
-  const t1=new Date(payDay+"T12:00:00").getTime();
-  let days=Math.round((t1-t0)/86400000);
-  if(!Number.isFinite(days)||days<1)days=1;
-  if(days>372)days=372;
-  const interest=apr>0?round2(bal*(apr/100)*(days/365)):0;
-  const principal=round2(Math.min(bal,Math.max(0,pay-interest)));
-  return{principal,interest,days};
+  return splitLoanPaymentCalc({
+    balance:debt?.balance,
+    aprPercent:debt?.rate,
+    payment,
+    loanInterestAsOfDate:debt?.loanInterestAsOfDate,
+    paymentDateStr,
+    fallbackPayDay:todayStr(),
+  });
 }
 /** Validate pay-from targets + compute loan principal split for marking a bill paid. */
 function prepareBillPaidTransition(x,debts,accounts,settings){
@@ -245,7 +238,7 @@ function prepareBillPaidTransition(x,debts,accounts,settings){
 }
 /** One bill row after unpaid→paid (recurring advances due date; one-time sets paid:true). */
 function patchBillForMarkingPaid(xx,x,payDate,pd,billPrevSnap){
-  if(xx.id!==x.id)return xx;
+  if(String(xx.id)!==String(x.id))return xx;
   if(xx.recurring&&xx.recurring!=="One-time"){
     const d=new Date((xx.dueDate||todayStr())+"T00:00:00");
     if(xx.recurring==="Weekly")d.setDate(d.getDate()+7);
@@ -2450,7 +2443,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       const addBack=parseFloat(x.loanPrincipalApplied)||0;
       if(addBack>0&&x.linkedDebtId)setDebts(p=>p.map(d=>String(d.id)===String(x.linkedDebtId)?{...d,balance:String(round2(parseFloat(d.balance||0)+addBack)),...(x.loanPrevInterestAsOfDate?{loanInterestAsOfDate:x.loanPrevInterestAsOfDate}:{})}:d));
       setTimeout(()=>showToast&&showToast("Marked unpaid — "+x.name),0);
-      setBills(p=>p.map(xx=>xx.id!==x.id?xx:{...xx,paid:false,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined}));
+      setBills(p=>p.map(xx=>String(xx.id)!==String(x.id)?xx:{...xx,paid:false,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined}));
     }
   }
   function undoLoanBillPayment(x){
@@ -2462,7 +2455,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
     if(applyRefund&&bamt)applyRefund(bpf,bamt,r.cid,r.bid);
     setDebts(p=>p.map(d=>String(d.id)===String(x.linkedDebtId)?{...d,balance:String(round2(parseFloat(d.balance||0)+pr)),...(x.loanPrevInterestAsOfDate?{loanInterestAsOfDate:x.loanPrevInterestAsOfDate}:{})}:d));
     setBills(p=>p.map(xx=>{
-      if(xx.id!==x.id)return xx;
+      if(String(xx.id)!==String(x.id))return xx;
       if(xx.recurring&&xx.recurring!=="One-time"){
         const d=new Date((xx.dueDate||todayStr())+"T00:00:00");
         if(xx.recurring==="Weekly")d.setDate(d.getDate()-7);
@@ -2494,7 +2487,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Bills</div><div style={{fontSize:13,color:C.textLight}}>{unpaid.length} unpaid · {overdue.length} overdue</div></div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>{const bad=overdue.filter(b=>!resolveBillSpendIds(b,accounts,debts,settings).ok);if(bad.length){showToast&&showToast("Can't pay "+bad.length+" overdue — edit each bill to choose which card or bank account.","error");return;}const _payOverdueDay=todayStr();let nextDebts=[...debts];const principalByBillId={};overdue.forEach(b=>{const ba=parseFloat(b.amount)||0;const r=resolveBillSpendIds(b,accounts,debts,settings);if(ba&&applySpend)applySpend(normalizePaidFrom(b.paidFrom),ba,r.cid,r.bid);if(b.linkedDebtId&&ba>0){const di=nextDebts.findIndex(d=>String(d.id)===String(b.linkedDebtId));if(di>=0&&isLoanDebt(nextDebts[di])){const d=nextDebts[di];const prevA=d.loanInterestAsOfDate;const sp=splitLoanPayment(d,ba,_payOverdueDay);if(sp.principal>0){principalByBillId[b.id]={pd:sp.principal,prevA};nextDebts[di]={...d,balance:String(round2(Math.max(0,parseFloat(d.balance||0)-sp.principal))),loanInterestAsOfDate:_payOverdueDay};}}}});setDebts(nextDebts);setBills(p=>p.map(b=>{if(!overdue.some(o=>o.id===b.id))return b;if(b.recurring&&b.recurring!=="One-time"){const d=new Date((b.dueDate||todayStr())+"T00:00:00");if(b.recurring==="Weekly")d.setDate(d.getDate()+7);else if(b.recurring==="Bi-weekly")d.setDate(d.getDate()+14);else if(b.recurring==="Quarterly")d.setMonth(d.getMonth()+3);else if(b.recurring==="Annual")d.setFullYear(d.getFullYear()+1);else d.setMonth(d.getMonth()+1);const _ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");const _pm=principalByBillId[b.id];const _olr=_pm?.pd||0;return{...b,paid:false,dueDate:_ds,paidDate:_payOverdueDay,loanPrincipalApplied:_olr>0?_olr:undefined,loanPrevInterestAsOfDate:_olr>0?_pm?.prevA:undefined};}const _pm2=principalByBillId[b.id];const lp=_pm2?.pd;return{...b,paid:true,...(lp>0?{loanPrincipalApplied:lp,loanPrevInterestAsOfDate:_pm2?.prevA}:{loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined})};}))}} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>{const bad=overdue.filter(b=>!resolveBillSpendIds(b,accounts,debts,settings).ok);if(bad.length){showToast&&showToast("Can't pay "+bad.length+" overdue — edit each bill to choose which card or bank account.","error");return;}const _payOverdueDay=todayStr();let nextDebts=[...debts];const principalByBillId={};overdue.forEach(b=>{const ba=parseFloat(b.amount)||0;const r=resolveBillSpendIds(b,accounts,debts,settings);if(ba&&applySpend)applySpend(normalizePaidFrom(b.paidFrom),ba,r.cid,r.bid);if(b.linkedDebtId&&ba>0){const di=nextDebts.findIndex(d=>String(d.id)===String(b.linkedDebtId));if(di>=0&&isLoanDebt(nextDebts[di])){const d=nextDebts[di];const prevA=d.loanInterestAsOfDate;const sp=splitLoanPayment(d,ba,_payOverdueDay);if(sp.principal>0){principalByBillId[b.id]={pd:sp.principal,prevA};nextDebts[di]={...d,balance:String(round2(Math.max(0,parseFloat(d.balance||0)-sp.principal))),loanInterestAsOfDate:_payOverdueDay};}}}});setDebts(nextDebts);setBills(p=>p.map(b=>{if(!overdue.some(o=>String(o.id)===String(b.id)))return b;if(b.recurring&&b.recurring!=="One-time"){const d=new Date((b.dueDate||todayStr())+"T00:00:00");if(b.recurring==="Weekly")d.setDate(d.getDate()+7);else if(b.recurring==="Bi-weekly")d.setDate(d.getDate()+14);else if(b.recurring==="Quarterly")d.setMonth(d.getMonth()+3);else if(b.recurring==="Annual")d.setFullYear(d.getFullYear()+1);else d.setMonth(d.getMonth()+1);const _ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");const _pm=principalByBillId[b.id];const _olr=_pm?.pd||0;return{...b,paid:false,dueDate:_ds,paidDate:_payOverdueDay,loanPrincipalApplied:_olr>0?_olr:undefined,loanPrevInterestAsOfDate:_olr>0?_pm?.prevA:undefined};}const _pm2=principalByBillId[b.id];const lp=_pm2?.pd;return{...b,paid:true,...(lp>0?{loanPrincipalApplied:lp,loanPrevInterestAsOfDate:_pm2?.prevA}:{loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined})};}))}} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
       </div>
       {bills.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
@@ -2970,7 +2963,7 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
         </div>
       </div>);
     })()}
-        {payModal&&<ExtraPayModal debt={payModal} onConfirm={pay=>{const raw=parseFloat(pay)||0;if(raw<=0)return;const d=payModal;const payDay=todayStr();if(isLoanDebt(d)){const sp=splitLoanPayment(d,raw,payDay);setDebts(p=>p.map(x=>x.id===payModal.id?{...x,balance:String(Math.max(0,parseFloat(x.balance||0)-sp.principal)),loanInterestAsOfDate:payDay}:x));showToast(`Payment applied — ${fmt(sp.principal)} principal, ${fmt(sp.interest)} interest (${sp.days}d)`);}else{setDebts(p=>p.map(x=>x.id===payModal.id?{...x,balance:String(Math.max(0,parseFloat(x.balance||0)-raw))}:x));showToast("Payment applied!");}setSelectedDebt(null);setPayModal(null);}} onClose={()=>setPayModal(null)}/>}
+        {payModal&&<ExtraPayModal debt={payModal} onConfirm={pay=>{const raw=parseFloat(pay)||0;if(raw<=0)return;const d=payModal;const payDay=todayStr();if(isLoanDebt(d)){const sp=splitLoanPayment(d,raw,payDay);setDebts(p=>p.map(x=>String(x.id)===String(payModal.id)?{...x,balance:String(Math.max(0,parseFloat(x.balance||0)-sp.principal)),loanInterestAsOfDate:payDay}:x));showToast(`Payment applied — ${fmt(sp.principal)} principal, ${fmt(sp.interest)} interest (${sp.days}d)`);}else{setDebts(p=>p.map(x=>String(x.id)===String(payModal.id)?{...x,balance:String(Math.max(0,parseFloat(x.balance||0)-raw))}:x));showToast("Payment applied!");}setSelectedDebt(null);setPayModal(null);}} onClose={()=>setPayModal(null)}/>}
     </div>
   );
 }
