@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { splitLoanPaymentCalc, round2 } from './loanSplit.js'
+import {
+  splitLoanPaymentCalc,
+  allocateLoanPayment,
+  round2,
+} from './loanSplit.js'
 
 describe('loanSplit', () => {
   it('round2 matches Math.round(n*100)/100 (IEEE float)', () => {
@@ -38,7 +42,6 @@ describe('loanSplit', () => {
       fallbackPayDay: '2026-03-31',
     })
     expect(r.days).toBe(1)
-    // 12000 * 0.06 / 365 ≈ 1.97
     expect(r.interest).toBeCloseTo(1.97, 1)
     expect(r.principal).toBe(round2(200 - r.interest))
   })
@@ -82,17 +85,22 @@ describe('loanSplit', () => {
     expect(r.days).toBe(1)
   })
 
-  it('interest can consume whole payment (principal 0) — cash still leaves account in app; balance unchanged', () => {
-    const r = splitLoanPaymentCalc({
+  it('short payment moves remainder into accrued carryover (no phantom principal)', () => {
+    const r = allocateLoanPayment({
       balance: 100000,
       aprPercent: 24,
       payment: 50,
       loanInterestAsOfDate: '2026-01-01',
       paymentDateStr: '2026-03-31',
       fallbackPayDay: '2026-03-31',
+      accruedInterestCarryover: 0,
     })
     expect(r.principal).toBe(0)
-    expect(r.interest).toBeGreaterThan(50)
+    expect(r.interest).toBe(50)
+    expect(r.newAccruedCarryover).toBe(
+      round2(r.periodInterest - 50),
+    )
+    expect(r.newAccruedCarryover).toBeGreaterThan(0)
   })
 
   it('principal never exceeds balance', () => {
@@ -106,5 +114,36 @@ describe('loanSplit', () => {
     })
     expect(r.principal).toBe(100)
     expect(r.interest).toBe(0)
+  })
+
+  it('carryover is paid before principal (0% APR period, prior accrued)', () => {
+    const r = allocateLoanPayment({
+      balance: 5000,
+      aprPercent: 0,
+      payment: 200,
+      loanInterestAsOfDate: '2026-03-01',
+      paymentDateStr: '2026-03-15',
+      fallbackPayDay: '2026-03-15',
+      accruedInterestCarryover: 150,
+    })
+    expect(r.periodInterest).toBe(0)
+    expect(r.interest).toBe(150)
+    expect(r.principal).toBe(50)
+    expect(r.newAccruedCarryover).toBe(0)
+  })
+
+  it('balance zero can still pay down accrued carryover', () => {
+    const r = allocateLoanPayment({
+      balance: 0,
+      aprPercent: 6,
+      payment: 40,
+      loanInterestAsOfDate: '2026-03-01',
+      paymentDateStr: '2026-03-15',
+      fallbackPayDay: '2026-03-15',
+      accruedInterestCarryover: 100,
+    })
+    expect(r.principal).toBe(0)
+    expect(r.interest).toBe(40)
+    expect(r.newAccruedCarryover).toBe(60)
   })
 })
