@@ -294,6 +294,10 @@ function commitMarkBillPaid(x,{debts,setDebts,setBills,accounts,settings,applySp
 function cashAccountsByKind(accounts,kind){
   return (accounts.cashAccounts||[]).filter(a=>a.kind===kind);
 }
+/** Once any sub-account exists under Accounts & Income, checking/savings spend must use a row of that kind (no silent legacy top-level balance). */
+function hasCashSubaccounts(accounts){
+  return((accounts?.cashAccounts)||[]).length>0;
+}
 function totalCheckingBalance(accounts){
   const list=cashAccountsByKind(accounts,"checking");
   if(list.length===0)return parseFloat(accounts.checking||0);
@@ -381,7 +385,7 @@ function pickDefaultCreditDebtId(settings,debts){
   if(d&&cards.some(c=>String(c.id)===String(d)))return String(d);
   return"";
 }
-/** Sub-account id for checking/savings spend/refund: explicit id, else settings default / first row (same as pickers + submit()). Optional settings required when multiple sub-accounts exist and explicit may be empty. */
+/** Sub-account id for checking/savings: explicit row, else verified Settings default when multiple; single row auto; legacy top-level only when hasCashSubaccounts is false. */
 function resolveBankAccountIdForExpense(paidFrom,explicitId,accounts,settings){
   const pf=normalizePaidFrom(paidFrom);
   const ch=cashAccountsByKind(accounts,"checking");
@@ -421,6 +425,8 @@ function resolveBillSpendIds(bill,accounts,debts,settings){
     }
   }
   const bid=resolveBankAccountIdForExpense(pf,bill?.bankAccountId,accounts,settings);
+  if(pf==="checking"&&hasCashSubaccounts(accounts)&&ch.length===0)return{ok:false,msg:"Add a checking account under Accounts & Income, or change pay-from.",cid,bid:undefined};
+  if(pf==="savings"&&hasCashSubaccounts(accounts)&&sv.length===0)return{ok:false,msg:"Add a savings account under Accounts & Income, or change pay-from.",cid,bid:undefined};
   if(pf==="checking"&&ch.length>=2&&!bid)return{ok:false,msg:"Edit the bill and choose which checking account.",cid,bid:undefined};
   if(pf==="savings"&&sv.length>=2&&!bid)return{ok:false,msg:"Edit the bill and choose which savings account.",cid,bid:undefined};
   if(bill?.linkedDebtId){
@@ -1388,7 +1394,7 @@ budget · trades · ytd · recent expenses · payday · help"}]);
     if(parsed.type==="undo"){if(!history.length){setMsgs(p=>[...p,{role:"a",text:"Nothing to undo!"}]);return;}const last=history[history.length-1];if(last.type==="expense"){setExpenses(p=>p.filter(x=>x.id!==last.id));const refund=last.amt!=null?last.amt:parseFloat(expenses.find(e=>e.id===last.id)?.amount)||0;const rp=normalizePaidFrom(last.paidFrom);if(applyRefund&&refund)applyRefund(rp,refund,last.creditDebtId||undefined,last.bankAccountId||undefined);}else if(last.type==="bill")setBills(p=>p.filter(x=>x.id!==last.id));else if(last.type==="debt")setDebts(p=>p.filter(x=>x.id!==last.id));else if(last.type==="trade")setTrades(p=>p.filter(x=>x.id!==last.id));else if(last.type==="account")setAccounts(p=>({...p,[last.key]:last.oldVal}));setHistory(p=>p.slice(0,-1));setMsgs(p=>[...p,{role:"a",text:"↩️ Undone: "+last.label}]);return;}
     setPending(parsed);setMsgs(p=>[...p,{role:"a",text:parsed.type==="expense"?"Review paid-from below, then Save.":parsed.type==="income"?"Confirm income field update below.":"Confirm?"}]);}
   function confirm(){if(!pending)return;const id=Date.now();let lbl="";
-    if(pending.type==="expense"){const _ea=parseFloat(pending.amount)||0;const _pf=normalizePaidFrom(expConfirm?.paidFrom??pending.paidFrom??defaultExpensePaidFrom);const _cards=cardDebtsList(debts);const _ch=cashAccountsByKind(accounts,"checking");const _sv=cashAccountsByKind(accounts,"savings");if(_pf==="credit"){if(!_cards.length){setMsgs(p=>[...p,{role:"a",text:"Add a credit card under More → Debt (type: Credit card), then try again."}]);return;}const _cid=String(expConfirm?.creditDebtId||"");if(!_cid||!_cards.some(c=>String(c.id)===_cid)){setMsgs(p=>[...p,{role:"a",text:"Tap which card below, or set a default under Settings \u2192 Defaults."}]);return;}setExpenses(p=>[...p,{id,name:pending.name,amount:pending.amount,category:pending.category,date:pending.date,notes:"",paidFrom:_pf,creditDebtId:_cid}]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount),amt:_ea,paidFrom:_pf,creditDebtId:_cid}]);if(applySpend&&_ea)applySpend(_pf,_ea,_cid,undefined);lbl="✅ "+pending.name+" ("+fmt(pending.amount)+") on "+(_cards.find(c=>String(c.id)===_cid)?.name||"card")+"!";}else{const _bid=resolveBankAccountIdForExpense(_pf,expConfirm?.bankAccountId,accounts,settings);if((_pf==="checking"&&_ch.length>=2||_pf==="savings"&&_sv.length>=2)&&!_bid){setMsgs(p=>[...p,{role:"a",text:_pf==="checking"?"Tap which checking account below.":"Tap which savings account below."}]);return;}const row={id,name:pending.name,amount:pending.amount,category:pending.category,date:pending.date,notes:"",paidFrom:_pf};if(_bid)row.bankAccountId=_bid;setExpenses(p=>[...p,row]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount),amt:_ea,paidFrom:_pf,...(_bid?{bankAccountId:_bid}:{})}]);if(applySpend&&_ea)applySpend(_pf,_ea,undefined,_bid||undefined);const _cn=_ch.find(c=>String(c.id)===_bid)?.name;const _sn=_sv.find(c=>String(c.id)===_bid)?.name;lbl="✅ "+pending.name+" ("+fmt(pending.amount)+")"+(_cn?" — "+_cn:_sn?" — "+_sn:"")+"!";}}else if(pending.type==="bill"){setBills(p=>[...p,{id,...pending,paid:false,autoPay:false,paidFrom:normalizePaidFrom(pending.paidFrom||defaultBillPaidFrom)}]);setHistory(p=>[...p,{type:"bill",id,label:pending.name}]);lbl="✅ "+pending.name+" bill added!";}else if(pending.type==="debt"){if(pending.isUpdate){setDebts(p=>p.map(d=>d.id===pending.matchId?{...d,balance:pending.balance}:d));}else{setDebts(p=>[...p,{id,name:pending.name,balance:pending.balance,rate:pending.rate||"",minPayment:""}]);setHistory(p=>[...p,{type:"debt",id,label:pending.name}]);}lbl="✅ "+pending.name+" saved!";}else if(pending.type==="trade"){setTrades(p=>[{id,date:pending.date,symbol:pending.symbol,side:pending.side,contracts:"1",pnl:pending.pnl,entry:"",exit:"",note:""},...p]);setHistory(p=>[...p,{type:"trade",id,label:pending.symbol+" "+pending.side}]);lbl="✅ "+pending.symbol+" "+(parseFloat(pending.pnl)>=0?"+":"")+fmt(pending.pnl);}else if(pending.type==="income"){const k=pending.key;setIncome(p=>({...p,[k]:pending.amount}));lbl="✅ Income · "+String(k).replace(/_/g," ")+": "+fmt(pending.amount)+" (per pay period where applicable — adjust in Accounts & Income).";}else if(pending.type==="account"){const oldVal=accounts[pending.key];setAccounts(p=>({...p,[pending.key]:pending.amount}));setHistory(p=>[...p,{type:"account",key:pending.key,oldVal,label:pending.key}]);lbl="✅ "+pending.key+": "+fmt(pending.amount);}
+    if(pending.type==="expense"){const _ea=parseFloat(pending.amount)||0;const _pf=normalizePaidFrom(expConfirm?.paidFrom??pending.paidFrom??defaultExpensePaidFrom);const _cards=cardDebtsList(debts);const _ch=cashAccountsByKind(accounts,"checking");const _sv=cashAccountsByKind(accounts,"savings");if(_pf==="credit"){if(!_cards.length){setMsgs(p=>[...p,{role:"a",text:"Add a credit card under More → Debt (type: Credit card), then try again."}]);return;}const _cid=String(expConfirm?.creditDebtId||"");if(!_cid||!_cards.some(c=>String(c.id)===_cid)){setMsgs(p=>[...p,{role:"a",text:"Tap which card below, or set a default under Settings \u2192 Defaults."}]);return;}setExpenses(p=>[...p,{id,name:pending.name,amount:pending.amount,category:pending.category,date:pending.date,notes:"",paidFrom:_pf,creditDebtId:_cid}]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount),amt:_ea,paidFrom:_pf,creditDebtId:_cid}]);if(applySpend&&_ea)applySpend(_pf,_ea,_cid,undefined);lbl="✅ "+pending.name+" ("+fmt(pending.amount)+") on "+(_cards.find(c=>String(c.id)===_cid)?.name||"card")+"!";}else{const _anyCaChat=hasCashSubaccounts(accounts);if(_pf==="checking"&&_anyCaChat&&_ch.length===0){setMsgs(p=>[...p,{role:"a",text:"Add a checking account under Accounts & Income, or choose Track only."}]);return;}if(_pf==="savings"&&_anyCaChat&&_sv.length===0){setMsgs(p=>[...p,{role:"a",text:"Add a savings account under Accounts & Income, or choose Track only."}]);return;}const _bid=resolveBankAccountIdForExpense(_pf,expConfirm?.bankAccountId,accounts,settings);if((_pf==="checking"&&_ch.length>=2||_pf==="savings"&&_sv.length>=2)&&!_bid){setMsgs(p=>[...p,{role:"a",text:_pf==="checking"?"Tap which checking account below.":"Tap which savings account below."}]);return;}const row={id,name:pending.name,amount:pending.amount,category:pending.category,date:pending.date,notes:"",paidFrom:_pf};if(_bid)row.bankAccountId=_bid;setExpenses(p=>[...p,row]);setHistory(p=>[...p,{type:"expense",id,label:pending.name+" "+fmt(pending.amount),amt:_ea,paidFrom:_pf,...(_bid?{bankAccountId:_bid}:{})}]);if(applySpend&&_ea)applySpend(_pf,_ea,undefined,_bid||undefined);const _cn=_ch.find(c=>String(c.id)===_bid)?.name;const _sn=_sv.find(c=>String(c.id)===_bid)?.name;lbl="✅ "+pending.name+" ("+fmt(pending.amount)+")"+(_cn?" — "+_cn:_sn?" — "+_sn:"")+"!";}}else if(pending.type==="bill"){setBills(p=>[...p,{id,...pending,paid:false,autoPay:false,paidFrom:normalizePaidFrom(pending.paidFrom||defaultBillPaidFrom)}]);setHistory(p=>[...p,{type:"bill",id,label:pending.name}]);lbl="✅ "+pending.name+" bill added!";}else if(pending.type==="debt"){if(pending.isUpdate){setDebts(p=>p.map(d=>d.id===pending.matchId?{...d,balance:pending.balance}:d));}else{setDebts(p=>[...p,{id,name:pending.name,balance:pending.balance,rate:pending.rate||"",minPayment:""}]);setHistory(p=>[...p,{type:"debt",id,label:pending.name}]);}lbl="✅ "+pending.name+" saved!";}else if(pending.type==="trade"){setTrades(p=>[{id,date:pending.date,symbol:pending.symbol,side:pending.side,contracts:"1",pnl:pending.pnl,entry:"",exit:"",note:""},...p]);setHistory(p=>[...p,{type:"trade",id,label:pending.symbol+" "+pending.side}]);lbl="✅ "+pending.symbol+" "+(parseFloat(pending.pnl)>=0?"+":"")+fmt(pending.pnl);}else if(pending.type==="income"){const k=pending.key;setIncome(p=>({...p,[k]:pending.amount}));lbl="✅ Income · "+String(k).replace(/_/g," ")+": "+fmt(pending.amount)+" (per pay period where applicable — adjust in Accounts & Income).";}else if(pending.type==="account"){const oldVal=accounts[pending.key];setAccounts(p=>({...p,[pending.key]:pending.amount}));setHistory(p=>[...p,{type:"account",key:pending.key,oldVal,label:pending.key}]);lbl="✅ "+pending.key+": "+fmt(pending.amount);}
     setMsgs(p=>[...p,{role:"a",text:lbl||"✅ Saved!"}]);setPending(null);}
   const cr=(l,v)=><div style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",background:C.bg,borderRadius:8,marginBottom:3}}><span style={{fontSize:12,color:C.textLight}}>{l}</span><span style={{fontSize:12,color:C.text,fontWeight:600}}>{v}</span></div>;
   return(<div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -3447,8 +3453,8 @@ function EditModal({item,categories,household,debts=[],bills=[],accounts={},sett
   const ff=(k,v)=>{setEditError("");setForm(p=>({...p,[k]:v}));};
   const type=item.type;
   function save(){
-    if(type==="expense"){if(!form.name){setEditError("Name is required.");return;}if(!form.amount||parseFloat(form.amount)<=0){setEditError("Enter a valid amount.");return;}const pf=normalizePaidFrom(form.paidFrom);const ch=cashAccountsByKind(accounts,"checking");const sv=cashAccountsByKind(accounts,"savings");const rb=resolveBankAccountIdForExpense(pf,form.bankAccountId,accounts,settings);const effCardE=String(form.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts);if(pf==="credit"&&cardDebtsList(debts).length&&!effCardE){setEditError("Select which credit card, or set a default in Settings \u2192 Defaults.");return;}if(pf==="checking"&&ch.length>=2&&!rb){setEditError("Select which checking account.");return;}if(pf==="savings"&&sv.length>=2&&!rb){setEditError("Select which savings account.");return;}}
-    if(type==="bill"){if(!form.name){setEditError("Name is required.");return;}if(!form.amount||parseFloat(form.amount)<=0){setEditError("Enter a valid amount.");return;}const bpf=normalizePaidFrom(form.paidFrom);const bch=cashAccountsByKind(accounts,"checking");const bsv=cashAccountsByKind(accounts,"savings");const bcds=cardDebtsList(debts);const rbb=resolveBankAccountIdForExpense(bpf,form.bankAccountId,accounts,settings);const effCardB=String(form.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts);if(form.linkedDebtId&&bpf==="credit"){setEditError("Loan-linked bills must pay from checking or savings.");return;}if(bpf==="credit"&&!bcds.length){setEditError("Add a credit card under Debt first.");return;}if(bpf==="credit"&&bcds.length&&!effCardB){setEditError("Select which credit card pays this bill, or set a default in Settings \u2192 Defaults.");return;}if(bpf==="checking"&&bch.length>=2&&!rbb){setEditError("Select which checking account.");return;}if(bpf==="savings"&&bsv.length>=2&&!rbb){setEditError("Select which savings account.");return;}}
+    if(type==="expense"){if(!form.name){setEditError("Name is required.");return;}if(!form.amount||parseFloat(form.amount)<=0){setEditError("Enter a valid amount.");return;}const pf=normalizePaidFrom(form.paidFrom);const ch=cashAccountsByKind(accounts,"checking");const sv=cashAccountsByKind(accounts,"savings");const rb=resolveBankAccountIdForExpense(pf,form.bankAccountId,accounts,settings);const effCardE=String(form.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts);const anyCaE=hasCashSubaccounts(accounts);if(pf==="credit"&&cardDebtsList(debts).length&&!effCardE){setEditError("Select which credit card, or set a default in Settings \u2192 Defaults.");return;}if(pf==="checking"&&anyCaE&&ch.length===0){setEditError("Add a checking account under Accounts & Income.");return;}if(pf==="savings"&&anyCaE&&sv.length===0){setEditError("Add a savings account under Accounts & Income.");return;}if(pf==="checking"&&ch.length>=2&&!rb){setEditError("Select which checking account.");return;}if(pf==="savings"&&sv.length>=2&&!rb){setEditError("Select which savings account.");return;}}
+    if(type==="bill"){if(!form.name){setEditError("Name is required.");return;}if(!form.amount||parseFloat(form.amount)<=0){setEditError("Enter a valid amount.");return;}const bpf=normalizePaidFrom(form.paidFrom);const bch=cashAccountsByKind(accounts,"checking");const bsv=cashAccountsByKind(accounts,"savings");const bcds=cardDebtsList(debts);const rbb=resolveBankAccountIdForExpense(bpf,form.bankAccountId,accounts,settings);const effCardB=String(form.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts);const anyCaB=hasCashSubaccounts(accounts);if(form.linkedDebtId&&bpf==="credit"){setEditError("Loan-linked bills must pay from checking or savings.");return;}if(bpf==="credit"&&!bcds.length){setEditError("Add a credit card under Debt first.");return;}if(bpf==="credit"&&bcds.length&&!effCardB){setEditError("Select which credit card pays this bill, or set a default in Settings \u2192 Defaults.");return;}if(bpf==="checking"&&anyCaB&&bch.length===0){setEditError("Add a checking account under Accounts & Income.");return;}if(bpf==="savings"&&anyCaB&&bsv.length===0){setEditError("Add a savings account under Accounts & Income.");return;}if(bpf==="checking"&&bch.length>=2&&!rbb){setEditError("Select which checking account.");return;}if(bpf==="savings"&&bsv.length>=2&&!rbb){setEditError("Select which savings account.");return;}}
     if(type==="debt"){
       if(!form.name){setEditError("Name is required.");return;}
       if(!form.balance){setEditError("Balance is required.");return;}
@@ -3461,11 +3467,21 @@ function EditModal({item,categories,household,debts=[],bills=[],accounts={},sett
         const bsv=cashAccountsByKind(accounts,"savings");
         const bbCh=String(form.billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");
         const bbSv=String(form.billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");
+        if(bpf==="checking"&&hasCashSubaccounts(accounts)&&bch.length===0){setEditError("Add a checking account under Accounts & Income.");return;}
+        if(bpf==="savings"&&hasCashSubaccounts(accounts)&&bsv.length===0){setEditError("Add a savings account under Accounts & Income.");return;}
         if(bpf==="checking"&&bch.length>=2&&!bbCh){setEditError("Select which checking account for the bill.");return;}
         if(bpf==="savings"&&bsv.length>=2&&!bbSv){setEditError("Select which savings account for the bill.");return;}
       }
     }
-    onSave(form);onClose();
+    let savePayload=form;
+    if(type==="bill"){
+      const bpf=normalizePaidFrom(form.paidFrom);
+      const effOut=String(form.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts);
+      savePayload={...form};
+      if(bpf==="credit"&&effOut)savePayload.creditDebtId=String(effOut);
+      else delete savePayload.creditDebtId;
+    }
+    onSave(savePayload);onClose();
   }
   const accent=type==="expense"?C.accent:type==="bill"?C.amber:C.red;
   const title=type==="expense"?"Edit Expense":type==="bill"?"Edit Bill":"Edit Debt";
@@ -4878,13 +4894,19 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
       else if(dpf==="savings")bankAccountId=pickDefaultBankAccountId("savings",accounts,settings)||undefined;
       if(dpf==="checking"&&ch.length===1&&!bankAccountId)bankAccountId=String(ch[0].id);
       if(dpf==="savings"&&sv.length===1&&!bankAccountId)bankAccountId=String(sv[0].id);
-      let creditOk=true,cashOk=true;
+      let creditOk=true,cashOk=true,cashFail="def";
+      const anyCaR=hasCashSubaccounts(accounts);
       if(dpf==="credit"&&tot>0){if(!cards.length)creditOk=false;else if(!creditDebtId)creditOk=false;}
-      if(dpf==="checking"&&tot>0&&ch.length>=2&&!bankAccountId)cashOk=false;
-      if(dpf==="savings"&&tot>0&&sv.length>=2&&!bankAccountId)cashOk=false;
+      if(dpf==="checking"&&tot>0){if(anyCaR&&ch.length===0){cashOk=false;cashFail="no-ch";}else if(ch.length>=2&&!bankAccountId){cashOk=false;cashFail="def";}}
+      if(dpf==="savings"&&tot>0){if(anyCaR&&sv.length===0){cashOk=false;cashFail="no-sv";}else if(sv.length>=2&&!bankAccountId){cashOk=false;cashFail="def";}}
       if(!creditOk||!cashOk){
         recurCommit=recurrings;
-        if(showToast)showToast(!creditOk?"Recurring skipped: add cards under Debt or set a default credit card in Settings \u2192 Defaults.":"Recurring skipped: set default checking or savings in Settings \u2192 Defaults.","error");
+        if(showToast){
+          if(!creditOk)showToast("Recurring skipped: add cards under Debt or set a default credit card in Settings \u2192 Defaults.","error");
+          else if(cashFail==="no-ch")showToast("Recurring skipped: add a checking account under Accounts & Income.","error");
+          else if(cashFail==="no-sv")showToast("Recurring skipped: add a savings account under Accounts & Income.","error");
+          else showToast("Recurring skipped: set default checking or savings in Settings \u2192 Defaults.","error");
+        }
       }else{
         const tagged=newExps.map(row=>({...row,...(dpf==="credit"&&creditDebtId?{creditDebtId:String(creditDebtId)}:{}),...((dpf==="checking"||dpf==="savings")&&bankAccountId?{bankAccountId:String(bankAccountId)}:{})}));
         if(applySpend&&tot&&(dpf!=="credit"||creditDebtId))applySpend(dpf,tot,creditDebtId,bankAccountId);
@@ -4897,7 +4919,7 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
     }
     setRecurrings(recurCommit);
     try{if(recurCommit===updated)localStorage.setItem(getScope()+"recurring_last",today);}catch{}
-  },[appReady,recurrings.length]);
+  },[appReady,recurrings,defaultExpensePaidFrom,accounts,settings,debts,applySpend,showToast]);
   const FREQS=["Weekly","Bi-weekly","Monthly","Quarterly","Annual"];
   const ICONS=["🏠","🚗","📱","💪","🎮","📺","☕","🛒","💊","🐕","🎓","⚡","💧","🌐","🎵","🏋️","🍕","✈️","👶","🐱"];
   function add(){if(!form.name){setFormErr("Name is required.");return;}if(!form.amount||isNaN(parseFloat(form.amount))){setFormErr("Enter a valid amount.");return;}setFormErr("");setRecurrings(p=>[...p,{id:Date.now(),name:form.name,amount:form.amount,category:form.category,frequency:form.frequency,nextDate:form.nextDate,icon:form.icon||"🔄",active:true}]);setForm({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});if(showToast)showToast("Recurring added — "+form.name);setShowAdd(false);}
@@ -6260,12 +6282,15 @@ function AppInner(){
       const _sv=cashAccountsByKind(accounts,"savings");
       const _bankCh=String(form.bankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");
       const _bankSv=String(form.bankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");
+      const _anyCa=hasCashSubaccounts(accounts);
       let _cid="";
       if(_pf==="credit"){
         if(!_cards.length){setFormError("Add a credit card under Debt (type: Credit card), then pick which card.");return;}
         _cid=String(form.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts);
         if(!_cid){setFormError("Select which credit card, or set a default under Settings \u2192 Defaults.");return;}
       }
+      if(_pf==="checking"&&_anyCa&&_ch.length===0){setFormError("Add a checking account under Accounts & Income.");return;}
+      if(_pf==="savings"&&_anyCa&&_sv.length===0){setFormError("Add a savings account under Accounts & Income.");return;}
       if(_pf==="checking"&&_ch.length>=2&&!_bankCh){setFormError("Select which checking account.");return;}
       if(_pf==="savings"&&_sv.length>=2&&!_bankSv){setFormError("Select which savings account.");return;}
       let _bid="";
@@ -6285,12 +6310,15 @@ function AppInner(){
       const _bsv=cashAccountsByKind(accounts,"savings");
       const _bbankCh=String(form.bankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");
       const _bbankSv=String(form.bankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");
+      const _anyCaBill=hasCashSubaccounts(accounts);
       let _bcid="";
       if(_bpf==="credit"){
         if(!_bc.length){setFormError("Add a credit card under Debt (type: Credit card), then pick which card.");return;}
         _bcid=String(form.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts);
         if(!_bcid){setFormError("Select which credit card pays this bill, or set a default under Settings \u2192 Defaults.");return;}
       }
+      if(_bpf==="checking"&&_anyCaBill&&_bch.length===0){setFormError("Add a checking account under Accounts & Income.");return;}
+      if(_bpf==="savings"&&_anyCaBill&&_bsv.length===0){setFormError("Add a savings account under Accounts & Income.");return;}
       if(_bpf==="checking"&&_bch.length>=2&&!_bbankCh){setFormError("Select which checking account.");return;}
       if(_bpf==="savings"&&_bsv.length>=2&&!_bbankSv){setFormError("Select which savings account.");return;}
       let _bbid="";
@@ -6306,6 +6334,18 @@ function AppInner(){
       const _debtId=Date.now();
       const _minP=parseFloat(form.minPayment||0);
       const _addBill=_dk==="loan"&&_minP>0&&form.addLoanBill!==false;
+      if(_addBill){
+        let _bpf=normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking");
+        if(_bpf==="credit")_bpf="checking";
+        const _bch=cashAccountsByKind(accounts,"checking");
+        const _bsv=cashAccountsByKind(accounts,"savings");
+        const _bbankCh=String(form.billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");
+        const _bbankSv=String(form.billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");
+        if(_bpf==="checking"&&hasCashSubaccounts(accounts)&&_bch.length===0){setFormError("Add a checking account under Accounts & Income for the loan payment bill.");return;}
+        if(_bpf==="savings"&&hasCashSubaccounts(accounts)&&_bsv.length===0){setFormError("Add a savings account under Accounts & Income for the loan payment bill.");return;}
+        if(_bpf==="checking"&&_bch.length>=2&&!_bbankCh){setFormError("Select which checking account pays the loan bill.");return;}
+        if(_bpf==="savings"&&_bsv.length>=2&&!_bbankSv){setFormError("Select which savings account pays the loan bill.");return;}
+      }
       setDebts(p=>[...p,{id:_debtId,name:form.name,balance:form.balance,original:form.original||form.balance,rate:form.rate||"",minPayment:form.minPayment||"",type:form.type||"",debtKind:_dk,color:(form.color&&isValidHexColor(form.color)?form.color.trim():DEBT_PALETTE[p.length%DEBT_PALETTE.length]),...(_dk!=="credit_card"?{loanInterestAsOfDate:todayStr()}:{})}]);
       if(_addBill){
         let _bpf=normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking");
