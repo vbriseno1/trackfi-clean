@@ -3061,7 +3061,7 @@ function GoalRing({pct,size=80,color,icon,label,saved,target}){
   );
 }
 
-function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAccountRates,showToast}){
+function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAccountRates,showToast,applySpend,settings={}}){
   const[view,setView]=useState("rings");
   const[editGoal,setEditGoal]=useState(null);
   const[editForm,setEditForm]=useState({});
@@ -3069,6 +3069,23 @@ function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAcc
   const[form,setForm]=useState({});
   const ff=k=>e=>setForm(p=>({...p,[k]:e.target.value}));
   function add(){if(!form.name||!form.target)return;setGoals(p=>[...p,{id:Date.now().toString(),name:form.name,target:parseFloat(form.target),saved:parseFloat(form.saved||0),monthly:parseFloat(form.monthly||0),icon:form.icon||"🎯",color:form.color||C.teal}]);showToast&&showToast("✓ Goal added — "+form.name);setForm({});setShowAdd(false);}
+  const depositToGoal=React.useCallback((goal,rawAmt)=>{
+    const amt=parseFloat(rawAmt);
+    if(!(amt>0))return;
+    const bid=pickDefaultBankAccountId("checking",accounts,settings)||undefined;
+    if(applySpend)applySpend("checking",amt,undefined,bid);
+    setGoals(p=>p.map(g=>{
+      if(String(g.id)!==String(goal.id))return g;
+      const tgt=parseFloat(g.target||0);
+      const prevS=parseFloat(g.saved||0);
+      const newSaved=parseFloat(Math.min(tgt,prevS+amt).toFixed(2));
+      const oldPct=tgt>0?Math.floor((prevS/tgt)*4)*25:0;
+      const newPct=tgt>0?Math.floor((newSaved/tgt)*4)*25:0;
+      if(newPct>oldPct)setTimeout(()=>showToast&&showToast(newSaved>=tgt?"🎉 Goal complete: "+g.name+"!":"🎯 "+newPct+"% reached — "+g.name),100);
+      else showToast&&showToast("+"+fmt(amt)+" → "+g.name);
+      return{...g,saved:newSaved};
+    }));
+  },[accounts,settings,applySpend,showToast,setGoals]);
   function GoalRingInner({goal}){
     const pct=Math.min(100,goal.target>0?(goal.saved/goal.target)*100:0);
     const r=44;const circ=2*Math.PI*r;const dash=circ*(pct/100);
@@ -3091,8 +3108,8 @@ function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAcc
         <div style={{fontSize:12,color:C.textLight,marginBottom:8,textAlign:"center"}}>{fmt(goal.saved)} of {fmt(goal.target)}</div>
         {months>0&&<div style={{fontSize:11,color:C.green,fontWeight:600,marginBottom:4}}>{months} mo · {targetDate}</div>}
         <div style={{display:"flex",gap:6,width:"100%"}}>
-          <input type="number" min="0" placeholder="Deposit $" id={"dep-"+goal.id} onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){const amt=parseFloat(e.target.value);if(amt>0){setGoals(p=>p.map(g=>g.id===goal.id?{...g,saved:parseFloat(Math.min(g.target,(g.saved||0)+amt).toFixed(2))}:g));showToast&&showToast("+" + fmt(amt)+" added to "+goal.name);e.target.value="";}}}  } style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none",background:C.surfaceAlt}}/>
-          <button onClick={()=>{const inp=document.getElementById("dep-"+goal.id);const amt=parseFloat(inp?.value||0);if(amt>0){setGoals(p=>p.map(g=>{if(g.id!==goal.id)return g;const newSaved=parseFloat(Math.min(g.target,(g.saved||0)+amt).toFixed(2));const oldPct=g.target>0?Math.floor(((g.saved||0)/g.target)*4)*25:0;const newPct=g.target>0?Math.floor((newSaved/g.target)*4)*25:0;if(newPct>oldPct){setTimeout(()=>showToast&&showToast(newSaved>=g.target?"🎉 Goal complete: "+g.name+"!":"🎯 "+newPct+"% reached — "+g.name),100);}else{showToast&&showToast("+"+fmt(amt)+" → "+g.name);}return{...g,saved:newSaved};}));if(inp)inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
+          <input type="number" min="0" placeholder="From checking ($)" id={"dep-"+goal.id} onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){depositToGoal(goal,e.target.value);e.target.value="";}}} style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none",background:C.surfaceAlt}}/>
+          <button onClick={()=>{const inp=document.getElementById("dep-"+goal.id);if(inp?.value){depositToGoal(goal,inp.value);inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
           <button onClick={()=>setGoals(p=>p.filter(g=>g.id!==goal.id))} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.textLight}}>✕</button>
         </div>
       </div>
@@ -3198,9 +3215,9 @@ function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAcc
               <div style={{height:"100%",width:pct.toFixed(1)+"%",background:pct>=100?C.green:g.color||C.teal,borderRadius:99,transition:"width .6s"}}/>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <input type="number" placeholder="Deposit $" id={"ldep-"+g.id} style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none",background:C.surfaceAlt}}
-                onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){const a=parseFloat(e.target.value);if(a>0){setGoals(p=>p.map(x=>{if(x.id!==g.id)return x;const ns=Math.min(x.target,(x.saved||0)+a);if(ns>=x.target)setTimeout(()=>showToast&&showToast("🎉 Goal complete: "+x.name),100);else showToast&&showToast("+"+fmt(a)+" → "+x.name);return{...x,saved:ns};}));e.target.value='';}};}}/>
-              <button onClick={()=>{const inp=document.getElementById("ldep-"+g.id);const a=parseFloat(inp?.value||0);if(a>0){setGoals(p=>p.map(x=>{if(x.id!==g.id)return x;const ns=Math.min(x.target,(x.saved||0)+a);if(ns>=x.target)setTimeout(()=>showToast&&showToast("🎉 Goal complete: "+x.name),100);else showToast&&showToast("+"+fmt(a)+" → "+x.name);return{...x,saved:ns};}));if(inp)inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
+              <input type="number" placeholder="From checking ($)" id={"ldep-"+g.id} style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none",background:C.surfaceAlt}}
+                onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){depositToGoal(g,e.target.value);e.target.value="";}}}/>
+              <button onClick={()=>{const inp=document.getElementById("ldep-"+g.id);if(inp?.value){depositToGoal(g,inp.value);inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
               <button onClick={()=>{setEditGoal(g);setEditForm({name:g.name,target:String(g.target),monthly:String(g.monthly||0),saved:String(g.saved||0)});}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",fontSize:12,color:C.textMid,fontWeight:600}}>Edit</button>
               <button onClick={()=>{setGoals(p=>p.filter(x=>x.id!==g.id));showToast&&showToast("Goal removed","error");}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.textLight,display:"flex",alignItems:"center"}}><Trash2 size={14}/></button>
             </div>
@@ -4810,7 +4827,7 @@ function AuthScreen({onAuth,onSkip}){
   );
 }
 
-function RecurringView({expenses,setExpenses,categories,showToast,appReady,recurrings,setRecurrings,applySpend,defaultExpensePaidFrom}){
+function RecurringView({expenses,setExpenses,categories,showToast,appReady,recurrings,setRecurrings,applySpend,defaultExpensePaidFrom,accounts={},settings={},debts=[]}){
   const[showAdd,setShowAdd]=useState(false);
   const[form,setForm]=useState({name:"",amount:"",category:"Food",frequency:"Monthly",nextDate:todayStr(),icon:""});
   const[formErr,setFormErr]=useState("");
@@ -4837,8 +4854,17 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
     if(newExps.length){
       const tot=newExps.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
       const dpf=normalizePaidFrom(defaultExpensePaidFrom);
-      if(applySpend&&tot)applySpend(dpf,tot);
-      setExpenses(p=>[...p,...newExps]);
+      const cards=cardDebtsList(debts);
+      let creditDebtId=undefined,bankAccountId=undefined;
+      if(dpf==="credit"){
+        if(cards.length===1)creditDebtId=String(cards[0].id);
+        else if(cards.length>1)creditDebtId=String(cards[0].id);
+      }      else if(dpf==="checking")bankAccountId=pickDefaultBankAccountId("checking",accounts,settings)||undefined;
+      else if(dpf==="savings")bankAccountId=pickDefaultBankAccountId("savings",accounts,settings)||undefined;
+      const tagged=newExps.map(row=>({...row,...(dpf==="credit"&&creditDebtId?{creditDebtId:String(creditDebtId)}:{}),...((dpf==="checking"||dpf==="savings")&&bankAccountId?{bankAccountId:String(bankAccountId)}:{})}));
+      if(applySpend&&tot&&(dpf!=="credit"||creditDebtId))applySpend(dpf,tot,creditDebtId,bankAccountId);
+      else if(applySpend&&dpf==="credit"&&tot&&!creditDebtId&&showToast)showToast("Add a credit card debt for recurring charges to update your card balance.","error");
+      setExpenses(p=>[...p,...tagged]);
       if(showToast){
         if(newExps.length===1)showToast("🔄 Auto-logged: "+newExps[0].name);
         else showToast("🔄 Auto-logged "+newExps.length+" recurring expenses");
@@ -7151,8 +7177,8 @@ function AppInner(){
         )}
 
         {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setBills={setBills} setModal={setModal} setEditItem={setEditItem} showToast={showToast} extraPayDebt={extraPayDebt} setExtraPayDebt={setExtraPayDebt} onAddDebt={()=>om("debt",{addLoanBill:true,loanBillDueDate:todayStr()})}/>}
-        {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} accounts={accounts} accountRates={accountRates} setAccountRates={setAccountRates} showToast={showToast}/>}
-        {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready} recurrings={recurrings} setRecurrings={setRecurrings} applySpend={applySpend} defaultExpensePaidFrom={settings.defaultExpensePaidFrom||"checking"}/>}
+        {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} accounts={accounts} accountRates={accountRates} setAccountRates={setAccountRates} showToast={showToast} applySpend={applySpend} settings={settings}/>}
+        {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready} recurrings={recurrings} setRecurrings={setRecurrings} applySpend={applySpend} defaultExpensePaidFrom={settings.defaultExpensePaidFrom||"checking"} accounts={accounts} settings={settings} debts={debts}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
         {tab==="physical"&&<FinancialPhysicalView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} savingsGoals={savingsGoals}/>}
         {tab==="health"&&<HealthScoreView income={income} expenses={expenses} debts={debts} accounts={accounts} bills={bills} tradingAccount={tradingAccount} onNavigate={navTo}/>}
