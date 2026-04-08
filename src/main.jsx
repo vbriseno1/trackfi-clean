@@ -13,10 +13,13 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker
+    void navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
       .then((reg) => {
-        setInterval(() => reg.update(), 60 * 60 * 1000)
+        const safeUpdate = () => {
+          void reg.update().catch(() => {})
+        }
+        setInterval(safeUpdate, 60 * 60 * 1000)
       })
       .catch(() => {})
   })

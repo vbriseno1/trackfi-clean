@@ -2,7 +2,7 @@
 // Caches the app shell for offline use and fast loads
 
 // Bump when changing caching rules so clients drop old caches on activate.
-const CACHE_NAME = 'trackfi-v3';
+const CACHE_NAME = 'trackfi-v4';
 const SHELL = [
   '/',
   '/index.html',
@@ -29,6 +29,11 @@ self.addEventListener('activate', e => {
 // Fetch: network-first for API calls, cache-first for assets
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+
+  // Never intercept the service worker script or update checks (cache-first .js rule would stale sw.js).
+  if (url.origin === self.location.origin && url.pathname === '/sw.js') {
+    return;
+  }
 
   // Always fetch API calls from network
   if (url.hostname.includes('supabase.co') || url.pathname.startsWith('/api/')) {

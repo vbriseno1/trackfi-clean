@@ -354,9 +354,11 @@ function getLatestScheduledPaydayOnOrBefore(anchorIso,payFreq,beforeIso){
   const end=new Date(beforeIso+"T00:00:00");
   if(new Date(cur+"T00:00:00")>end)return null;
   let next=advancePaydayIso(cur,payFreq);
-  while(new Date(next+"T00:00:00")<=end){
+  let guard=0;
+  while(new Date(next+"T00:00:00")<=end&&guard<120){
     cur=next;
     next=advancePaydayIso(cur,payFreq);
+    guard++;
   }
   return cur;
 }
