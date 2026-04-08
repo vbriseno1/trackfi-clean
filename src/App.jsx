@@ -5005,6 +5005,10 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
       }
       return r;
     });
+    if(newExps.length===0){
+      try{localStorage.setItem(getScope()+"recurring_last",today);}catch{}
+      return;
+    }
     let recurCommit=updated;
     if(newExps.length){
       const tot=newExps.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
@@ -5022,10 +5026,14 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
       const cashOk=!cashErr;
       if(!creditOk||!cashOk){
         recurCommit=recurrings;
-        if(showToast){
-          if(!creditOk)showToast("Recurring skipped: add cards under Debt or set a default credit card in Settings \u2192 Defaults.","error");
-          else showToast(cashErr||"Recurring skipped: fix pay-from under Settings \u2192 Defaults.","error");
-        }
+        const sk=getScope()+"recurring_skip_err";
+        try{
+          if(showToast&&localStorage.getItem(sk)!==today){
+            if(!creditOk)showToast("Recurring skipped: add cards under Debt or set a default credit card in Settings \u2192 Defaults.","error");
+            else showToast(cashErr||"Recurring skipped: fix pay-from under Settings \u2192 Defaults.","error");
+            localStorage.setItem(sk,today);
+          }
+        }catch{}
       }else{
         const tagged=newExps.map(row=>({...row,...(dpf==="credit"&&creditDebtId?{creditDebtId:String(creditDebtId)}:{}),...((dpf==="checking"||dpf==="savings")&&bankAccountId?{bankAccountId:String(bankAccountId)}:{})}));
         if(applySpend&&tot&&(dpf!=="credit"||creditDebtId))applySpend(dpf,tot,creditDebtId,bankAccountId);
@@ -5037,7 +5045,13 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
       }
     }
     setRecurrings(recurCommit);
-    try{if(recurCommit===updated)localStorage.setItem(getScope()+"recurring_last",today);}catch{}
+    try{
+      if(recurCommit===updated){
+        const sc=getScope();
+        localStorage.setItem(sc+"recurring_last",today);
+        localStorage.removeItem(sc+"recurring_skip_err");
+      }
+    }catch{}
   },[appReady,recurrings,defaultExpensePaidFrom,accounts,settings,debts,applySpend,showToast]);
   const FREQS=["Weekly","Bi-weekly","Monthly","Quarterly","Annual"];
   const ICONS=["🏠","🚗","📱","💪","🎮","📺","☕","🛒","💊","🐕","🎓","⚡","💧","🌐","🎵","🏋️","🍕","✈️","👶","🐱"];
@@ -6241,7 +6255,7 @@ function AppInner(){
     const t=todayStr();
     const due=getLatestScheduledPaydayOnOrBefore(anchor,income.payFrequency||"Biweekly",t)||t;
     setPaycheckDepCtx({dueDate:due});
-  },[income.lastPayDate,income.payFrequency]);
+  },[income.lastPayDate,income.payFrequency,showToast]);
 
   useEffect(()=>{
     if(!ready)return;
@@ -6281,7 +6295,7 @@ function AppInner(){
         fmt(parseFloat(income.primary||0))+" expected · "+nextPayDate.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"}),
         "success");
     }
-  },[ready,bills,budgetGoals,expenses,settings,savingsGoals,notifs.length]);
+  },[ready,bills,budgetGoals,expenses,settings,savingsGoals,notifs.length,income,accounts,nextPayStr]);
   const detectedSubs=useMemo(()=>{
     if(expenses.length<2)return[];
     // Only look at expenses from the last 6 months to avoid showing cancelled subs
@@ -6622,9 +6636,9 @@ function AppInner(){
   function backupExport(){
     const d={
       exportedAt:new Date().toISOString(),
-      version:"3.1",
+      version:"3.2",
       ...(typeof window!=="undefined"&&window.__trackfiDemoInfo?.modelVersion?{demoModelVersion:window.__trackfiDemoInfo.modelVersion}:{}),
-      appName,greetName,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,
+      appName,greetName,onboarded,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,
       categories,settings,calColors,dashConfig,household,recurrings,settlements,hhBudgets,nwGoal,subDismissed,
       profCategory,profSub,tradingAccount,accountRates,balHist,notifs,
       merchantCats:typeof window!=="undefined"?window._merchantCats:void 0
@@ -6670,6 +6684,8 @@ function AppInner(){
       if(Array.isArray(d.notifs))setNotifs(d.notifs);
       if(d.appName)setAppName(d.appName);
       if(d.greetName!==undefined)setGreetName(d.greetName);
+      if(d.onboarded===true){try{localStorage.setItem("fv_onboarded","1");}catch{}setOnboarded(true);ss("fv6:onboarded",true);}
+      else if(d.onboarded===false){try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);ss("fv6:onboarded",false);}
       if(d.merchantCats)try{window._merchantCats=d.merchantCats;ss("fv6:merchantCats",d.merchantCats);}catch{}
       showToast&&showToast(isTrackfiDemoMode()?"✅ Backup imported (on this device — sample mode doesn\u2019t sync to the cloud).":"✅ Backup imported — saving to your account\u2026");
     }catch(e){showToast&&showToast("❌ "+e.message,"error");}
