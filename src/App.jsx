@@ -172,7 +172,7 @@ const dueIn  = d => { if(!d||typeof d!=="string")return 999; const parts=d.split
 const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); };
 const dayOfMonth  = () => new Date().getDate();
 const fmtDate = s => { if(!s)return""; const clean=s.includes("T")?s.split("T")[0]:s; const d=new Date(clean+"T00:00:00"); return FULL_MOS[d.getMonth()]+" "+d.getDate(); };
-const DEF_SETTINGS={showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"],notifBills:true,notifBudget:true,notifSavings:true,notifPayday:true,notifMilestones:true,defaultExpensePaidFrom:"checking",defaultBillPaidFrom:"checking",defaultCheckingAccountId:"",defaultSavingsAccountId:"",defaultCreditDebtId:""};
+const DEF_SETTINGS={showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"],notifBills:true,notifBudget:true,notifSavings:true,notifPayday:true,notifMilestones:true,defaultExpensePaidFrom:"checking",defaultBillPaidFrom:"checking",defaultCheckingAccountId:"",defaultSavingsAccountId:"",defaultCreditDebtId:"",paycheckNudgeLastHandledPeriod:""};
 const DEF_ACCOUNTS={checking:"",savings:"",cushion:"",credit_card:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:"",cashAccounts:[]};
 /** Where a spend hits: checking ↓, savings ↓, credit ↑ (owed), none = categories only */
 function normalizePaidFrom(pf){if(pf==="credit"||pf==="checking"||pf==="savings"||pf==="none")return pf;return "checking";}
@@ -337,6 +337,42 @@ function totalSavingsBalance(accounts){
   const list=cashAccountsByKind(accounts,"savings");
   if(list.length===0)return parseFloat(accounts.savings||0);
   return list.reduce((s,a)=>s+(parseFloat(a.balance)||0),0);
+}
+/** One pay period after ISO date — matches computeSafeToSpend / PaycheckView cadence. */
+function advancePaydayIso(fromIso,payFreq){
+  const next=new Date(fromIso+"T00:00:00");
+  if(payFreq==="Weekly")next.setDate(next.getDate()+7);
+  else if(payFreq==="Twice Monthly"){if(next.getDate()<15)next.setDate(15);else next.setMonth(next.getMonth()+1,1);}
+  else if(payFreq==="Monthly")next.setMonth(next.getMonth()+1);
+  else next.setDate(next.getDate()+14);
+  return next.getFullYear()+"-"+String(next.getMonth()+1).padStart(2,"0")+"-"+String(next.getDate()).padStart(2,"0");
+}
+/** Most recent scheduled payday on or before `beforeIso` (anchor = last payday on record). */
+function getLatestScheduledPaydayOnOrBefore(anchorIso,payFreq,beforeIso){
+  if(!anchorIso||!beforeIso)return null;
+  let cur=anchorIso;
+  const end=new Date(beforeIso+"T00:00:00");
+  if(new Date(cur+"T00:00:00")>end)return null;
+  let next=advancePaydayIso(cur,payFreq);
+  while(new Date(next+"T00:00:00")<=end){
+    cur=next;
+    next=advancePaydayIso(cur,payFreq);
+  }
+  return cur;
+}
+/** Soft nudge: new pay period landed (by schedule) and user has not recorded or skipped this period yet. */
+function paycheckPeriodNeedsHandling(income,settings,todayIso){
+  const handled=String(settings?.paycheckNudgeLastHandledPeriod||"").trim();
+  const primary=parseFloat(income?.primary||0);
+  if(!(primary>0))return{show:false,due:null};
+  const anchor=String(income?.lastPayDate||"").trim();
+  if(!anchor)return{show:false,due:null};
+  const payFreq=income?.payFrequency||"Biweekly";
+  const due=getLatestScheduledPaydayOnOrBefore(anchor,payFreq,todayIso);
+  if(!due)return{show:false,due:null};
+  if(todayIso<due)return{show:false,due};
+  if(handled&&due<=handled)return{show:false,due};
+  return{show:true,due};
 }
 /** Safe-to-spend: checking + pro-rated other income − bills before next pay − projected checking burn − envelope reserve − $200 buffer. Shared by Home dashboard + AI Log header. */
 function computeSafeToSpend(accounts,income,bills,expenses,budgetGoals,now=new Date()){
@@ -1868,7 +1904,58 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
   );
 }
 
-function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],onAdd}){
+function PaycheckDepositModal({ctx,onClose,accounts,income,settings,setAccounts,setIncome,setSettings,showToast}){
+  const[amt,setAmt]=useState("");
+  const[payDate,setPayDate]=useState("");
+  const[bankId,setBankId]=useState("");
+  const[err,setErr]=useState("");
+  useEffect(()=>{
+    if(!ctx){setErr("");return;}
+    const ck=cashAccountsByKind(accounts,"checking");
+    const def=pickDefaultBankAccountId("checking",accounts,settings)||"";
+    setAmt(String(parseFloat(income.primary||0)>0?parseFloat(income.primary||0):""));
+    setPayDate(ctx.dueDate||todayStr());
+    setBankId(def||(ck.length===1?String(ck[0].id):""));
+    setErr("");
+  },[ctx,income.primary,accounts,settings]);
+  if(!ctx)return null;
+  const ch=cashAccountsByKind(accounts,"checking");
+  function submit(){
+    setErr("");
+    const a=parseFloat(amt)||0;
+    if(a<=0){setErr("Enter a valid deposit amount.");return;}
+    if(hasCashSubaccounts(accounts)&&ch.length===0){setErr("Add a checking account under Accounts & Income first.");return;}
+    const cashE=validateCashSpendPrerequisites("checking",bankId,accounts,settings);
+    if(cashE){setErr(cashE);return;}
+    const bid=resolveBankAccountIdForExpense("checking",bankId,accounts,settings);
+    if(hasCashSubaccounts(accounts)&&ch.length>0&&!bid){setErr("Select which checking account receives the deposit.");return;}
+    if(bid){
+      setAccounts(p=>{
+        const ca=[...(p.cashAccounts||[])];
+        const i=ca.findIndex(x=>String(x.id)===String(bid)&&x.kind==="checking");
+        if(i>=0){const row=ca[i];ca[i]={...row,balance:String(round2(parseFloat(row.balance||0)+a))};return{...p,cashAccounts:ca};}
+        return p;
+      });
+    }else{
+      setAccounts(p=>({...p,checking:String(round2(parseFloat(p.checking||0)+a))}));
+    }
+    const anchor=(payDate&&payDate.trim())||(ctx.dueDate||todayStr());
+    setIncome(p=>({...p,lastPayDate:anchor}));
+    setSettings(s=>({...s,paycheckNudgeLastHandledPeriod:anchor}));
+    showToast&&showToast("Paycheck recorded — "+fmt(a)+" to checking");
+    onClose();
+  }
+  return(
+    <Modal title="Record paycheck deposit" icon={DollarSign} onClose={onClose} onSubmit={submit} submitLabel="Add to checking" accent={C.green} error={err}>
+      <div style={{fontSize:13,color:C.textLight,lineHeight:1.5,marginBottom:14}}>Deposits take-home into checking and sets your last payday to this date. Safe-to-spend and net worth follow your updated balance.</div>
+      <FI label="Deposit amount ($)" type="number" value={amt} onChange={e=>setAmt(e.target.value)}/>
+      <FI label="Pay date (schedule anchor)" type="date" value={payDate} onChange={e=>setPayDate(e.target.value)}/>
+      {ch.length>1&&<div style={{marginBottom:12}}><FS label="Deposit to" options={ch.map(a=>({value:String(a.id),label:(a.name||"Checking")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(bankId||"")} onChange={e=>setBankId(e.target.value)}/></div>}
+    </Modal>
+  );
+}
+
+function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],onAdd,onRecordPaycheck}){
   const now=new Date();
   const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const checking=totalCheckingBalance(accounts);
@@ -1923,9 +2010,14 @@ function PaycheckView({bills,income,setIncome,expenses,accounts,budgetGoals=[],o
   const safeToSpend=Math.max(0,checking+_pvOtherProRated-beforeTotal-projectedSpend-_pvEnvReserve-200);
   return(
     <div className="fu">
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,flexWrap:"wrap",gap:8}}>
         <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Paycheck Planner</div>
-        <button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Log Spending</button>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          {parseFloat(income.primary||0)>0&&income.lastPayDate&&typeof onRecordPaycheck==="function"&&(
+            <button type="button" className="ba" onClick={onRecordPaycheck} style={{display:"flex",alignItems:"center",gap:5,background:C.green,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><DollarSign size={14}/>Record paycheck</button>
+          )}
+          <button type="button" className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Log Spending</button>
+        </div>
       </div>
       {(()=>{
         return(<>
@@ -5814,6 +5906,7 @@ function AppInner(){
   const[formError,setFormError]=useState("");
   const[showExport,setShowExport]=useState(false);
   const[showImport,setShowImport]=useState(false);
+  const[paycheckDepCtx,setPaycheckDepCtx]=useState(null);
   const[form,setForm]=useState({});
   const[editItem,setEditItem]=useState(null);
   const[extraPayDebt,setExtraPayDebt]=useState(0);
@@ -6139,6 +6232,14 @@ function AppInner(){
     return streak;
   },[expenses,burnRateChecking]);
   const unreadNotifs=useMemo(()=>notifs.filter(n=>!n.read).length,[notifs]);
+  const paycheckNudge=useMemo(()=>paycheckPeriodNeedsHandling(income,settings,todayStr()),[income,settings]);
+  const openPaycheckDeposit=useCallback(()=>{
+    const anchor=String(income.lastPayDate||"").trim();
+    if(!anchor){showToast("Set your pay schedule in Paycheck Planner first.","error");return;}
+    const t=todayStr();
+    const due=getLatestScheduledPaydayOnOrBefore(anchor,income.payFrequency||"Biweekly",t)||t;
+    setPaycheckDepCtx({dueDate:due});
+  },[income.lastPayDate,income.payFrequency]);
 
   useEffect(()=>{
     if(!ready)return;
@@ -6695,6 +6796,18 @@ function AppInner(){
             )}
 
             {overdue.length>0&&<div onClick={()=>navTo("bills")} style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",gap:8,alignItems:"center",cursor:"pointer"}}><AlertCircle size={15} color={C.red} style={{flexShrink:0}}/><div style={{flex:1,fontSize:13,color:C.red,fontWeight:600}}>{overdue.length} bill{overdue.length!==1?"s":""} overdue — tap to resolve</div><ChevronRight size={13} color={C.red}/></div>}
+
+            {ready&&paycheckNudge.show&&paycheckNudge.due&&(
+              <div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",flexWrap:"wrap",gap:10,alignItems:"center"}}>
+                <div style={{flex:"1 1 220px",fontSize:13,color:C.text,fontWeight:600,lineHeight:1.45}}>
+                  Paycheck for <strong>{fmtDate(paycheckNudge.due)}</strong> — record your deposit so checking and safe-to-spend stay accurate.
+                </div>
+                <div style={{display:"flex",gap:8,flexShrink:0}}>
+                  <button type="button" className="ba" onClick={()=>setPaycheckDepCtx({dueDate:paycheckNudge.due})} style={{background:C.green,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>Record deposit</button>
+                  <button type="button" className="ba" onClick={()=>setSettings(s=>({...s,paycheckNudgeLastHandledPeriod:paycheckNudge.due}))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",color:C.textMid,fontWeight:600,fontSize:12,cursor:"pointer"}}>Not now</button>
+                </div>
+              </div>
+            )}
 
             {/* ── 2. CAROUSEL — 4 rich cards ─────────────────────── */}
             {(()=>{
@@ -7273,7 +7386,7 @@ function AppInner(){
         {tab==="search"&&<SearchView expenses={expenses} bills={bills} debts={debts} trades={trades} categories={categories} setEditItem={setEditItem} onNavigate={navTo}/>}
         {tab==="subscriptions"&&<SubsView detectedSubs={detectedSubs} expenses={expenses} showToast={showToast} dismissed={subDismissed} setDismissed={setSubDismissed}/>}
         {tab==="insights"&&<InsightsView expenses={expenses} income={income} bills={bills} debts={debts} budgetGoals={budgetGoals} savingsGoals={savingsGoals}/>}
-        {tab==="paycheck"&&<PaycheckView bills={bills} income={income} setIncome={setIncome} expenses={expenses} accounts={accounts} budgetGoals={budgetGoals} onAdd={()=>om("expense")}/>}
+        {tab==="paycheck"&&<PaycheckView bills={bills} income={income} setIncome={setIncome} expenses={expenses} accounts={accounts} budgetGoals={budgetGoals} onAdd={()=>om("expense")} onRecordPaycheck={openPaycheckDeposit}/>}
         {tab==="networthtrend"&&<NetWorthTrendView balHist={balHist} debts={debts} accounts={accounts} tradingAccount={tradingAccount} onNavigate={navTo} nwGoal={nwGoal} setNwGoal={setNwGoal}/>}
         {tab==="tax"&&<TaxView expenses={expenses} income={income} trades={trades} shifts={shifts} appName={appName}/>}
         {tab==="dashsettings"&&<DashSettingsView config={dashConfig} setConfig={setDashConfig} showTrading={settings.showTrading}/>}
@@ -7413,6 +7526,7 @@ function AppInner(){
 
       {showImport&&<BankImportModal categories={categories} expenses={expenses} setExpenses={setExpenses} household={household} showToast={showToast} onClose={()=>setShowImport(false)}/>}
       {showExport&&<ExportModal expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} budgetGoals={budgetGoals} trades={trades} shifts={shifts} categories={categories} appName={appName} greetName={greetName} tradingAccount={tradingAccount} onClose={()=>setShowExport(false)}/>}
+      {paycheckDepCtx&&<PaycheckDepositModal ctx={paycheckDepCtx} onClose={()=>setPaycheckDepCtx(null)} accounts={accounts} income={income} settings={settings} setAccounts={setAccounts} setIncome={setIncome} setSettings={setSettings} showToast={showToast}/>}
       {confirm&&<ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)} danger={confirm.danger}/>}
       {sessionExpired&&(
         <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(10,22,40,.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(6px)"}}>
