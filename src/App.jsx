@@ -29,6 +29,16 @@ import {
   setUploadConflictHandler,
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
+
+/** Prefer `updated_at` for versioned sync; fall back if the column isn’t exposed (avoids hard sync failure). */
+async function supaFetchUserDataRows(uid) {
+  const q = encodeURIComponent(uid);
+  const primary = await supaFetch(
+    `/rest/v1/user_data?user_id=eq.${q}&select=key,value,updated_at`
+  );
+  if (!primary.error && Array.isArray(primary.data)) return primary;
+  return supaFetch(`/rest/v1/user_data?user_id=eq.${q}&select=key,value`);
+}
 import BankImportModal from "./modals/BankImportModal.jsx";
 import ExportModal from "./modals/ExportModal.jsx";
 
@@ -5752,6 +5762,7 @@ function AppInner(){
   const _startupParams=useRef((()=>{try{const sp=new URLSearchParams(window.location.search);return{action:sp.get("action"),tab:sp.get("tab")};}catch{return{};}})());
   /** Throttle pulls when app becomes visible (visibility/pageshow can fire in bursts on mobile). */
   const lastVisibilityPullRef=useRef(0);
+  const readyRef=useRef(false);
   const[authSession,setAuthSession]=useState(null);
   const[authLoading,setAuthLoading]=useState(true);
   const[pwResetMode,setPwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
@@ -5883,79 +5894,81 @@ function AppInner(){
       }
     }catch{}
     // Authoritative pull after migration: boot may have run with a different scope before session was set.
-    setTimeout(()=>loadFromSupabase(sess), 150);
+    setTimeout(()=>loadFromSupabase(sess,{background:true}),150);
   }
-  async function loadFromSupabase(sess) {
-    if (isTrackfiDemoMode()) return;
-    const uid = sess?.user?.id;
-    if (!uid) return;
-    const gen = ++remotePullGenRef.current;
-    // Push pending local changes first (with version checks), then pull so other devices win when newer.
-    await flushPendingSync();
-    await new Promise(r => setTimeout(r, 50));
-    setSyncing(true);
-    try {
-      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&select=key,value,updated_at`);
-      if (gen !== remotePullGenRef.current) return;
-      if (!res?.data || !Array.isArray(res.data)) {
-        if (navigator.onLine) setSyncRecoverableError(true);
-        return;
-      }
-      // Drop any scheduled uploads from before this snapshot — they may target pre-pull state.
-      cancelPendingDebouncedSync();
-      if (res.data.length === 0) {
-        applyPulledUserDataRows([]);
-        // Wipe stale scoped cache (e.g. sample data saved locally while signed in) so an empty cloud is authoritative.
-        resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
-        setSyncRecoverableError(false);
-        try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
-        if (gen === remotePullGenRef.current) {
-          setSyncing(false);
-          setTimeout(() => { void flushPendingSync(); }, 0);
+  async function loadFromSupabase(sess,opts={}){
+    const background=opts.background===true;
+    if(isTrackfiDemoMode())return;
+    const uid=sess?.user?.id;
+    if(!uid)return;
+    if(background&&backgroundPullInFlightRef.current)return backgroundPullInFlightRef.current;
+    const gen=++remotePullGenRef.current;
+    const exec=(async()=>{
+      try{
+        await flushPendingSync();
+        if(gen!==remotePullGenRef.current)return;
+        await new Promise(r=>setTimeout(r,50));
+        if(gen!==remotePullGenRef.current)return;
+        if(!background)setSyncing(true);
+        const res=await supaFetchUserDataRows(uid);
+        if(gen!==remotePullGenRef.current)return;
+        if(!res?.data||!Array.isArray(res.data)){
+          if(navigator.onLine&&!background)setSyncRecoverableError(true);
+          if(!background)showToast("Sync failed — check your connection","error");
+          return;
         }
-        return;
+        cancelPendingDebouncedSync();
+        if(res.data.length===0){
+          applyPulledUserDataRows([]);
+          resetUserState({clearOnboarding:true,cloudLoadedRefTarget:true});
+          setSyncRecoverableError(false);
+          try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
+          return;
+        }
+        applyPulledUserDataRows(res.data);
+        const map={};
+        res.data.forEach(row=>{map[row.key]=row.value;});
+        const fullMap=buildAuthoritativeCloudMap(map);
+        setSyncRecoverableError(false);
+        applyUserDataSnapshot(fullMap,{
+          setExpenses,setBills,setDebts,setBGoals,setSGoals,setCats,setTrades,
+          setBalHist,setShifts,setRecurrings,setNotifs,setSettlements,setHhBudgets,
+          setNwGoal,setSubDismissed,setAccounts,setIncome,setSettings,setCalColors,
+          setDashConfig,setHousehold,setTradingAccount,setAppName,setGreetName,
+          setProfCategory,setProfSub,setAccountRates,setOnboarded,
+        },{cloudPull:true});
+        const pulledSettings=fullMap.settings;
+        if(
+          pulledSettings&&
+          typeof pulledSettings==="object"&&
+          Object.prototype.hasOwnProperty.call(pulledSettings,"darkMode")&&
+          typeof pulledSettings.darkMode==="boolean"
+        ){
+          setDarkMode(pulledSettings.darkMode);
+        }
+        cloudLoadedRef.current=true;
+        const scope="fv6_"+uid.slice(0,8)+":";
+        for(const key of SCOPED_USER_DATA_KEYS){
+          if(!Object.prototype.hasOwnProperty.call(fullMap,key))continue;
+          try{localStorage.setItem(scope+key,JSON.stringify(fullMap[key]));}catch{}
+        }
+        try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
+      }catch(e){
+        console.error("loadFromSupabase error",e);
+        if(gen===remotePullGenRef.current&&navigator.onLine&&!background)setSyncRecoverableError(true);
+        if(!background)showToast("Sync failed — check your connection","error");
+      }finally{
+        if(!background&&gen===remotePullGenRef.current)setSyncing(false);
+        if(gen===remotePullGenRef.current)setTimeout(()=>{void flushPendingSync();},0);
       }
-      applyPulledUserDataRows(res.data);
-      const map = {};
-      res.data.forEach(row => { map[row.key] = row.value; });
-      const fullMap = buildAuthoritativeCloudMap(map);
-      setSyncRecoverableError(false);
-      applyUserDataSnapshot(fullMap, {
-        setExpenses, setBills, setDebts, setBGoals, setSGoals, setCats, setTrades,
-        setBalHist, setShifts, setRecurrings, setNotifs, setSettlements, setHhBudgets,
-        setNwGoal, setSubDismissed, setAccounts, setIncome, setSettings, setCalColors,
-        setDashConfig, setHousehold, setTradingAccount, setAppName, setGreetName,
-        setProfCategory, setProfSub, setAccountRates, setOnboarded,
-      }, { cloudPull: true });
-      const pulledSettings = fullMap.settings;
-      if (
-        pulledSettings &&
-        typeof pulledSettings === "object" &&
-        Object.prototype.hasOwnProperty.call(pulledSettings, "darkMode") &&
-        typeof pulledSettings.darkMode === "boolean"
-      ) {
-        setDarkMode(pulledSettings.darkMode);
-      }
-      cloudLoadedRef.current=true;
-      // Mirror full merged snapshot (including defaults for keys the server omitted) for offline use
-      const scope = "fv6_" + uid.slice(0,8) + ":";
-      for (const key of SCOPED_USER_DATA_KEYS) {
-        if (!Object.prototype.hasOwnProperty.call(fullMap, key)) continue;
-        try { localStorage.setItem(scope + key, JSON.stringify(fullMap[key])); } catch {}
-      }
-      try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
-    } catch(e) {
-      console.error("loadFromSupabase error", e);
-      if (gen === remotePullGenRef.current && navigator.onLine) setSyncRecoverableError(true);
-      showToast("Sync failed — check your connection","error");
+    })();
+    if(background){
+      backgroundPullInFlightRef.current=exec;
+      exec.finally(()=>{
+        if(backgroundPullInFlightRef.current===exec)backgroundPullInFlightRef.current=null;
+      });
     }
-    finally {
-      if (gen === remotePullGenRef.current) {
-        setSyncing(false);
-        // After React applies server state, persistence effects re-run ss(); flush those writes.
-        setTimeout(() => { void flushPendingSync(); }, 0);
-      }
-    }
+    return exec;
   }
   const loadFromSupabaseRef=useRef(loadFromSupabase);
   loadFromSupabaseRef.current=loadFromSupabase;
@@ -6013,6 +6026,7 @@ function AppInner(){
     setSyncRecoverableError(false);
   }
   const[ready,setReady]=useState(false);
+  useEffect(()=>{readyRef.current=ready;},[ready]);
   // True once we've successfully loaded at least one round of cloud data.
   // Prevents empty boot state from overwriting real Supabase data on other devices.
   const cloudLoadedRef=useRef(false);
@@ -6020,6 +6034,8 @@ function AppInner(){
   const monthlyRecapShownRef=useRef(null);
   /** Increments on each loadFromSupabase call so stale responses never overwrite newer state. */
   const remotePullGenRef=useRef(0);
+  /** One coalesced background pull at a time (focus/visibility/online) to avoid UI thrash. */
+  const backgroundPullInFlightRef=useRef(null);
   const[accounts,setAccounts]=useState(DEF_ACCOUNTS);
   const[income,setIncome]=useState(DEF_INCOME);
   const[expenses,setExpenses]=useState([]);
@@ -6088,7 +6104,7 @@ function AppInner(){
   useEffect(()=>{
     setUploadConflictHandler(()=>{
       const s=authSessionRef.current;
-      if(s?.user?.id&&!isTrackfiDemoMode())void loadFromSupabaseRef.current?.(s);
+      if(s?.user?.id&&!isTrackfiDemoMode())void loadFromSupabaseRef.current?.(s,{background:true});
     });
     return()=>setUploadConflictHandler(null);
   },[]);
@@ -6098,12 +6114,13 @@ function AppInner(){
     async function pullIfDue(){
       const sess=authSessionRef.current;
       if(!sess?.user?.id||isTrackfiDemoMode())return;
+      if(!readyRef.current)return;
       const now=Date.now();
-      if(now-lastVisibilityPullRef.current<1200)return;
+      if(now-lastVisibilityPullRef.current<4500)return;
       lastVisibilityPullRef.current=now;
       const { conflict }=await flushPendingSync();
       if(conflict)showToastRef.current("Another device had newer data — this tab was synced to match.","info");
-      await loadFromSupabaseRef.current?.(sess);
+      await loadFromSupabaseRef.current?.(sess,{background:true});
     }
     function onFocus(){
       if(!authSessionRef.current?.user?.id)return;
@@ -6143,27 +6160,13 @@ function AppInner(){
       const { conflict }=await flushPendingSync();
       if(conflict)showToastRef.current("Another device had newer data — syncing this device to match.","info");
       const s=authSessionRef.current;
-      if(s?.user?.id)await loadFromSupabaseRef.current?.(s);
+      if(s?.user?.id)await loadFromSupabaseRef.current?.(s,{background:true});
     };
     const goOffline=()=>{setIsOnline(false);};
     window.addEventListener("online",goOnline);
     window.addEventListener("offline",goOffline);
     return()=>{window.removeEventListener("online",goOnline);window.removeEventListener("offline",goOffline);};
   },[]);
-
-  /** While the tab is visible, refresh periodically so a second browser doesn’t stay stale for long. */
-  useEffect(()=>{
-    if(!authSession?.user?.id)return;
-    const id=setInterval(()=>{
-      if(document.visibilityState!=="visible"||isTrackfiDemoMode())return;
-      void (async()=>{
-        const { conflict }=await flushPendingSync();
-        if(conflict)showToastRef.current("Synced latest from your other device.","info");
-        await loadFromSupabaseRef.current?.(authSessionRef.current);
-      })();
-    },90000);
-    return()=>clearInterval(id);
-  },[authSession?.user?.id]);
 
   const[isDemoMode,setIsDemoMode]=useState(()=>{try{return localStorage.getItem("fv_demo")==="1";}catch{return false;}});
   const[demoBannerVisible,setDemoBannerVisible]=useState(true);
@@ -6189,7 +6192,7 @@ function AppInner(){
           }
         }else if(uid_boot){
           try{
-            const bulk=await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid_boot)}&select=key,value,updated_at`);
+            const bulk=await supaFetchUserDataRows(uid_boot);
             if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length===0){
               applyPulledUserDataRows([]);
               resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
