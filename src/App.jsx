@@ -29,6 +29,7 @@ import {
   setUploadConflictHandler,
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
+import { shiftRecurringBillDueDate } from "./lib/billDueDates.js";
 
 /** Prefer `updated_at` for versioned sync; fall back if the column isn’t exposed (avoids hard sync failure). */
 async function supaFetchUserDataRows(uid) {
@@ -226,15 +227,32 @@ const RECURRING_RESHOW_UPCOMING_WITHIN_DAYS = {
   Quarterly: 30,   // ~1 month before quarter due
   Annual: 60,      // ~2 months before yearly due
 };
-function recurringReshowUpcomingWithinDays(recurring){
+const BILL_RESHOW_PRESETS=[0.5,0.75,1,1.25,1.5,2,3];
+function clampBillReshowMultiplier(m){
+  const x=typeof m==="number"&&Number.isFinite(m)?m:parseFloat(m);
+  if(!Number.isFinite(x)||x<=0)return 1;
+  return Math.min(3,Math.max(0.25,x));
+}
+function nearestBillReshowPreset(m){
+  const v=clampBillReshowMultiplier(m);
+  let best=BILL_RESHOW_PRESETS[2],bd=Infinity;
+  for(const p of BILL_RESHOW_PRESETS){
+    const d=Math.abs(p-v);
+    if(d<bd){bd=d;best=p;}
+  }
+  return best;
+}
+function recurringReshowUpcomingWithinDays(recurring,settings){
   if(!recurring||recurring==="One-time")return 0;
-  const n=RECURRING_RESHOW_UPCOMING_WITHIN_DAYS[recurring];
-  return typeof n==="number"?n:RECURRING_RESHOW_UPCOMING_WITHIN_DAYS.Monthly;
+  const base=RECURRING_RESHOW_UPCOMING_WITHIN_DAYS[recurring];
+  const b=typeof base==="number"?base:RECURRING_RESHOW_UPCOMING_WITHIN_DAYS.Monthly;
+  const mult=clampBillReshowMultiplier(settings?.billReshowLeadMultiplier);
+  return Math.max(0,Math.round(b*mult));
 }
 const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); };
 const dayOfMonth  = () => new Date().getDate();
 const fmtDate = s => { if(!s)return""; const clean=s.includes("T")?s.split("T")[0]:s; const d=new Date(clean+"T00:00:00"); return FULL_MOS[d.getMonth()]+" "+d.getDate(); };
-const DEF_SETTINGS={showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"],notifBills:true,notifBudget:true,notifSavings:true,notifPayday:true,notifMilestones:true,defaultExpensePaidFrom:"checking",defaultBillPaidFrom:"checking",defaultCheckingAccountId:"",defaultSavingsAccountId:"",defaultCreditDebtId:"",paycheckNudgeLastHandledPeriod:""};
+const DEF_SETTINGS={showTrading:true,showCrypto:false,showHealth:true,showSavings:true,showForecast:true,darkMode:false,quickActions:["expense","bill","paycheck","debt","health","budget","savings","insights"],notifBills:true,notifBudget:true,notifSavings:true,notifPayday:true,notifMilestones:true,defaultExpensePaidFrom:"checking",defaultBillPaidFrom:"checking",defaultCheckingAccountId:"",defaultSavingsAccountId:"",defaultCreditDebtId:"",paycheckNudgeLastHandledPeriod:"",billReshowLeadMultiplier:1};
 const DEF_ACCOUNTS={checking:"",savings:"",cushion:"",credit_card:"",investments:"",k401:"",roth_ira:"",brokerage:"",crypto:"",hsa:"",property:"",vehicles:"",cashAccounts:[]};
 /** Where a spend hits: checking ↓, savings ↓, credit ↑ (owed), none = categories only */
 function normalizePaidFrom(pf){if(pf==="credit"||pf==="checking"||pf==="savings"||pf==="none")return pf;return "checking";}
@@ -321,13 +339,7 @@ function prepareBillPaidTransition(x,debts,accounts,settings){
 }
 /** Move a recurring bill's due date back one period (inverse of marking paid). */
 function rewindRecurringDueDate(dueDateStr,recurring){
-  const d=new Date((dueDateStr||todayStr())+"T00:00:00");
-  if(recurring==="Weekly")d.setDate(d.getDate()-7);
-  else if(recurring==="Bi-weekly")d.setDate(d.getDate()-14);
-  else if(recurring==="Quarterly")d.setMonth(d.getMonth()-3);
-  else if(recurring==="Annual")d.setFullYear(d.getFullYear()-1);
-  else d.setMonth(d.getMonth()-1);
-  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  return shiftRecurringBillDueDate(dueDateStr,recurring,todayStr(),false);
 }
 /** One bill row after unpaid→paid (recurring advances due date + paid:true so the checkmark sticks; one-time sets paid:true). */
 function patchBillForMarkingPaid(xx,x,payDate,pd,billPrevSnap,isLoanPay,prevCarry){
@@ -335,13 +347,7 @@ function patchBillForMarkingPaid(xx,x,payDate,pd,billPrevSnap,isLoanPay,prevCarr
   const loanClear={loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined};
   const loanSnap=isLoanPay&&x.linkedDebtId?{loanPrincipalApplied:pd,loanPrevInterestAsOfDate:billPrevSnap,loanPrevAccruedInterest:prevCarry}:null;
   if(xx.recurring&&xx.recurring!=="One-time"){
-    const d=new Date((xx.dueDate||todayStr())+"T00:00:00");
-    if(xx.recurring==="Weekly")d.setDate(d.getDate()+7);
-    else if(xx.recurring==="Bi-weekly")d.setDate(d.getDate()+14);
-    else if(xx.recurring==="Quarterly")d.setMonth(d.getMonth()+3);
-    else if(xx.recurring==="Annual")d.setFullYear(d.getFullYear()+1);
-    else d.setMonth(d.getMonth()+1);
-    const nd=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    const nd=shiftRecurringBillDueDate(xx.dueDate,xx.recurring,xx.dueDate||todayStr(),true);
     return{...xx,paid:true,dueDate:nd,paidDate:payDate,...(loanSnap||loanClear)};
   }
   return{...xx,paid:true,paidDate:payDate,...(loanSnap||loanClear)};
@@ -678,7 +684,7 @@ function applyUserDataSnapshot(map,H,{bootDefaults=false,cloudPull=false}={}){
       }
     }catch{}
     try{if(map.income!=null&&typeof map.income==="object")H.setIncome({...map.income});}catch{}
-    try{if(map.settings!=null&&typeof map.settings==="object")H.setSettings({...map.settings});}catch{}
+    try{if(map.settings!=null&&typeof map.settings==="object")H.setSettings({...DEF_SETTINGS,...map.settings});}catch{}
     try{if(map.calColors!=null&&typeof map.calColors==="object")H.setCalColors({...map.calColors});}catch{}
     try{if(map.dashConfig!=null&&typeof map.dashConfig==="object")H.setDashConfig({...map.dashConfig});}catch{}
     try{
@@ -2987,11 +2993,11 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
                 <div style={{fontSize:12,marginTop:2,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                   <span style={{color:uc,fontWeight:500}}>{ul}</span>
                   {b.recurring&&b.recurring!=="One-time"&&<span style={{color:C.textLight}}>{b.recurring}</span>}{b.linkedDebtId&&<span style={{color:C.accent,fontSize:11,fontWeight:600}}> · loan payment</span>}{b.linkedDebtId&&!b.paid&&<span style={{fontSize:10,color:C.textFaint,lineHeight:1.35}}> · pays period interest + any accrued pending first, then principal (actual/365)</span>}{b.notes&&<span style={{color:C.textFaint,fontSize:11}}>· {b.notes}</span>}
-                  {b.autoPay&&<span style={{background:C.accentBg,color:C.accent,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99}}>AUTO-PAY</span>}{household?.enabled&&b.paidBy&&b.paidBy!=="shared"&&(()=>{const m=household.members.find(x=>x.id===b.paidBy);return m?<span style={{background:m.color+"18",color:m.color,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,border:`1px solid ${m.color}33`}}>{m.emoji} {m.name}</span>:null;})()}
+                  {b.autoPay&&<span title="Label only — does not auto-mark paid or change balances." style={{background:C.accentBg,color:C.accent,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,cursor:"help"}}>AUTO-PAY</span>}{household?.enabled&&b.paidBy&&b.paidBy!=="shared"&&(()=>{const m=household.members.find(x=>x.id===b.paidBy);return m?<span style={{background:m.color+"18",color:m.color,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,border:`1px solid ${m.color}33`}}>{m.emoji} {m.name}</span>:null;})()}
                 </div>
               </div>
               <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:b.paid?C.textLight:C.text}}>{fmt(b.amount)}</div>
-              {billTab==="history"&&b.paid&&<button type="button" className="ba" onClick={()=>handleBillPaidChange(b,false)} style={{background:"none",border:"none",cursor:"pointer",color:C.amber,fontSize:11,fontWeight:700,padding:"4px 6px",whiteSpace:"nowrap"}}>Mark unpaid</button>}
+              {billTab==="history"&&b.paid&&!billHasLoanUndoSnap(b)&&<button type="button" className="ba" onClick={()=>handleBillPaidChange(b,false)} style={{background:"none",border:"none",cursor:"pointer",color:C.amber,fontSize:11,fontWeight:700,padding:"4px 6px",whiteSpace:"nowrap"}}>Mark unpaid</button>}
               {billHasLoanUndoSnap(b)&&((billTab==="upcoming"&&!b.paid)||(billTab==="history"&&b.paid))&&<button type="button" className="ba" onClick={()=>undoLoanBillPayment(b)} style={{background:"none",border:"none",cursor:"pointer",color:C.amber,fontSize:11,fontWeight:700,padding:"4px 6px",whiteSpace:"nowrap"}}>Undo loan pay</button>}
               <button type="button" className="ba" onClick={()=>setEditItem({type:"bill",data:b})} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,fontSize:11,fontWeight:600,padding:"4px 6px"}}>Edit</button>
               <button className="ba" onClick={()=>{const snap=b;setBills(p=>p.filter(x=>x.id!==snap.id));(showUndoToast||showToast)&&(showUndoToast?showUndoToast("Bill removed — "+snap.name,()=>setBills(p=>[...p,snap])):showToast("Bill removed","error"));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
@@ -3890,7 +3896,7 @@ function EditModal({item,categories,household,debts=[],bills=[],accounts={},sett
             </div>
           </div>}
           <div style={{marginBottom:12}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Tags</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{["food","transport","health","work","personal","family","fun","recurring"].map(tag=>{const on=(form.tags||[]).includes(tag);return(<button key={tag} onClick={()=>ff("tags",on?(form.tags||[]).filter(t=>t!==tag):[...(form.tags||[]),tag])} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${on?C.accent:C.border}`,background:on?C.accentBg:C.surface,color:on?C.accent:C.textMid,fontSize:12,fontWeight:on?700:500,cursor:"pointer"}}>{tag}</button>);})}</div></div></>}
-      {type==="bill"&&<><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Weekly","Bi-weekly","Monthly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/><FS label="Pay from (when paid)" options={PAID_FROM_OPTIONS.map(k=>({value:k,label:PAID_FROM_FS_LABELS[k]}))} value={normalizePaidFrom(form.paidFrom)} onChange={e=>{ff("paidFrom",e.target.value);const v=normalizePaidFrom(e.target.value);if(v==="credit")ff("creditDebtId",pickDefaultCreditDebtId(settings,debts)||"");else ff("creditDebtId","");if(v==="credit"&&form.linkedDebtId)ff("linkedDebtId","");ff("bankAccountId",pickDefaultBankAccountId(v,accounts,settings)||"");}}/>{loanDebtsList(debts).length>0&&<FS label="Pay down loan (optional)" options={[{value:"",label:"— None —"},...loanDebtsList(debts).map(d=>({value:String(d.id),label:d.name+" — "+fmt(parseFloat(d.balance||0))}))]} value={form.linkedDebtId!=null&&form.linkedDebtId!==""?String(form.linkedDebtId):""} onChange={e=>{const v=e.target.value;if(!v){ff("linkedDebtId","");return;}ff("linkedDebtId",v);if(normalizePaidFrom(form.paidFrom)==="credit"){ff("paidFrom","checking");ff("creditDebtId","");ff("bankAccountId",pickDefaultBankAccountId("checking",accounts,settings)||"");}}}/>}{normalizePaidFrom(form.paidFrom)==="credit"&&cardDebtsList(debts).length>1&&<FS label="Which card pays this bill" options={cardDebtsList(debts).map(d=>({value:String(d.id),label:d.name+" — "+fmt(parseFloat(d.balance||0))+" principal"}))} value={String(form.creditDebtId||"")} onChange={e=>ff("creditDebtId",e.target.value)}/>}{normalizePaidFrom(form.paidFrom)==="credit"&&cardDebtsList(debts).length===0&&<div style={{fontSize:12,color:C.red,marginBottom:12}}>Add credit cards under Debt (type: Credit card) first.</div>}{normalizePaidFrom(form.paidFrom)==="checking"&&cashAccountsByKind(accounts,"checking").length>1&&<FS label="Which checking account" options={cashAccountsByKind(accounts,"checking").map(a=>({value:String(a.id),label:(a.name||"Checking")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.bankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"")} onChange={e=>ff("bankAccountId",e.target.value)}/>}{normalizePaidFrom(form.paidFrom)==="savings"&&cashAccountsByKind(accounts,"savings").length>1&&<FS label="Which savings account" options={cashAccountsByKind(accounts,"savings").map(a=>({value:String(a.id),label:(a.name||"Savings")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.bankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"")} onChange={e=>ff("bankAccountId",e.target.value)}/>}<FI label="Notes (optional)" value={form.notes||""} onChange={e=>ff("notes",e.target.value)}/><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Auto-Pay</div><div style={{fontSize:12,color:C.textLight}}>Mark as automatically paid</div></div><button onClick={()=>ff("autoPay",!form.autoPay)} style={{background:"none",border:"none",cursor:"pointer",color:form.autoPay?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.autoPay?<ToggleRight size={30}/>:<ToggleLeft size={30}/>}</button></div></>}
+      {type==="bill"&&<><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Weekly","Bi-weekly","Monthly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/><FS label="Pay from (when paid)" options={PAID_FROM_OPTIONS.map(k=>({value:k,label:PAID_FROM_FS_LABELS[k]}))} value={normalizePaidFrom(form.paidFrom)} onChange={e=>{ff("paidFrom",e.target.value);const v=normalizePaidFrom(e.target.value);if(v==="credit")ff("creditDebtId",pickDefaultCreditDebtId(settings,debts)||"");else ff("creditDebtId","");if(v==="credit"&&form.linkedDebtId)ff("linkedDebtId","");ff("bankAccountId",pickDefaultBankAccountId(v,accounts,settings)||"");}}/>{loanDebtsList(debts).length>0&&<FS label="Pay down loan (optional)" options={[{value:"",label:"— None —"},...loanDebtsList(debts).map(d=>({value:String(d.id),label:d.name+" — "+fmt(parseFloat(d.balance||0))}))]} value={form.linkedDebtId!=null&&form.linkedDebtId!==""?String(form.linkedDebtId):""} onChange={e=>{const v=e.target.value;if(!v){ff("linkedDebtId","");return;}ff("linkedDebtId",v);if(normalizePaidFrom(form.paidFrom)==="credit"){ff("paidFrom","checking");ff("creditDebtId","");ff("bankAccountId",pickDefaultBankAccountId("checking",accounts,settings)||"");}}}/>}{normalizePaidFrom(form.paidFrom)==="credit"&&cardDebtsList(debts).length>1&&<FS label="Which card pays this bill" options={cardDebtsList(debts).map(d=>({value:String(d.id),label:d.name+" — "+fmt(parseFloat(d.balance||0))+" principal"}))} value={String(form.creditDebtId||"")} onChange={e=>ff("creditDebtId",e.target.value)}/>}{normalizePaidFrom(form.paidFrom)==="credit"&&cardDebtsList(debts).length===0&&<div style={{fontSize:12,color:C.red,marginBottom:12}}>Add credit cards under Debt (type: Credit card) first.</div>}{normalizePaidFrom(form.paidFrom)==="checking"&&cashAccountsByKind(accounts,"checking").length>1&&<FS label="Which checking account" options={cashAccountsByKind(accounts,"checking").map(a=>({value:String(a.id),label:(a.name||"Checking")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.bankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"")} onChange={e=>ff("bankAccountId",e.target.value)}/>}{normalizePaidFrom(form.paidFrom)==="savings"&&cashAccountsByKind(accounts,"savings").length>1&&<FS label="Which savings account" options={cashAccountsByKind(accounts,"savings").map(a=>({value:String(a.id),label:(a.name||"Savings")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.bankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"")} onChange={e=>ff("bankAccountId",e.target.value)}/>}<FI label="Notes (optional)" value={form.notes||""} onChange={e=>ff("notes",e.target.value)}/><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Auto-Pay</div><div style={{fontSize:12,color:C.textLight,lineHeight:1.4}}>Badge only — does not mark paid or move money. You still tap paid when it clears.</div></div><button onClick={()=>ff("autoPay",!form.autoPay)} style={{background:"none",border:"none",cursor:"pointer",color:form.autoPay?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.autoPay?<ToggleRight size={30}/>:<ToggleLeft size={30}/>}</button></div></>}
       {type==="debt"&&<><FS label="Debt type" options={[{value:"loan",label:"Loan / installment / other"},{value:"credit_card",label:"💳 Credit card"}]} value={form.debtKind==="credit_card"?"credit_card":"loan"} onChange={e=>ff("debtKind",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div style={{display:"flex",gap:12}}><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/></div>{form.debtKind!=="credit_card"&&<><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",marginTop:10,marginBottom:8,fontSize:12,color:C.textMid,lineHeight:1.48}}>Add or keep a <strong>monthly bill</strong> that matches this payment. Marking it paid reduces the loan balance by the estimated principal.</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Linked monthly bill</div><div style={{fontSize:11,color:C.textLight}}>Min. payment amount · Bills tab</div></div><button type="button" className="ba" onClick={()=>ff("addLoanBill",!(form.addLoanBill!==false))} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:form.addLoanBill!==false?C.accent:C.borderLight}}>{form.addLoanBill!==false?<ToggleRight size={30}/>:<ToggleLeft size={30}/>}</button></div>{form.addLoanBill!==false&&parseFloat(form.minPayment||0)>0&&<><FI label="Next bill due" type="date" value={form.loanBillDueDate||todayStr()} onChange={e=>ff("loanBillDueDate",e.target.value)}/><FS label="Bill pays from" options={PAID_FROM_OPTIONS.filter(k=>k!=="credit"&&k!=="none").map(k=>({value:k,label:PAID_FROM_FS_LABELS[k]}))} value={normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking")} onChange={e=>{ff("billPaidFrom",e.target.value);ff("billBankAccountId",pickDefaultBankAccountId(normalizePaidFrom(e.target.value),accounts,settings)||"");}}/>{normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking")==="checking"&&cashAccountsByKind(accounts,"checking").length>1&&<FS label="Which checking" options={cashAccountsByKind(accounts,"checking").map(a=>({value:String(a.id),label:(a.name||"Checking")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"")} onChange={e=>ff("billBankAccountId",e.target.value)}/>}{normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking")==="savings"&&cashAccountsByKind(accounts,"savings").length>1&&<FS label="Which savings" options={cashAccountsByKind(accounts,"savings").map(a=>({value:String(a.id),label:(a.name||"Savings")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"")} onChange={e=>ff("billBankAccountId",e.target.value)}/>}</>}</>}<div style={{marginTop:10}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Chart color</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>{DEBT_PALETTE.map(hex=>(<button key={hex} type="button" className="ba" onClick={()=>ff("color",hex)} aria-label={hex} style={{width:26,height:26,borderRadius:6,background:hex,border:`2px solid ${String(form.color||debtDisplayColor(item.data,debts)).toLowerCase()===hex.toLowerCase()?C.accent:C.border}`,cursor:"pointer",padding:0}}/>))}</div><FI label="Custom (#hex)" placeholder="#6366F1" value={form.color||""} onChange={e=>ff("color",e.target.value)}/><div style={{fontSize:11,color:C.textLight,marginTop:6,lineHeight:1.4}}>Used in the Debt pie and lists. Leave custom blank to keep the auto color.</div></div></>}
       <button className="ba" onClick={()=>{onDelete();onClose();}} style={{width:"100%",background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"13px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer",marginTop:6}}>🗑 Delete</button>
     </Modal>
@@ -4327,6 +4333,9 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
       {cashAccountsByKind(accounts,"checking").length>=2&&<FS label="Default checking (several accounts)" options={[{value:"",label:"— Choose —"},...cashAccountsByKind(accounts,"checking").map(a=>({value:String(a.id),label:(a.name||"Checking")+" — "+fmt(parseFloat(a.balance||0))}))]} value={settings.defaultCheckingAccountId!=null&&settings.defaultCheckingAccountId!==""?String(settings.defaultCheckingAccountId):""} onChange={e=>setSettings(p=>({...p,defaultCheckingAccountId:e.target.value}))}/>}
       {cashAccountsByKind(accounts,"savings").length>=2&&<FS label="Default savings (several accounts)" options={[{value:"",label:"— Choose —"},...cashAccountsByKind(accounts,"savings").map(a=>({value:String(a.id),label:(a.name||"Savings")+" — "+fmt(parseFloat(a.balance||0))}))]} value={settings.defaultSavingsAccountId!=null&&settings.defaultSavingsAccountId!==""?String(settings.defaultSavingsAccountId):""} onChange={e=>setSettings(p=>({...p,defaultSavingsAccountId:e.target.value}))}/>}
       {cardDebtsList(debts).length>=2&&<FS label="Default credit card (several cards)" options={[{value:"",label:"— Choose —"},...cardDebtsList(debts).map(d=>({value:String(d.id),label:d.name+" — "+fmt(parseFloat(d.balance||0))}))]} value={settings.defaultCreditDebtId!=null&&settings.defaultCreditDebtId!==""?String(settings.defaultCreditDebtId):""} onChange={e=>setSettings(p=>({...p,defaultCreditDebtId:e.target.value}))}/>}
+      <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:14}}>Bills</div>
+      <div style={{fontSize:11,color:C.textLight,marginBottom:8,lineHeight:1.45}}>After you mark a recurring bill paid, it hides in Paid History until the next due is close. This scales how many days ahead it comes back to <strong>Upcoming</strong> (weekly / monthly / etc. each keep their own shape).</div>
+      <FS label="Recurring: return to Upcoming" options={BILL_RESHOW_PRESETS.map(p=>({value:String(p),label:p===0.5?"Tighter (0.5× notice)":p===0.75?"Slightly early (0.75×)":p===1?"Balanced (default)":p===1.25?"More notice (1.25×)":p===1.5?"Earlier (1.5×)":p===2?"Much earlier (2×)":"Latest allowed (3×)"}))} value={String(nearestBillReshowPreset(settings.billReshowLeadMultiplier))} onChange={e=>setSettings(p=>({...p,billReshowLeadMultiplier:parseFloat(e.target.value)||1}))}/>
     </div>
 
     {/* ── 3. APPEARANCE ──────────────────────────── */}
@@ -6123,6 +6132,15 @@ function AppInner(){
   const[notifs,setNotifs]=useState([]);
   const[calColors,setCalColors]=useState(()=>DEF_CALCOLORS(C));
   const[settings,setSettings]=useState(DEF_SETTINGS);
+  const billsNeedingRecurringReshow=useMemo(()=>{
+    if(!bills.length)return false;
+    return bills.some(b=>{
+      if(!b.paid||!b.recurring||b.recurring==="One-time")return false;
+      if(isBillDueDateUnusable(b.dueDate))return true;
+      const w=recurringReshowUpcomingWithinDays(b.recurring,settings);
+      return dueIn(b.dueDate)<=w;
+    });
+  },[bills,settings]);
   const[monthlySummary,setMonthlySummary]=useState(null);
   const[dashConfig,setDashConfig]=useState(DEF_DASHCONFIG);
   const[appName,setAppName]=useState("Trackfi");
@@ -6408,27 +6426,21 @@ function AppInner(){
     setBills(p=>p.map(b=>{
       if(!b.paid)return b;
       if(b.recurring&&b.recurring!=="One-time")return b;
-      return{...b,paid:false,paidDate:null};
+      return{...b,paid:false,paidDate:undefined};
     }));
     try{localStorage.setItem("fv_bills_reset_month",currentMonth);}catch{}
   },[ready,bills.length]);
   // Recurring bills marked paid stay in history until the next due is within the cadence-specific window — then they return to Upcoming (unpaid for the new cycle).
   useEffect(()=>{
-    if(!ready||!bills.length)return;
-    if(!bills.some(b=>{
-      if(!b.paid||!b.recurring||b.recurring==="One-time")return false;
-      if(isBillDueDateUnusable(b.dueDate))return true;
-      const w=recurringReshowUpcomingWithinDays(b.recurring);
-      return dueIn(b.dueDate)<=w;
-    }))return;
+    if(!ready||!bills.length||!billsNeedingRecurringReshow)return;
     setBills(p=>p.map(b=>{
       if(!b.paid||!b.recurring||b.recurring==="One-time")return b;
       if(isBillDueDateUnusable(b.dueDate))return{...b,paid:false,paidDate:undefined};
-      const w=recurringReshowUpcomingWithinDays(b.recurring);
+      const w=recurringReshowUpcomingWithinDays(b.recurring,settings);
       if(dueIn(b.dueDate)>w)return b;
       return{...b,paid:false,paidDate:undefined};
     }));
-  },[ready,bills]);
+  },[ready,billsNeedingRecurringReshow,settings]);
   /** Prevents duplicate system notifications: SW showNotification is async, so two effect runs can both schedule OS before the in-app dedupe row exists. */
   const osNotifCooldownRef=useRef(new Map());
   const pushNotif=(id,title,body,type)=>{
