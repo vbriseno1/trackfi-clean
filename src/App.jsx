@@ -1145,10 +1145,12 @@ function chatPickExpenseDate(text){
 /** Route stats questions before action parsing (includes phrases that are not real questions). */
 function chatIsStatsQuery(t){
   const s=t.trim();
+  const s0=s.replace(/[?.!,;:]+$/g,"").trim();
+  if(s0==="undo"||s0.startsWith("undo last")||s0.includes("undo that"))return false;
   if(s.includes("?"))return true;
   if(/^(how|what|when|where|why|can|could|should|would|is|are|am|do|does|did|will|tell|summarize|calculate|compare)\b/i.test(s))return true;
-  if(/^(show|list)\s+(me\s+)?(my\s+)?(balance|balances|bills|debts|goals|income|spending|budget|net|worth|payday|subscriptions|transactions|trades|health|categories|envelope|envelopes)/i.test(s))return true;
-  if(/^my\s+(balance|balances|bills|debts|goals|income|spending|budget|net|worth|payday|subscriptions|transactions|trades)/i.test(s))return true;
+  if(/^(show|list)\s+(me\s+)?(my\s+)?(balance|balances|bills|debts|goals|income|spending|budget|net|worth|payday|subscriptions|transactions|trades|health|categories|envelope|envelopes|savings|checking|accounts?)/i.test(s))return true;
+  if(/^my\s+(balance|balances|bills|debts|goals|income|spending|budget|net|worth|payday|subscriptions|transactions|trades|savings|checking|accounts?)/i.test(s))return true;
   if(/\b(split spending|safe to spend|spending by paid|paid from breakdown|year to date|ytd spending)\b/i.test(s))return true;
   return false;
 }
@@ -1184,7 +1186,8 @@ function parseMsg(text,categories,debts,bills,opts={}){
   const dueM=t.match(/due(?:\s+the)?\s+(\d{1,2})(?:st|nd|rd|th)?/)||t.match(/on(?:\s+the)?\s+(\d{1,2})(?:st|nd|rd|th)/);
   let dueDate=null;
   if(dueM){const d=new Date(dt.getFullYear(),dt.getMonth(),parseInt(dueM[1]));if(d<dt)d.setMonth(d.getMonth()+1);dueDate=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
-  if(t==="undo"||t.startsWith("undo last")||t.includes("undo that"))return{type:"undo"};
+  const tUndo=t.replace(/[?.!,;:]+$/g,"").trim();
+  if(tUndo==="undo"||tUndo.startsWith("undo last")||tUndo.includes("undo that"))return{type:"undo"};
   const acctKeys={checking:["checking","check","debit"],savings:["savings","saving"],cushion:["cushion","buffer","emergency fund","e-fund"],investments:["investments","investment account","mutual fund"],k401:["401","401k","four oh one"],roth_ira:["roth","roth ira"],brokerage:["brokerage","taxable"],crypto:["crypto","bitcoin","btc","ethereum"],hsa:["hsa","health savings"],property:["property","home value","house value"],vehicles:["vehicles","car value","auto value"]};
   for(const[key,kws]of Object.entries(acctKeys)){if(kws.some(k=>t.includes(k))&&amount&&!/\b(bill|expense|spent|loan|debt|due)\b/.test(t))return{type:"account",key,amount};}
   if(amount){
@@ -1365,6 +1368,40 @@ budget · trades · ytd · recent expenses · payday · help"}]);
     if((t.includes("split")&&t.includes("spend"))||t.includes("checking vs credit")||t.includes("paid from")||t.includes("paidfrom")){
       return"\ud83d\udcca This month by paid-from:\n\ud83c\udfe6 Checking: "+fmt(_chatSplit.checking)+"\n\ud83d\udcb3 Credit card: "+fmt(_chatSplit.credit)+"\n\ud83d\udcb0 Savings: "+fmt(_chatSplit.savings)+"\n\ud83d\udccb Track only: "+fmt(_chatSplit.none)+"\n\nTotal in categories: "+fmt(_chatMtd);
     }
+    const _qBills=t.includes("bill")||t.includes("due")||t.includes("upcoming");
+    const _chkSav=(t.includes("checking")||t.includes("savings"))&&!_qBills&&!t.includes("rate")&&!t.includes("goal")&&!t.includes("goals");
+    const _howMuchCash=!_qBills&&t.includes("how much")&&!t.includes("spent")&&!t.includes("spend on")&&!t.includes("spent on")&&!t.includes("spending")&&(t.includes("checking")||t.includes("savings")||t.includes("account")||t.includes("accounts")||t.includes("cash")||t.includes("liquid")||/\b(do i have|have in|i have left|in the bank)\b/.test(t));
+    const _acctCash=(t.includes("account")||t.includes("accounts"))&&!t.includes("health")&&!_qBills&&(t.includes("bank")||t.includes("balance")||/\bwhat'?s\b/.test(t)||t.includes("what is")||t.includes("total")||t.includes("worth"));
+    if(t.includes("balance")||t.includes("balances")||_chkSav||_howMuchCash||_acctCash){
+      const chkBal=totalCheckingBalance(accounts);
+      const savBal=totalSavingsBalance(accounts);
+      const cushion=parseFloat(accounts.cushion||0);
+      const liquid=chkBal+savBal+cushion;
+      const inv=parseFloat(accounts.investments||0);
+      const k401=parseFloat(accounts.k401||0);
+      const roth=parseFloat(accounts.roth_ira||0);
+      const hsa=parseFloat(accounts.hsa||0);
+      const retBal=k401+roth+hsa;
+      const br=parseFloat(accounts.brokerage||0);
+      const cry=parseFloat(accounts.crypto||0);
+      const prop=parseFloat(accounts.property||0);
+      const veh=parseFloat(accounts.vehicles||0);
+      const tb=parseFloat(tradingAccount?.balance||0);
+      const ta=totalAppAssets(accounts,tradingAccount);
+      const showTrading=tb>0||/\btrading (bal|balance|acct|account)\b/.test(t);
+      let out="\ud83d\udcb3 Checking: "+fmt(chkBal)+"\n\ud83d\udcb0 Savings: "+fmt(savBal);
+      if(cushion>0)out+="\n\ud83d\udee1\ufe0f Cushion: "+fmt(cushion);
+      out+="\n\ud83d\udca7 Liquid (checking + savings + cushion): "+fmt(liquid);
+      if(inv>0)out+="\n\ud83d\udcc8 Investments: "+fmt(inv);
+      if(retBal>0)out+="\n\ud83c\udfe6 Retirement (401k + Roth + HSA): "+fmt(retBal);
+      if(br+cry>0)out+="\n\ud83d\udcca Brokerage + crypto: "+fmt(br+cry);
+      if(showTrading)out+="\n\ud83d\udcc8 Trading (app): "+fmt(tb);
+      if(prop>0)out+="\n\ud83c\udfe0 Property: "+fmt(prop);
+      if(veh>0)out+="\n\ud83d\ude97 Vehicles: "+fmt(veh);
+      if(ccOwed>0)out+="\n\ud83d\udcb3 Credit card owed (app): "+fmt(ccOwed);
+      out+="\nTotal assets (app): "+fmt(ta);
+      return out;
+    }
     if(t.includes("bill")||t.includes("due")||t.includes("upcoming")){
       const ov=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
       const soon=bills.filter(b=>!b.paid&&dueIn(b.dueDate)>=0&&dueIn(b.dueDate)<=14);
@@ -1397,36 +1434,6 @@ budget · trades · ytd · recent expenses · payday · help"}]);
       const diff=_prevTotal>0?((_thisTotal-_prevTotal)/_prevTotal*100):0;
       const splitLn=_chatSplit.credit+_chatSplit.none+_chatSplit.savings>0?"\nBy paid-from: "+fmt(_chatSplit.checking)+" chk · "+fmt(_chatSplit.credit)+" card · "+fmt(_chatSplit.savings)+" sav · "+fmt(_chatSplit.none)+" track":"";
       return"\ud83d\udcca "+FULL_MOS[new Date().getMonth()]+" so far: "+fmt(_thisTotal)+splitLn+"\nBurn (all): "+fmt(dom>0?_thisTotal/dom:0)+"/day\nProjected month-end: "+fmt(projected)+(_prevTotal>0?"\n"+(diff>0?"\u2b06\ufe0f "+diff.toFixed(0)+"% more":"\u2b07\ufe0f "+Math.abs(diff).toFixed(0)+"% less")+" than last month":"");
-    }
-    if(t.includes("balance")||t.includes("checking")||(t.includes("account")&&!t.includes("health"))){
-      const chkBal=totalCheckingBalance(accounts);
-      const savBal=totalSavingsBalance(accounts);
-      const cushion=parseFloat(accounts.cushion||0);
-      const liquid=chkBal+savBal+cushion;
-      const inv=parseFloat(accounts.investments||0);
-      const k401=parseFloat(accounts.k401||0);
-      const roth=parseFloat(accounts.roth_ira||0);
-      const hsa=parseFloat(accounts.hsa||0);
-      const retBal=k401+roth+hsa;
-      const br=parseFloat(accounts.brokerage||0);
-      const cry=parseFloat(accounts.crypto||0);
-      const prop=parseFloat(accounts.property||0);
-      const veh=parseFloat(accounts.vehicles||0);
-      const tb=parseFloat(tradingAccount?.balance||0);
-      const ta=totalAppAssets(accounts,tradingAccount);
-      const showTrading=tb>0||/\btrading (bal|balance|acct|account)\b/.test(t);
-      let out="\ud83d\udcb3 Checking: "+fmt(chkBal)+"\n\ud83d\udcb0 Savings: "+fmt(savBal);
-      if(cushion>0)out+="\n\ud83d\udee1\ufe0f Cushion: "+fmt(cushion);
-      out+="\n\ud83d\udca7 Liquid (checking + savings + cushion): "+fmt(liquid);
-      if(inv>0)out+="\n\ud83d\udcc8 Investments: "+fmt(inv);
-      if(retBal>0)out+="\n\ud83c\udfe6 Retirement (401k + Roth + HSA): "+fmt(retBal);
-      if(br+cry>0)out+="\n\ud83d\udcca Brokerage + crypto: "+fmt(br+cry);
-      if(showTrading)out+="\n\ud83d\udcc8 Trading (app): "+fmt(tb);
-      if(prop>0)out+="\n\ud83c\udfe0 Property: "+fmt(prop);
-      if(veh>0)out+="\n\ud83d\ude97 Vehicles: "+fmt(veh);
-      if(ccOwed>0)out+="\n\ud83d\udcb3 Credit card owed (app): "+fmt(ccOwed);
-      out+="\nTotal assets (app): "+fmt(ta);
-      return out;
     }
     if(t.includes("payday")||t.includes("paycheck")||t.includes("pay day")||t.includes("next pay")||t.includes("get paid")){
       const days=Math.max(0,Math.ceil((chatNextPay-chatNow)/86400000));
