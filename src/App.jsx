@@ -23,6 +23,7 @@ import {
   cancelPendingDebouncedSync,
   isTrackfiDemoMode,
   clearScopedUserDataCache,
+  SCOPED_USER_DATA_KEYS,
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import BankImportModal from "./modals/BankImportModal.jsx";
@@ -562,7 +563,7 @@ const DEF_CALCOLORS=(C)=>({expense:C.red,bill:C.amber,today:C.accent,dotStyle:"c
 const DEF_DASHCONFIG={showIncomeChart:true,showMetrics:true,showAccounts:true,showForecast:true,showBills:true,showRecent:true,showTradeCard:true};
 
 /** Single path for Supabase `user_data` rows → React state (pull + boot). Validates arrays to avoid corrupt snapshots. */
-function applyUserDataSnapshot(map,H,{bootDefaults=false}={}){
+function applyUserDataSnapshot(map,H,{bootDefaults=false,cloudPull=false}={}){
   const setArr=(key,setter)=>{
     if(map[key]===undefined)return;
     const v=map[key];
@@ -597,24 +598,48 @@ function applyUserDataSnapshot(map,H,{bootDefaults=false}={}){
   try{setArr("hhBudgets",H.setHhBudgets);}catch{}
   try{apply("nwGoal",H.setNwGoal);}catch{}
   try{setArr("subDismissed",H.setSubDismissed);}catch{}
-  if(bootDefaults){
+  if(cloudPull){
+    try{
+      if(map.accounts!=null&&typeof map.accounts==="object"){
+        const a=map.accounts;
+        H.setAccounts({...a,cashAccounts:Array.isArray(a.cashAccounts)?a.cashAccounts.map(c=>({...c})):[]});
+      }
+    }catch{}
+    try{if(map.income!=null&&typeof map.income==="object")H.setIncome({...map.income});}catch{}
+    try{if(map.settings!=null&&typeof map.settings==="object")H.setSettings({...map.settings});}catch{}
+    try{if(map.calColors!=null&&typeof map.calColors==="object")H.setCalColors({...map.calColors});}catch{}
+    try{if(map.dashConfig!=null&&typeof map.dashConfig==="object")H.setDashConfig({...map.dashConfig});}catch{}
+    try{
+      if(map.household!=null&&typeof map.household==="object"){
+        const h=map.household;
+        H.setHousehold({...h,members:Array.isArray(h.members)?h.members.map(m=>({...m})):[]});
+      }
+    }catch{}
+    try{if(map.accountRates!=null&&typeof map.accountRates==="object")H.setAccountRates({...map.accountRates});}catch{}
+  }else if(bootDefaults){
     try{if(map.accounts!=null&&typeof map.accounts==="object")H.setAccounts(prev=>({...DEF_ACCOUNTS,...prev,...map.accounts}));}catch{}
     try{if(map.income!=null&&typeof map.income==="object")H.setIncome(prev=>({...DEF_INCOME,...prev,...map.income}));}catch{}
+    try{apply("settings",H.setSettings,true);}catch{}
+    try{apply("calColors",H.setCalColors,true);}catch{}
+    try{apply("dashConfig",H.setDashConfig,true);}catch{}
+    try{apply("household",H.setHousehold,true);}catch{}
   }else{
     try{apply("accounts",H.setAccounts,true);}catch{}
     try{apply("income",H.setIncome,true);}catch{}
+    try{apply("settings",H.setSettings,true);}catch{}
+    try{apply("calColors",H.setCalColors,true);}catch{}
+    try{apply("dashConfig",H.setDashConfig,true);}catch{}
+    try{apply("household",H.setHousehold,true);}catch{}
   }
-  try{apply("settings",H.setSettings,true);}catch{}
-  try{apply("calColors",H.setCalColors,true);}catch{}
-  try{apply("dashConfig",H.setDashConfig,true);}catch{}
-  try{apply("household",H.setHousehold,true);}catch{}
   try{if(map.taccount!==undefined)H.setTradingAccount(map.taccount??{deposit:"",balance:""});}catch{}
   try{if(map.appName!==undefined)H.setAppName(map.appName||"Trackfi");}catch{}
   try{if(map.greetName!==undefined)H.setGreetName(map.greetName||"");}catch{}
   try{if(map.prof!==undefined)H.setProfCategory(map.prof);}catch{}
   try{if(map.profSub!==undefined)H.setProfSub(map.profSub);}catch{}
   try{if(map.merchantCats!==undefined)window._merchantCats=map.merchantCats||{};}catch{}
-  try{if(map.accountRates&&typeof map.accountRates==="object")H.setAccountRates(prev=>({...prev,...map.accountRates}));}catch{}
+  if(!cloudPull){
+    try{if(map.accountRates&&typeof map.accountRates==="object")H.setAccountRates(prev=>({...prev,...map.accountRates}));}catch{}
+  }
   try{
     if(map.onboarded===true){localStorage.setItem("fv_onboarded","1");H.setOnboarded(true);}
     else if(map.onboarded===false){localStorage.removeItem("fv_onboarded");H.setOnboarded(false);}
@@ -653,6 +678,46 @@ const DEF_CATS = [
   // Catch-all
   {id:"shopping",name:"Shopping",icon:"🛍️"},{id:"misc",name:"Misc",icon:"📦"},
 ];
+
+/**
+ * Ensures every stored slice exists after a cloud read. Keys the server omits are treated as empty/default
+ * so old local/demo rows cannot survive next to newer partial Supabase data.
+ * `onboarded` is not filled here — if the server never stored it, local completion state is preserved.
+ */
+function buildAuthoritativeCloudMap(raw){
+  const out={...raw};
+  const defRates={checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0};
+  const fill=(k,fn)=>{if(!Object.prototype.hasOwnProperty.call(raw,k))out[k]=fn();};
+  fill("expenses",()=>[]);
+  fill("bills",()=>[]);
+  fill("debts",()=>[]);
+  fill("bgoals",()=>[]);
+  fill("sgoals",()=>[]);
+  fill("cats",()=>DEF_CATS.map(c=>({...c})));
+  fill("trades",()=>[]);
+  fill("balHist",()=>[]);
+  fill("shifts",()=>[]);
+  fill("recurrings",()=>[]);
+  fill("notifs",()=>[]);
+  fill("settlements",()=>[]);
+  fill("hhBudgets",()=>[]);
+  fill("subDismissed",()=>[]);
+  fill("nwGoal",()=>null);
+  fill("accounts",()=>({...DEF_ACCOUNTS,cashAccounts:[...(DEF_ACCOUNTS.cashAccounts||[])]}));
+  fill("income",()=>({...DEF_INCOME}));
+  fill("taccount",()=>({deposit:"",balance:""}));
+  fill("settings",()=>({...DEF_SETTINGS}));
+  fill("calColors",()=>DEF_CALCOLORS(C));
+  fill("dashConfig",()=>({...DEF_DASHCONFIG}));
+  fill("household",()=>({...DEF_HOUSEHOLD,members:DEF_HOUSEHOLD.members.map(m=>({...m}))}));
+  fill("merchantCats",()=>({}));
+  fill("accountRates",()=>({...defRates}));
+  fill("appName",()=>"Trackfi");
+  fill("greetName",()=>"");
+  fill("prof",()=>"healthcare");
+  fill("profSub",()=>"nurse_rn");
+  return out;
+}
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800;900&display=swap');
@@ -5888,15 +5953,16 @@ function AppInner(){
       }
       const map = {};
       res.data.forEach(row => { map[row.key] = row.value; });
+      const fullMap = buildAuthoritativeCloudMap(map);
       setSyncRecoverableError(false);
-      applyUserDataSnapshot(map, {
+      applyUserDataSnapshot(fullMap, {
         setExpenses, setBills, setDebts, setBGoals, setSGoals, setCats, setTrades,
         setBalHist, setShifts, setRecurrings, setNotifs, setSettlements, setHhBudgets,
         setNwGoal, setSubDismissed, setAccounts, setIncome, setSettings, setCalColors,
         setDashConfig, setHousehold, setTradingAccount, setAppName, setGreetName,
         setProfCategory, setProfSub, setAccountRates, setOnboarded,
-      }, { bootDefaults: false });
-      const pulledSettings = map.settings;
+      }, { cloudPull: true });
+      const pulledSettings = fullMap.settings;
       if (
         pulledSettings &&
         typeof pulledSettings === "object" &&
@@ -5906,11 +5972,12 @@ function AppInner(){
         setDarkMode(pulledSettings.darkMode);
       }
       cloudLoadedRef.current=true;
-      // Mirror Supabase data into scoped localStorage for offline use
+      // Mirror full merged snapshot (including defaults for keys the server omitted) for offline use
       const scope = "fv6_" + uid.slice(0,8) + ":";
-      res.data.forEach(row => {
-        try { localStorage.setItem(scope + row.key, JSON.stringify(row.value)); } catch {}
-      });
+      for (const key of SCOPED_USER_DATA_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(fullMap, key)) continue;
+        try { localStorage.setItem(scope + key, JSON.stringify(fullMap[key])); } catch {}
+      }
       try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
     } catch(e) {
       console.error("loadFromSupabase error", e);
@@ -6074,6 +6141,7 @@ function AppInner(){
         const uid_boot=_getUserId();
         const _demoHydrateKeys=["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName","merchantCats","recurrings","settlements","hhBudgets","nwGoal","subDismissed","household","accountRates","onboarded"];
         let _bulkMap={};
+        let cloudHydratedFromBulk=false;
         if(isTrackfiDemoMode()){
           const scope=getScope();
           for(const bare of _demoHydrateKeys){
@@ -6090,8 +6158,37 @@ function AppInner(){
               setReady(true);
               return;
             }
-            if(Array.isArray(bulk?.data))bulk.data.forEach(r=>{_bulkMap[r.key]=r.value;});
+            if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length>0){
+              const raw={};
+              bulk.data.forEach(r=>{raw[r.key]=r.value;});
+              const fullMap=buildAuthoritativeCloudMap(raw);
+              applyUserDataSnapshot(fullMap,{
+                setExpenses,setBills,setDebts,setBGoals,setSGoals,setCats,setTrades,
+                setBalHist,setShifts,setRecurrings,setNotifs,setSettlements,setHhBudgets,
+                setNwGoal,setSubDismissed,setAccounts,setIncome,setSettings,setCalColors,
+                setDashConfig,setHousehold,setTradingAccount,setAppName,setGreetName,
+                setProfCategory,setProfSub,setAccountRates,setOnboarded,
+              },{cloudPull:true});
+              const bootSettings=fullMap.settings;
+              if(
+                bootSettings&&
+                typeof bootSettings==="object"&&
+                Object.prototype.hasOwnProperty.call(bootSettings,"darkMode")&&
+                typeof bootSettings.darkMode==="boolean"
+              )setDarkMode(bootSettings.darkMode);
+              const scope="fv6_"+uid_boot.slice(0,8)+":";
+              for(const key of SCOPED_USER_DATA_KEYS){
+                if(!Object.prototype.hasOwnProperty.call(fullMap,key))continue;
+                try{localStorage.setItem(scope+key,JSON.stringify(fullMap[key]));}catch{}
+              }
+              cloudLoadedRef.current=true;
+              cloudHydratedFromBulk=true;
+            }
           }catch{}
+        }
+        if(cloudHydratedFromBulk){
+          setReady(true);
+          return;
         }
         async function _sg_boot(bare){
           if(_bulkMap[bare]!==undefined)return _bulkMap[bare];

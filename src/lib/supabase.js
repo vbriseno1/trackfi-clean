@@ -137,8 +137,8 @@ export function isTrackfiDemoMode() {
   }
 }
 
-/** Bare keys mirrored under getScope() + key and legacy fv6:key — clear on full reset so demo/stale rows cannot return after cloud wipe or reload. */
-const SCOPED_USER_DATA_KEYS = [
+/** Bare `user_data.key` values — single list for cache clear, offline mirror, and authoritative sync. */
+export const SCOPED_USER_DATA_KEYS = [
   "accounts",
   "income",
   "expenses",
