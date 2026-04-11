@@ -184,6 +184,22 @@ const fmt    = n => { const v=Number(n); return "$"+(isNaN(v)?0:v).toLocaleStrin
 const fmtK   = n => { const v=Number(n||0); return v>=1000?"$"+(v/1000).toFixed(1)+"k":fmt(v); };
 const todayStr = () => { const n=new Date(); return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0"); };
 const dueIn  = d => { if(!d||typeof d!=="string")return 999; const parts=d.split('-').map(Number); if(parts.length!==3||parts.some(isNaN))return 999; const [ty,tm,tdy]=todayStr().split('-').map(Number); const [dy,dm,ddd]=parts; const today2=new Date(ty,tm-1,tdy); const due=new Date(dy,dm-1,ddd); const diff=Math.ceil((due-today2)/86400000); return isNaN(diff)?999:diff; };
+/**
+ * After marking a recurring bill paid, it stays in Paid History until the next due is within this many days — then it returns to Upcoming.
+ * Tuned to each cadence (share of the typical period as heads-up).
+ */
+const RECURRING_RESHOW_UPCOMING_WITHIN_DAYS = {
+  Weekly: 4,       // ~half a week before next due
+  "Bi-weekly": 7,  // ~half a bi-weekly period
+  Monthly: 21,     // ~3 weeks before monthly due
+  Quarterly: 30,   // ~1 month before quarter due
+  Annual: 60,      // ~2 months before yearly due
+};
+function recurringReshowUpcomingWithinDays(recurring){
+  if(!recurring||recurring==="One-time")return 0;
+  const n=RECURRING_RESHOW_UPCOMING_WITHIN_DAYS[recurring];
+  return typeof n==="number"?n:RECURRING_RESHOW_UPCOMING_WITHIN_DAYS.Monthly;
+}
 const daysInMonth = () => { const t=new Date(); return new Date(t.getFullYear(),t.getMonth()+1,0).getDate(); };
 const dayOfMonth  = () => new Date().getDate();
 const fmtDate = s => { if(!s)return""; const clean=s.includes("T")?s.split("T")[0]:s; const d=new Date(clean+"T00:00:00"); return FULL_MOS[d.getMonth()]+" "+d.getDate(); };
@@ -6351,12 +6367,18 @@ function AppInner(){
     }));
     try{localStorage.setItem("fv_bills_reset_month",currentMonth);}catch{}
   },[ready,bills.length]);
-  // Recurring bills marked paid advance to the next due date and stay paid:true until that date; then they return to unpaid for the new cycle.
+  // Recurring bills marked paid stay in history until the next due is within the cadence-specific window — then they return to Upcoming (unpaid for the new cycle).
   useEffect(()=>{
     if(!ready||!bills.length)return;
-    if(!bills.some(b=>b.paid&&b.recurring&&b.recurring!=="One-time"&&b.dueDate&&dueIn(b.dueDate)<=0))return;
+    if(!bills.some(b=>{
+      if(!b.paid||!b.recurring||b.recurring==="One-time"||!b.dueDate)return false;
+      const w=recurringReshowUpcomingWithinDays(b.recurring);
+      return dueIn(b.dueDate)<=w;
+    }))return;
     setBills(p=>p.map(b=>{
-      if(!b.paid||!b.recurring||b.recurring==="One-time"||!b.dueDate||dueIn(b.dueDate)>0)return b;
+      if(!b.paid||!b.recurring||b.recurring==="One-time"||!b.dueDate)return b;
+      const w=recurringReshowUpcomingWithinDays(b.recurring);
+      if(dueIn(b.dueDate)>w)return b;
       return{...b,paid:false,paidDate:undefined};
     }));
   },[ready,bills]);
