@@ -290,6 +290,39 @@ function commitMarkBillPaid(x,{debts,setDebts,setBills,accounts,settings,applySp
   if(!skipVibrate){try{navigator.vibrate&&navigator.vibrate([30,10,30]);}catch{}}
   return{ok:true,tip};
 }
+/** Pay several bills in order using one debts snapshot chain (correct loan math per bill). */
+function commitMarkBillsPaidList(rows,{debts,setDebts,setBills,accounts,settings,applySpend,onToast,skipToast,skipVibrate}){
+  if(!rows.length)return{ok:true,tip:""};
+  let sim=debts;
+  const preps=[];
+  for(const x of rows){
+    const prep=prepareBillPaidTransition(x,sim,accounts,settings);
+    if(!prep.ok)return{ok:false,msg:prep.msg};
+    preps.push({x,prep});
+    if(prep.isLoanPay&&x.linkedDebtId){
+      sim=sim.map(d=>String(d.id)===String(x.linkedDebtId)?applyLoanPaymentToDebtRow(d,prep.pd,prep.payDate,prep.newCarry):d);
+    }
+  }
+  let runningDebts=debts;
+  for(const {x,prep} of preps){
+    const{r,bpf,bamt,payDate,pd,intPortion,accDays,billPrevSnap,isLoanPay,prevCarry,newCarry}=prep;
+    if(applySpend&&bamt)applySpend(bpf,bamt,r.cid,r.bid);
+    if(isLoanPay&&x.linkedDebtId){
+      runningDebts=runningDebts.map(d=>String(d.id)===String(x.linkedDebtId)?applyLoanPaymentToDebtRow(d,pd,payDate,newCarry):d);
+    }
+  }
+  setDebts(runningDebts);
+  setBills(p=>p.map(xx=>{
+    const st=preps.find(s=>String(s.x.id)===String(xx.id));
+    if(!st)return xx;
+    const {x,prep}=st;
+    return patchBillForMarkingPaid(xx,x,prep.payDate,prep.pd,prep.billPrevSnap,prep.isLoanPay&&!!x.linkedDebtId,prep.prevCarry);
+  }));
+  const tip=preps.map(({x,prep})=>(prep.isLoanPay&&x.linkedDebtId&&(prep.pd>0||prep.intPortion>0||prep.newCarry>0.001)?x.name+": "+fmt(prep.pd)+" principal + "+fmt(prep.intPortion)+" interest":"")).filter(Boolean).join(" · ");
+  if(!skipToast&&onToast)onToast("\u2705 Paid "+rows.length+" bill(s)"+(tip?" \u2014 "+tip:""));
+  if(!skipVibrate){try{navigator.vibrate&&navigator.vibrate([30,10,30]);}catch{}}
+  return{ok:true,tip};
+}
 /** Sub-accounts: {id,name,kind:'checking'|'savings',balance} — when empty, legacy accounts.checking / accounts.savings apply */
 function cashAccountsByKind(accounts,kind){
   return (accounts.cashAccounts||[]).filter(a=>a.kind===kind);
@@ -337,6 +370,16 @@ function totalSavingsBalance(accounts){
   const list=cashAccountsByKind(accounts,"savings");
   if(list.length===0)return parseFloat(accounts.savings||0);
   return list.reduce((s,a)=>s+(parseFloat(a.balance)||0),0);
+}
+/** Balance-sheet assets for net worth (subaccount or legacy cash + other buckets + trading). */
+function totalAppAssets(accounts,tradingAccount){
+  const t=tradingAccount||{};
+  return totalCheckingBalance(accounts)+totalSavingsBalance(accounts)
+    +(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))
+    +(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))
+    +(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))
+    +(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))
+    +(parseFloat(accounts.vehicles||0))+(parseFloat(t.balance||0));
 }
 /** One pay period after ISO date — matches computeSafeToSpend / PaycheckView cadence. */
 function advancePaydayIso(fromIso,payFreq){
@@ -1388,7 +1431,7 @@ budget · trades · ytd · recent expenses · payday · help"}]);
       return"\ud83d\udcb3 Total owed: "+fmt(td)+(ccOwed>0&&debts.length?" (includes app card + debt list)":"")+"\n~\u2248 monthly interest on debts (APR\u00f712): "+fmt(monthlyInt)+"\n\n"+lines.join("\n");
     }
     if(t.includes("net worth")||t.includes("worth")){
-      const ta=["checking","savings","cushion","investments","k401","roth_ira","brokerage","crypto","hsa","property","vehicles"].reduce((s,k)=>s+(parseFloat(accounts[k]||0)),0);
+      const ta=totalAppAssets(accounts,tradingAccount);
       const td=sumDebtsPrincipalAndAccrued(debts)+ccOwed;
       return"\ud83d\udcca Net Worth: "+fmt(ta-td)+"\nAssets: "+fmt(ta)+" \u00b7 Debts (loans + app card): "+fmt(td);
     }
@@ -2696,7 +2739,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Bills</div><div style={{fontSize:13,color:C.textLight}}>{unpaid.length} unpaid · {overdue.length} overdue</div></div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>{const bad=overdue.filter(b=>!resolveBillSpendIds(b,accounts,debts,settings).ok);if(bad.length){showToast&&showToast("Can't pay "+bad.length+" overdue — edit each bill to choose which card or bank account.","error");return;}const _payOverdueDay=todayStr();let nextDebts=[...debts];const principalByBillId={};overdue.forEach(b=>{const ba=parseFloat(b.amount)||0;const r=resolveBillSpendIds(b,accounts,debts,settings);if(ba&&applySpend)applySpend(normalizePaidFrom(b.paidFrom),ba,r.cid,r.bid);if(b.linkedDebtId&&ba>0){const di=nextDebts.findIndex(d=>String(d.id)===String(b.linkedDebtId));if(di>=0&&isLoanDebt(nextDebts[di])){const d=nextDebts[di];const prevA=d.loanInterestAsOfDate;const prevC=parseFloat(d.loanAccruedInterest)||0;const sp=splitLoanPayment(d,ba,_payOverdueDay);if(sp.principal>0||sp.interest>0||Math.abs(sp.newAccruedCarryover-prevC)>0.001){principalByBillId[b.id]={pd:sp.principal,prevA,prevC};nextDebts[di]=applyLoanPaymentToDebtRow(d,sp.principal,_payOverdueDay,sp.newAccruedCarryover);}}}});setDebts(nextDebts);setBills(p=>p.map(b=>{if(!overdue.some(o=>String(o.id)===String(b.id)))return b;if(b.recurring&&b.recurring!=="One-time"){const d=new Date((b.dueDate||todayStr())+"T00:00:00");if(b.recurring==="Weekly")d.setDate(d.getDate()+7);else if(b.recurring==="Bi-weekly")d.setDate(d.getDate()+14);else if(b.recurring==="Quarterly")d.setMonth(d.getMonth()+3);else if(b.recurring==="Annual")d.setFullYear(d.getFullYear()+1);else d.setMonth(d.getMonth()+1);const _ds=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");const _pm=principalByBillId[b.id];return{...b,paid:false,dueDate:_ds,paidDate:_payOverdueDay,...(_pm?{loanPrincipalApplied:_pm.pd,loanPrevInterestAsOfDate:_pm.prevA,loanPrevAccruedInterest:_pm.prevC}:{loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined})};}const _pm2=principalByBillId[b.id];return{...b,paid:true,...(_pm2?{loanPrincipalApplied:_pm2.pd,loanPrevInterestAsOfDate:_pm2.prevA,loanPrevAccruedInterest:_pm2.prevC}:{loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined})};}))}} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>{const bad=overdue.filter(b=>!resolveBillSpendIds(b,accounts,debts,settings).ok);if(bad.length){showToast&&showToast("Can't pay "+bad.length+" overdue — edit each bill to choose which card or bank account.","error");return;}const res=commitMarkBillsPaidList(overdue,{debts,setDebts,setBills,accounts,settings,applySpend,onToast:msg=>setTimeout(()=>showToast&&showToast(msg),0),skipToast:!showToast,skipVibrate:false});if(!res.ok)showToast&&showToast(res.msg,"error");}} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
       </div>
       {bills.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
@@ -3218,11 +3261,15 @@ function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAcc
     const amt=parseFloat(rawAmt);
     if(!(amt>0))return;
     const ch=cashAccountsByKind(accounts,"checking");
-    if(ch.length===0){showToast&&showToast("Add a checking account under Accounts first.","error");return;}
-    const bid=pickDefaultBankAccountId("checking",accounts,settings)||"";
-    if(ch.length>=2&&!bid){showToast&&showToast("Multiple checking accounts: set a default under Settings \u2192 Defaults.","error");return;}
-    const finalBid=ch.length===1?String(ch[0].id):bid;
-    if(applySpend)applySpend("checking",amt,undefined,finalBid);
+    if(hasCashSubaccounts(accounts)){
+      if(ch.length===0){showToast&&showToast("Add a checking account under Accounts & Income first.","error");return;}
+      const bid=pickDefaultBankAccountId("checking",accounts,settings)||"";
+      if(ch.length>=2&&!bid){showToast&&showToast("Multiple checking accounts: set a default under Settings \u2192 Defaults.","error");return;}
+      const finalBid=ch.length===1?String(ch[0].id):bid;
+      if(applySpend)applySpend("checking",amt,undefined,finalBid);
+    }else{
+      if(applySpend)applySpend("checking",amt,undefined,undefined);
+    }
     setGoals(p=>p.map(g=>{
       if(String(g.id)!==String(goal.id))return g;
       const tgt=parseFloat(g.target||0);
@@ -6183,7 +6230,7 @@ function AppInner(){
   const monthlyIncome=useMemo(()=>(parseFloat(income.primary||0)*paycheckMultiplier)+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income,paycheckMultiplier]);
   // totalIncome = alias for monthlyIncome (keeps all existing references working)
   const totalIncome=monthlyIncome;
-  const totalAssets=useMemo(()=>totalCheckingBalance(accounts)+totalSavingsBalance(accounts)+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount.balance||0)),[accounts,tradingAccount]);
+  const totalAssets=useMemo(()=>totalAppAssets(accounts,tradingAccount),[accounts,tradingAccount]);
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
   const totalDebt=useMemo(()=>sumDebtsPrincipalAndAccrued(debts)+parseFloat(accounts.credit_card||0),[debts,accounts.credit_card]);
   const thisMonthExp=useMemo(()=>{const n=new Date();const ms=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");return expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);},[expenses]);
