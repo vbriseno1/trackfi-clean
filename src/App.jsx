@@ -22,6 +22,7 @@ import {
   flushPendingSync,
   cancelPendingDebouncedSync,
   isTrackfiDemoMode,
+  clearScopedUserDataCache,
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import BankImportModal from "./modals/BankImportModal.jsx";
@@ -607,14 +608,17 @@ function applyUserDataSnapshot(map,H,{bootDefaults=false}={}){
   try{apply("calColors",H.setCalColors,true);}catch{}
   try{apply("dashConfig",H.setDashConfig,true);}catch{}
   try{apply("household",H.setHousehold,true);}catch{}
-  try{if(map.taccount!==undefined&&map.taccount!==null)H.setTradingAccount(map.taccount);}catch{}
-  try{if(map.appName)H.setAppName(map.appName);}catch{}
-  try{if(map.greetName)H.setGreetName(map.greetName);}catch{}
-  try{if(map.prof)H.setProfCategory(map.prof);}catch{}
-  try{if(map.profSub)H.setProfSub(map.profSub);}catch{}
-  try{if(map.merchantCats)window._merchantCats=map.merchantCats;}catch{}
+  try{if(map.taccount!==undefined)H.setTradingAccount(map.taccount??{deposit:"",balance:""});}catch{}
+  try{if(map.appName!==undefined)H.setAppName(map.appName||"Trackfi");}catch{}
+  try{if(map.greetName!==undefined)H.setGreetName(map.greetName||"");}catch{}
+  try{if(map.prof!==undefined)H.setProfCategory(map.prof);}catch{}
+  try{if(map.profSub!==undefined)H.setProfSub(map.profSub);}catch{}
+  try{if(map.merchantCats!==undefined)window._merchantCats=map.merchantCats||{};}catch{}
   try{if(map.accountRates&&typeof map.accountRates==="object")H.setAccountRates(prev=>({...prev,...map.accountRates}));}catch{}
-  try{if(map.onboarded){localStorage.setItem("fv_onboarded","1");H.setOnboarded(true);}}catch{}
+  try{
+    if(map.onboarded===true){localStorage.setItem("fv_onboarded","1");H.setOnboarded(true);}
+    else if(map.onboarded===false){localStorage.removeItem("fv_onboarded");H.setOnboarded(false);}
+  }catch{}
 }
 
 const notifSupported  = () => typeof window!=="undefined"&&"Notification" in window;
@@ -5871,6 +5875,17 @@ function AppInner(){
       }
       // Drop any scheduled uploads from before this snapshot — they may target pre-pull state.
       cancelPendingDebouncedSync();
+      if (res.data.length === 0) {
+        // Wipe stale scoped cache (e.g. sample data saved locally while signed in) so an empty cloud is authoritative.
+        resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
+        setSyncRecoverableError(false);
+        try{localStorage.setItem("fv_last_sync", String(Date.now()));}catch{}
+        if (gen === remotePullGenRef.current) {
+          setSyncing(false);
+          setTimeout(() => { void flushPendingSync(); }, 0);
+        }
+        return;
+      }
       const map = {};
       res.data.forEach(row => { map[row.key] = row.value; });
       setSyncRecoverableError(false);
@@ -5927,11 +5942,15 @@ function AppInner(){
     setCalColors(DEF_CALCOLORS(C));
     setAccountRates({checking:0,savings:0,cushion:0,k401:0,roth_ira:0,brokerage:0,hsa:0,crypto:0});
     setIsDemoMode(false);setDarkMode(false);setHidden(false);
+    try{localStorage.removeItem("fv_demo");}catch{}
+    try{window._merchantCats={};}catch{}
+    try{localStorage.removeItem("fv_account_rates");}catch{}
+    clearScopedUserDataCache();
     if(clearOnboarding){
       setOnboarded(false);
       try{localStorage.removeItem("fv_onboarded");}catch{}
     }
-    cloudLoadedRef.current=false;
+    cloudLoadedRef.current=opts.cloudLoadedRefTarget===true;
   }
   async function handleSignOut(){
     await flushPendingSync();
@@ -6066,6 +6085,11 @@ function AppInner(){
         }else if(uid_boot){
           try{
             const bulk=await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid_boot)}&select=key,value`);
+            if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length===0){
+              resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
+              setReady(true);
+              return;
+            }
             if(Array.isArray(bulk?.data))bulk.data.forEach(r=>{_bulkMap[r.key]=r.value;});
           }catch{}
         }

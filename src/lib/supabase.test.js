@@ -39,6 +39,24 @@ describe('supabase helpers', () => {
     expect(s).toMatch(/^fv6_d_[a-z0-9]+:$/)
   })
 
+  it('clearScopedUserDataCache removes scoped and legacy fv6 keys', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'k')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem(
+      'fv_session',
+      JSON.stringify({ user: { id: 'abcdefghijklmnop' } })
+    )
+    vi.resetModules()
+    const { getScope, clearScopedUserDataCache } = await import('./supabase.js')
+    const scope = getScope()
+    localStorage.setItem(scope + 'expenses', JSON.stringify([{ id: 1 }]))
+    localStorage.setItem('fv6:expenses', JSON.stringify([{ id: 2 }]))
+    clearScopedUserDataCache()
+    expect(localStorage.getItem(scope + 'expenses')).toBeNull()
+    expect(localStorage.getItem('fv6:expenses')).toBeNull()
+  })
+
   it('supaFetch returns config error when env missing', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', '')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', '')

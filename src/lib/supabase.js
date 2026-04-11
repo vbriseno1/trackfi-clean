@@ -137,6 +137,53 @@ export function isTrackfiDemoMode() {
   }
 }
 
+/** Bare keys mirrored under getScope() + key and legacy fv6:key — clear on full reset so demo/stale rows cannot return after cloud wipe or reload. */
+const SCOPED_USER_DATA_KEYS = [
+  "accounts",
+  "income",
+  "expenses",
+  "bills",
+  "debts",
+  "bgoals",
+  "sgoals",
+  "cats",
+  "trades",
+  "taccount",
+  "settings",
+  "calColors",
+  "notifs",
+  "balHist",
+  "shifts",
+  "prof",
+  "profSub",
+  "dashConfig",
+  "appName",
+  "greetName",
+  "merchantCats",
+  "recurrings",
+  "settlements",
+  "hhBudgets",
+  "nwGoal",
+  "subDismissed",
+  "household",
+  "accountRates",
+  "onboarded",
+];
+
+export function clearScopedUserDataCache() {
+  try {
+    const scope = getScope();
+    for (const bare of SCOPED_USER_DATA_KEYS) {
+      try {
+        localStorage.removeItem(scope + bare);
+      } catch {}
+      try {
+        localStorage.removeItem("fv6:" + bare);
+      } catch {}
+    }
+  } catch {}
+}
+
 const _ssBuffer = {};
 let _lsQuotaWarned = false;
 
