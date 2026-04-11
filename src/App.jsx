@@ -272,7 +272,17 @@ function prepareBillPaidTransition(x,debts,accounts,settings){
   }
   return{ok:true,r,bpf,bamt,payDate,pd,intPortion,accDays,billPrevSnap,isLoanPay,prevCarry,newCarry};
 }
-/** One bill row after unpaid→paid (recurring advances due date; one-time sets paid:true). */
+/** Move a recurring bill's due date back one period (inverse of marking paid). */
+function rewindRecurringDueDate(dueDateStr,recurring){
+  const d=new Date((dueDateStr||todayStr())+"T00:00:00");
+  if(recurring==="Weekly")d.setDate(d.getDate()-7);
+  else if(recurring==="Bi-weekly")d.setDate(d.getDate()-14);
+  else if(recurring==="Quarterly")d.setMonth(d.getMonth()-3);
+  else if(recurring==="Annual")d.setFullYear(d.getFullYear()-1);
+  else d.setMonth(d.getMonth()-1);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+/** One bill row after unpaid→paid (recurring advances due date + paid:true so the checkmark sticks; one-time sets paid:true). */
 function patchBillForMarkingPaid(xx,x,payDate,pd,billPrevSnap,isLoanPay,prevCarry){
   if(String(xx.id)!==String(x.id))return xx;
   const loanClear={loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined};
@@ -285,7 +295,7 @@ function patchBillForMarkingPaid(xx,x,payDate,pd,billPrevSnap,isLoanPay,prevCarr
     else if(xx.recurring==="Annual")d.setFullYear(d.getFullYear()+1);
     else d.setMonth(d.getMonth()+1);
     const nd=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-    return{...xx,paid:false,dueDate:nd,paidDate:payDate,...(loanSnap||loanClear)};
+    return{...xx,paid:true,dueDate:nd,paidDate:payDate,...(loanSnap||loanClear)};
   }
   return{...xx,paid:true,...(loanSnap||loanClear)};
 }
@@ -2826,7 +2836,12 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         return o;
       }));
       setTimeout(()=>showToast&&showToast("Marked unpaid — "+x.name),0);
-      setBills(p=>p.map(xx=>String(xx.id)!==String(x.id)?xx:{...xx,paid:false,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined}));
+      setBills(p=>p.map(xx=>{
+        if(String(xx.id)!==String(x.id))return xx;
+        const cleared={...xx,paid:false,paidDate:undefined,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined};
+        if(xx.recurring&&xx.recurring!=="One-time")return{...cleared,dueDate:rewindRecurringDueDate(xx.dueDate,xx.recurring)};
+        return cleared;
+      }));
     }
   }
   function undoLoanBillPayment(x){
@@ -2854,13 +2869,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
     setBills(p=>p.map(xx=>{
       if(String(xx.id)!==String(x.id))return xx;
       if(xx.recurring&&xx.recurring!=="One-time"){
-        const d=new Date((xx.dueDate||todayStr())+"T00:00:00");
-        if(xx.recurring==="Weekly")d.setDate(d.getDate()-7);
-        else if(xx.recurring==="Bi-weekly")d.setDate(d.getDate()-14);
-        else if(xx.recurring==="Quarterly")d.setMonth(d.getMonth()-3);
-        else if(xx.recurring==="Annual")d.setFullYear(d.getFullYear()-1);
-        else d.setMonth(d.getMonth()-1);
-        const prevDue=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+        const prevDue=rewindRecurringDueDate(xx.dueDate,xx.recurring);
         return{...xx,dueDate:prevDue,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined,paidDate:undefined};
       }
       return{...xx,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined};
@@ -6342,6 +6351,15 @@ function AppInner(){
     }));
     try{localStorage.setItem("fv_bills_reset_month",currentMonth);}catch{}
   },[ready,bills.length]);
+  // Recurring bills marked paid advance to the next due date and stay paid:true until that date; then they return to unpaid for the new cycle.
+  useEffect(()=>{
+    if(!ready||!bills.length)return;
+    if(!bills.some(b=>b.paid&&b.recurring&&b.recurring!=="One-time"&&b.dueDate&&dueIn(b.dueDate)<=0))return;
+    setBills(p=>p.map(b=>{
+      if(!b.paid||!b.recurring||b.recurring==="One-time"||!b.dueDate||dueIn(b.dueDate)>0)return b;
+      return{...b,paid:false,paidDate:undefined};
+    }));
+  },[ready,bills]);
   /** Prevents duplicate system notifications: SW showNotification is async, so two effect runs can both schedule OS before the in-app dedupe row exists. */
   const osNotifCooldownRef=useRef(new Map());
   const pushNotif=(id,title,body,type)=>{
