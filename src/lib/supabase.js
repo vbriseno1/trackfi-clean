@@ -288,8 +288,10 @@ export async function sg(k) {
       );
       if (Array.isArray(res?.data) && res.data.length > 0) {
         const row = res.data[0];
-        if (row.updated_at != null && row.updated_at !== "") _lastKnownRowUpdatedAt[bare] = String(row.updated_at);
-        return row.value;
+        if (row != null && Object.prototype.hasOwnProperty.call(row, "value")) {
+          if (row.updated_at != null && row.updated_at !== "") _lastKnownRowUpdatedAt[bare] = String(row.updated_at);
+          return row.value;
+        }
       }
     } catch {}
   }
@@ -321,10 +323,22 @@ export async function ss(k, v) {
   }
   if (uid && !isTrackfiDemoMode()) {
     if (_ssBuffer[bare]?.timer) clearTimeout(_ssBuffer[bare].timer);
-    _ssBuffer[bare] = {
-      value: v,
-      timer: setTimeout(() => _flushKey(uid, bare, _ssBuffer[bare].value), 1500),
-    };
+    const buf = { value: v, timer: null };
+    buf.timer = setTimeout(() => {
+      try {
+        if (_ssBuffer[bare] !== buf) return;
+        let val;
+        try {
+          const raw = localStorage.getItem(getScope() + bare);
+          if (raw !== null) val = JSON.parse(raw);
+        } catch {}
+        if (val === undefined) val = buf.value;
+        if (val !== undefined) void _flushKey(uid, bare, val);
+      } finally {
+        if (_ssBuffer[bare] === buf) delete _ssBuffer[bare];
+      }
+    }, 1500);
+    _ssBuffer[bare] = buf;
   }
 }
 
