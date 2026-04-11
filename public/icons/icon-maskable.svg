@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Trackfi">
+  <defs>
+    <linearGradient id="mbg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop stop-color="#0a1628"/>
+      <stop offset="0.55" stop-color="#1e1b4b"/>
+      <stop offset="1" stop-color="#312e81"/>
+    </linearGradient>
+    <linearGradient id="mLo" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="mHi" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop stop-color="#6366f1"/>
+      <stop offset="0.55" stop-color="#a5b4fc"/>
+      <stop offset="1" stop-color="#2dd4bf"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#mbg)"/>
+  <g transform="translate(256 262) scale(0.65) translate(-256 -278)">
+    <g transform="translate(256 278)">
+      <path d="M-158 42 H158" stroke="#475569" stroke-width="10" stroke-linecap="round"/>
+      <rect x="-138" y="-8" width="62" height="50" rx="16" fill="url(#mLo)" opacity="0.88"/>
+      <rect x="-46" y="-78" width="62" height="120" rx="16" fill="url(#mHi)"/>
+      <rect x="46" y="-148" width="62" height="190" rx="16" fill="url(#mHi)"/>
+      <path d="M-138 34 Q-20 -40 108 -168" fill="none" stroke="#2dd4bf" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
+      <circle cx="108" cy="-168" r="14" fill="#2dd4bf"/>
+    </g>
+  </g>
+</svg>
