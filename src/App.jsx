@@ -184,6 +184,37 @@ const fmt    = n => { const v=Number(n); return "$"+(isNaN(v)?0:v).toLocaleStrin
 const fmtK   = n => { const v=Number(n||0); return v>=1000?"$"+(v/1000).toFixed(1)+"k":fmt(v); };
 const todayStr = () => { const n=new Date(); return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0"); };
 const dueIn  = d => { if(!d||typeof d!=="string")return 999; const parts=d.split('-').map(Number); if(parts.length!==3||parts.some(isNaN))return 999; const [ty,tm,tdy]=todayStr().split('-').map(Number); const [dy,dm,ddd]=parts; const today2=new Date(ty,tm-1,tdy); const due=new Date(dy,dm-1,ddd); const diff=Math.ceil((due-today2)/86400000); return isNaN(diff)?999:diff; };
+/** True when due date is missing or not a valid YYYY-MM-DD (dueIn uses 999 as sentinel). */
+function isBillDueDateUnusable(dueDateStr){
+  return dueIn(dueDateStr)===999;
+}
+function billPaidDateCalendarPrefix(b){
+  const raw=b?.paidDate;
+  if(raw==null||raw==="")return"";
+  const s=typeof raw==="string"?raw:String(raw);
+  const day=s.includes("T")?s.split("T")[0]:s;
+  const m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(day.trim());
+  if(!m)return"";
+  return m[1]+"-"+String(parseInt(m[2],10)).padStart(2,"0");
+}
+/** Amounts due in calendar month ms (YYYY-MM) by bill due date. */
+function billsDueTotalInMonth(bills,ms){
+  return bills.reduce((s,b)=>b.dueDate?.startsWith(ms)?s+(parseFloat(b.amount)||0):s,0);
+}
+/** Amounts marked paid in calendar month ms: paidDate month, or legacy rows with no paidDate but due in ms. */
+function billsMarkedPaidTotalInMonth(bills,ms){
+  return bills.reduce((s,b)=>{
+    if(!b.paid)return s;
+    const amt=parseFloat(b.amount)||0;
+    const pfx=billPaidDateCalendarPrefix(b);
+    if(pfx&&pfx===ms)return s+amt;
+    if(!pfx&&b.dueDate?.startsWith(ms))return s+amt;
+    return s;
+  },0);
+}
+function billHasLoanUndoSnap(b){
+  return !!(b?.linkedDebtId&&(parseFloat(b.loanPrincipalApplied)>0||b.loanPrevInterestAsOfDate!=null||b.loanPrevAccruedInterest!==undefined));
+}
 /**
  * After marking a recurring bill paid, it stays in Paid History until the next due is within this many days — then it returns to Upcoming.
  * Tuned to each cadence (share of the typical period as heads-up).
@@ -313,13 +344,14 @@ function patchBillForMarkingPaid(xx,x,payDate,pd,billPrevSnap,isLoanPay,prevCarr
     const nd=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
     return{...xx,paid:true,dueDate:nd,paidDate:payDate,...(loanSnap||loanClear)};
   }
-  return{...xx,paid:true,...(loanSnap||loanClear)};
+  return{...xx,paid:true,paidDate:payDate,...(loanSnap||loanClear)};
 }
 /**
  * Mark an unpaid bill paid: applySpend, loan balance/anchor, bill row. Use from Bills, chat, or quick actions.
  * @returns {{ok:false,msg:string}|{ok:true,tip:string}} tip is suffix for toast/chat (principal + interest).
  */
 function commitMarkBillPaid(x,{debts,setDebts,setBills,accounts,settings,applySpend,onToast,skipToast,skipVibrate}){
+  if(x.paid)return{ok:false,msg:(x.name?'"'+x.name+'" is':"This bill is")+" already marked paid."};
   const prep=prepareBillPaidTransition(x,debts,accounts,settings);
   if(!prep.ok)return{ok:false,msg:prep.msg};
   const{r,bpf,bamt,payDate,pd,intPortion,accDays,billPrevSnap,isLoanPay,prevCarry,newCarry}=prep;
@@ -337,6 +369,7 @@ function commitMarkBillsPaidList(rows,{debts,setDebts,setBills,accounts,settings
   let sim=debts;
   const preps=[];
   for(const x of rows){
+    if(x.paid)return{ok:false,msg:(x.name?'"'+x.name+'" is':"A selected bill is")+" already marked paid."};
     const prep=prepareBillPaidTransition(x,sim,accounts,settings);
     if(!prep.ok)return{ok:false,msg:prep.msg};
     preps.push({x,prep});
@@ -2884,11 +2917,12 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
     }));
     setBills(p=>p.map(xx=>{
       if(String(xx.id)!==String(x.id))return xx;
+      const loanClear={loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined,paidDate:undefined};
       if(xx.recurring&&xx.recurring!=="One-time"){
         const prevDue=rewindRecurringDueDate(xx.dueDate,xx.recurring);
-        return{...xx,dueDate:prevDue,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined,paidDate:undefined};
+        return{...xx,paid:false,dueDate:prevDue,...loanClear};
       }
-      return{...xx,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined};
+      return{...xx,paid:false,...loanClear};
     }));
     showToast&&showToast("Undid loan payment — "+x.name);
   }
@@ -2958,7 +2992,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
               </div>
               <div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:b.paid?C.textLight:C.text}}>{fmt(b.amount)}</div>
               {billTab==="history"&&b.paid&&<button type="button" className="ba" onClick={()=>handleBillPaidChange(b,false)} style={{background:"none",border:"none",cursor:"pointer",color:C.amber,fontSize:11,fontWeight:700,padding:"4px 6px",whiteSpace:"nowrap"}}>Mark unpaid</button>}
-              {!b.paid&&b.linkedDebtId&&(parseFloat(b.loanPrincipalApplied)>0||b.loanPrevInterestAsOfDate!=null||b.loanPrevAccruedInterest!==undefined)&&billTab==="upcoming"&&<button type="button" className="ba" onClick={()=>undoLoanBillPayment(b)} style={{background:"none",border:"none",cursor:"pointer",color:C.amber,fontSize:11,fontWeight:700,padding:"4px 6px",whiteSpace:"nowrap"}}>Undo loan pay</button>}
+              {billHasLoanUndoSnap(b)&&((billTab==="upcoming"&&!b.paid)||(billTab==="history"&&b.paid))&&<button type="button" className="ba" onClick={()=>undoLoanBillPayment(b)} style={{background:"none",border:"none",cursor:"pointer",color:C.amber,fontSize:11,fontWeight:700,padding:"4px 6px",whiteSpace:"nowrap"}}>Undo loan pay</button>}
               <button type="button" className="ba" onClick={()=>setEditItem({type:"bill",data:b})} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,fontSize:11,fontWeight:600,padding:"4px 6px"}}>Edit</button>
               <button className="ba" onClick={()=>{const snap=b;setBills(p=>p.filter(x=>x.id!==snap.id));(showUndoToast||showToast)&&(showUndoToast?showUndoToast("Bill removed — "+snap.name,()=>setBills(p=>[...p,snap])):showToast("Bill removed","error"));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
             </div>
@@ -2970,22 +3004,33 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       })()}
     {bills.length>3&&(()=>{
       const now3=new Date();
-      const last6=Array.from({length:6},(_,i)=>{const d=new Date(now3.getFullYear(),now3.getMonth()-5+i,1);const ms=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');const paid=bills.filter(b=>b.dueDate?.startsWith(ms)&&b.paid).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);const total=bills.filter(b=>b.dueDate?.startsWith(ms)).reduce((s,b)=>s+(parseFloat(b.amount)||0),0);return{month:FULL_MOS[d.getMonth()].slice(0,3),paid,total,isCurrent:i===5};});
-      if(!last6.some(m=>m.total>0))return null;
-      const maxB=Math.max(...last6.map(m=>m.total))||1;
+      const last6=Array.from({length:6},(_,i)=>{
+        const d=new Date(now3.getFullYear(),now3.getMonth()-5+i,1);
+        const ms=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+        const dueTotal=billsDueTotalInMonth(bills,ms);
+        const paidTotal=billsMarkedPaidTotalInMonth(bills,ms);
+        const barTotal=Math.max(dueTotal,paidTotal);
+        return{month:FULL_MOS[d.getMonth()].slice(0,3),paid:paidTotal,due:dueTotal,barTotal,isCurrent:i===5};
+      });
+      if(!last6.some(m=>m.barTotal>0))return null;
+      const maxB=Math.max(...last6.map(m=>m.barTotal))||1;
       return(<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:16,marginBottom:14}}>
-        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>6-Month Bill History</div>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>6-Month Bills</div>
+        <div style={{fontSize:11,color:C.textLight,marginBottom:12,lineHeight:1.45}}>Bar height is the larger of <strong>due that month</strong> vs <strong>marked paid that month</strong> (recurring payments use the month you tapped paid).</div>
         <div style={{display:'flex',gap:4,alignItems:'flex-end',height:64}}>
-          {last6.map((m,i)=>{const hTotal=Math.max(4,Math.round((m.total/maxB)*56));const hPaid=m.total>0?Math.round((m.paid/m.total)*hTotal):0;return(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+          {last6.map((m,i)=>{
+            const hTotal=Math.max(4,Math.round((m.barTotal/maxB)*56));
+            const hPaid=m.barTotal>0?Math.round((m.paid/m.barTotal)*hTotal):0;
+            return(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
             <div style={{width:'100%',height:hTotal,background:C.borderLight,borderRadius:'3px 3px 0 0',position:'relative',overflow:'hidden'}}>
               <div style={{position:'absolute',bottom:0,width:'100%',height:hPaid,background:m.isCurrent?C.green:C.accent,borderRadius:'3px 3px 0 0'}}/>
             </div>
             <div style={{fontSize:9,color:m.isCurrent?C.accent:C.textFaint,fontWeight:m.isCurrent?700:400}}>{m.month}</div>
           </div>);})}
         </div>
-        <div style={{display:'flex',gap:12,marginTop:8,fontSize:11}}>
-          <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.accent}}/><span style={{color:C.textLight}}>Due</span></div>
-          <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.green}}/><span style={{color:C.textLight}}>Paid</span></div>
+        <div style={{display:'flex',gap:12,marginTop:8,fontSize:11,flexWrap:'wrap'}}>
+          <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.borderLight,border:`1px solid ${C.border}`}}/><span style={{color:C.textLight}}>Scale (due or paid)</span></div>
+          <div style={{display:'flex',alignItems:'center',gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.accent}}/><span style={{color:C.textLight}}>Marked paid</span></div>
         </div>
       </div>);
     })()}
@@ -6371,12 +6416,14 @@ function AppInner(){
   useEffect(()=>{
     if(!ready||!bills.length)return;
     if(!bills.some(b=>{
-      if(!b.paid||!b.recurring||b.recurring==="One-time"||!b.dueDate)return false;
+      if(!b.paid||!b.recurring||b.recurring==="One-time")return false;
+      if(isBillDueDateUnusable(b.dueDate))return true;
       const w=recurringReshowUpcomingWithinDays(b.recurring);
       return dueIn(b.dueDate)<=w;
     }))return;
     setBills(p=>p.map(b=>{
-      if(!b.paid||!b.recurring||b.recurring==="One-time"||!b.dueDate)return b;
+      if(!b.paid||!b.recurring||b.recurring==="One-time")return b;
+      if(isBillDueDateUnusable(b.dueDate))return{...b,paid:false,paidDate:undefined};
       const w=recurringReshowUpcomingWithinDays(b.recurring);
       if(dueIn(b.dueDate)>w)return b;
       return{...b,paid:false,paidDate:undefined};
