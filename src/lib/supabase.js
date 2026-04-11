@@ -187,18 +187,95 @@ export function clearScopedUserDataCache() {
 const _ssBuffer = {};
 let _lsQuotaWarned = false;
 
+/** Last `updated_at` we saw from Supabase per key — used so stale tabs cannot overwrite newer cloud rows. */
+const _lastKnownRowUpdatedAt = Object.create(null);
+
+/** After each successful pull, replace version map from REST rows `{ key, value, updated_at }`. */
+export function applyPulledUserDataRows(rows) {
+  for (const k of SCOPED_USER_DATA_KEYS) delete _lastKnownRowUpdatedAt[k];
+  if (!Array.isArray(rows)) return;
+  for (const row of rows) {
+    if (row == null || row.key == null) continue;
+    if (row.updated_at != null && row.updated_at !== "") _lastKnownRowUpdatedAt[row.key] = String(row.updated_at);
+  }
+}
+
+export function clearUserDataRowVersions() {
+  for (const k of Object.keys(_lastKnownRowUpdatedAt)) delete _lastKnownRowUpdatedAt[k];
+}
+
+let _uploadConflictHandler = null;
+/** Optional: `() => void` — e.g. schedule `loadFromSupabase` when a background PATCH hits a version conflict. */
+export function setUploadConflictHandler(fn) {
+  _uploadConflictHandler = typeof fn === "function" ? fn : null;
+}
+
+let _conflictPullScheduled = false;
+function scheduleConflictPull() {
+  if (_conflictPullScheduled) return;
+  _conflictPullScheduled = true;
+  queueMicrotask(() => {
+    _conflictPullScheduled = false;
+    try {
+      _uploadConflictHandler?.();
+    } catch {}
+  });
+}
+
+/**
+ * @returns {{ ok: true } | { conflict: true } | { error: true }}
+ */
 async function _flushKey(uid, bare, v) {
+  const nextUpdatedAt = new Date().toISOString();
+  const lastTs = _lastKnownRowUpdatedAt[bare];
   try {
-    const r = await supaFetch("/rest/v1/user_data?on_conflict=user_id,key", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: new Date().toISOString() }),
-    });
-    if (!r.error)
+    if (lastTs) {
+      const r = await supaFetch(
+        `/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&key=eq.${encodeURIComponent(bare)}&updated_at=eq.${encodeURIComponent(lastTs)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Prefer: "return=representation" },
+          body: JSON.stringify({ value: v, updated_at: nextUpdatedAt }),
+        }
+      );
+      if (r.error) return { error: true };
+      const raw = r.data;
+      if (Array.isArray(raw)) {
+        if (raw.length === 1 && raw[0]?.updated_at != null) {
+          _lastKnownRowUpdatedAt[bare] = String(raw[0].updated_at);
+          try {
+            localStorage.setItem("fv_last_sync", String(Date.now()));
+          } catch {}
+          return { ok: true };
+        }
+        if (raw.length === 0) {
+          scheduleConflictPull();
+          return { conflict: true };
+        }
+        return { error: true };
+      }
+      _lastKnownRowUpdatedAt[bare] = nextUpdatedAt;
       try {
         localStorage.setItem("fv_last_sync", String(Date.now()));
       } catch {}
-  } catch {}
+      return { ok: true };
+    }
+    const r2 = await supaFetch("/rest/v1/user_data?on_conflict=user_id,key", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: nextUpdatedAt }),
+    });
+    if (r2.error) return { error: true };
+    const rows2 = Array.isArray(r2.data) ? r2.data : [];
+    if (rows2.length === 1 && rows2[0]?.updated_at != null) _lastKnownRowUpdatedAt[bare] = String(rows2[0].updated_at);
+    else _lastKnownRowUpdatedAt[bare] = nextUpdatedAt;
+    try {
+      localStorage.setItem("fv_last_sync", String(Date.now()));
+    } catch {}
+    return { ok: true };
+  } catch {
+    return { error: true };
+  }
 }
 
 export async function sg(k) {
@@ -207,9 +284,13 @@ export async function sg(k) {
   if (uid && !isTrackfiDemoMode()) {
     try {
       const res = await supaFetch(
-        `/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&key=eq.${encodeURIComponent(bare)}&select=value`
+        `/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&key=eq.${encodeURIComponent(bare)}&select=value,updated_at`
       );
-      if (Array.isArray(res?.data) && res.data.length > 0) return res.data[0].value;
+      if (Array.isArray(res?.data) && res.data.length > 0) {
+        const row = res.data[0];
+        if (row.updated_at != null && row.updated_at !== "") _lastKnownRowUpdatedAt[bare] = String(row.updated_at);
+        return row.value;
+      }
     } catch {}
   }
   try {
@@ -263,6 +344,7 @@ export async function flushPendingSync() {
   const uid = getUserId();
   const allowCloud = !!uid && !isTrackfiDemoMode();
   const keys = Object.keys(_ssBuffer);
+  let conflict = false;
   for (const bare of keys) {
     const buf = _ssBuffer[bare];
     if (!buf) continue;
@@ -273,8 +355,12 @@ export async function flushPendingSync() {
         const raw = localStorage.getItem(getScope() + bare);
         if (raw !== null) val = JSON.parse(raw);
       } catch {}
-      if (val !== undefined) await _flushKey(uid, bare, val);
+      if (val !== undefined) {
+        const out = await _flushKey(uid, bare, val);
+        if (out?.conflict) conflict = true;
+      }
     }
     delete _ssBuffer[bare];
   }
+  return { conflict };
 }

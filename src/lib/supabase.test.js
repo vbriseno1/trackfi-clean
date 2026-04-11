@@ -179,6 +179,20 @@ describe('supabase helpers', () => {
     vi.useRealTimers()
   })
 
+  it('flushPendingSync returns conflict shape without throwing', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem(
+      'fv_session',
+      JSON.stringify({ user: { id: 'user1234567890' }, access_token: 'tok' })
+    )
+    vi.resetModules()
+    const { flushPendingSync } = await import('./supabase.js')
+    const r = await flushPendingSync()
+    expect(r).toEqual({ conflict: false })
+  })
+
   it('cancelPendingDebouncedSync clears without throwing', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')

@@ -24,6 +24,9 @@ import {
   isTrackfiDemoMode,
   clearScopedUserDataCache,
   SCOPED_USER_DATA_KEYS,
+  applyPulledUserDataRows,
+  clearUserDataRowVersions,
+  setUploadConflictHandler,
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import BankImportModal from "./modals/BankImportModal.jsx";
@@ -5796,46 +5799,6 @@ function AppInner(){
     return()=>clearInterval(iv);
   },[authSession?.refresh_token]);
 
-  // Auto-sync when user returns to the app (tab focus, phone unlock, etc.)
-  useEffect(()=>{
-    function pullIfDue(){
-      if(!authSession)return;
-      const now=Date.now();
-      if(now-lastVisibilityPullRef.current<700)return;
-      lastVisibilityPullRef.current=now;
-      void loadFromSupabase(authSession);
-    }
-    function onFocus(){
-      if(!authSession)return;
-      pullIfDue();
-    }
-    let bgTimestamp=0;
-    function onVis(){
-      if(document.hidden){
-        bgTimestamp=Date.now();
-      } else {
-        pullIfDue();
-        if(bgTimestamp>0&&Date.now()-bgTimestamp>2*60*1000){
-          setPinEnabled(pe=>{if(pe){setLocked(true);}return pe;});
-        }
-        bgTimestamp=0;
-      }
-    }
-    /** BFCache restore (back/forward) — extra pull; normal opens rely on visibilitychange */
-    function onPageShow(e){
-      if(!authSession||!e.persisted)return;
-      pullIfDue();
-    }
-    window.addEventListener("focus",onFocus);
-    document.addEventListener("visibilitychange",onVis);
-    window.addEventListener("pageshow",onPageShow);
-    return()=>{
-      window.removeEventListener("focus",onFocus);
-      document.removeEventListener("visibilitychange",onVis);
-      window.removeEventListener("pageshow",onPageShow);
-    };
-  },[authSession]);
-
   useEffect(()=>{
     // Safety net: if auth hasn't resolved in 15s, unblock the UI
     const authTimeout=setTimeout(()=>setAuthLoading(false),15000);
@@ -5927,12 +5890,12 @@ function AppInner(){
     const uid = sess?.user?.id;
     if (!uid) return;
     const gen = ++remotePullGenRef.current;
-    // Do NOT flushPendingSync() before fetch: debounced ss() may still hold stale bills JSON
-    // from this device and would overwrite newer rows another device just wrote.
+    // Push pending local changes first (with version checks), then pull so other devices win when newer.
+    await flushPendingSync();
     await new Promise(r => setTimeout(r, 50));
     setSyncing(true);
     try {
-      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&select=key,value`);
+      const res = await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&select=key,value,updated_at`);
       if (gen !== remotePullGenRef.current) return;
       if (!res?.data || !Array.isArray(res.data)) {
         if (navigator.onLine) setSyncRecoverableError(true);
@@ -5941,6 +5904,7 @@ function AppInner(){
       // Drop any scheduled uploads from before this snapshot — they may target pre-pull state.
       cancelPendingDebouncedSync();
       if (res.data.length === 0) {
+        applyPulledUserDataRows([]);
         // Wipe stale scoped cache (e.g. sample data saved locally while signed in) so an empty cloud is authoritative.
         resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
         setSyncRecoverableError(false);
@@ -5951,6 +5915,7 @@ function AppInner(){
         }
         return;
       }
+      applyPulledUserDataRows(res.data);
       const map = {};
       res.data.forEach(row => { map[row.key] = row.value; });
       const fullMap = buildAuthoritativeCloudMap(map);
@@ -5992,6 +5957,8 @@ function AppInner(){
       }
     }
   }
+  const loadFromSupabaseRef=useRef(loadFromSupabase);
+  loadFromSupabaseRef.current=loadFromSupabase;
   function handleSkip(){try{localStorage.setItem("fv_skip_auth","1");}catch{}setSkipAuth(true);}
   function resetUserState(opts={}){
     const clearOnboarding=opts.clearOnboarding!==false;
@@ -6018,6 +5985,7 @@ function AppInner(){
       try{localStorage.removeItem("fv_onboarded");}catch{}
     }
     cloudLoadedRef.current=opts.cloudLoadedRefTarget===true;
+    clearUserDataRowVersions();
   }
   async function handleSignOut(){
     await flushPendingSync();
@@ -6036,6 +6004,7 @@ function AppInner(){
       }
     }catch{}
     if(authToken)supaFetch("/auth/v1/logout",{method:"POST"});
+    clearUserDataRowVersions();
     resetUserState();
     setAuthSession(null);
     try{localStorage.removeItem("fv_session");}catch{}
@@ -6087,20 +6056,6 @@ function AppInner(){
   const[isOnline,setIsOnline]=useState(()=>navigator.onLine);
   const[syncRecoverableError,setSyncRecoverableError]=useState(false);
   useEffect(()=>{
-    const goOnline=()=>{
-      setIsOnline(true);
-      setSyncRecoverableError(false);
-      showToast("Back online — syncing...","success");
-      void flushPendingSync();
-      const s=authSessionRef.current;
-      if(s?.user?.id)void loadFromSupabase(s);
-    };
-    const goOffline=()=>{setIsOnline(false);};
-    window.addEventListener("online",goOnline);
-    window.addEventListener("offline",goOffline);
-    return()=>{window.removeEventListener("online",goOnline);window.removeEventListener("offline",goOffline);};
-  },[]);
-  useEffect(()=>{
     function onLeave(){if(_getUserId())flushPendingSync();}
     window.addEventListener("pagehide",onLeave);
     window.addEventListener("beforeunload",onLeave);
@@ -6127,6 +6082,88 @@ function AppInner(){
   const[toast,setToast]=useState(null);
   const showToast=(msg,type='success',action=null)=>{setToast({msg,type,action});const dur=type==='error'?4000:type==='info'?3000:action?4000:2500;setTimeout(()=>setToast(t=>t?.msg===msg?null:t),dur);};
   const showUndoToast=(msg,undoFn)=>showToast(msg,"error",{label:"Undo",fn:undoFn});
+  const showToastRef=useRef(showToast);
+  showToastRef.current=showToast;
+
+  useEffect(()=>{
+    setUploadConflictHandler(()=>{
+      const s=authSessionRef.current;
+      if(s?.user?.id&&!isTrackfiDemoMode())void loadFromSupabaseRef.current?.(s);
+    });
+    return()=>setUploadConflictHandler(null);
+  },[]);
+
+  /** Tab focus / visibility — flush local uploads (version-aware), then pull latest for smooth multi-device rotation. */
+  useEffect(()=>{
+    async function pullIfDue(){
+      const sess=authSessionRef.current;
+      if(!sess?.user?.id||isTrackfiDemoMode())return;
+      const now=Date.now();
+      if(now-lastVisibilityPullRef.current<1200)return;
+      lastVisibilityPullRef.current=now;
+      const { conflict }=await flushPendingSync();
+      if(conflict)showToastRef.current("Another device had newer data — this tab was synced to match.","info");
+      await loadFromSupabaseRef.current?.(sess);
+    }
+    function onFocus(){
+      if(!authSessionRef.current?.user?.id)return;
+      void pullIfDue();
+    }
+    let bgTimestamp=0;
+    function onVis(){
+      if(document.hidden){
+        bgTimestamp=Date.now();
+      }else{
+        void pullIfDue();
+        if(bgTimestamp>0&&Date.now()-bgTimestamp>2*60*1000){
+          setPinEnabled(pe=>{if(pe){setLocked(true);}return pe;});
+        }
+        bgTimestamp=0;
+      }
+    }
+    function onPageShow(e){
+      if(!authSessionRef.current?.user?.id||!e.persisted)return;
+      void pullIfDue();
+    }
+    window.addEventListener("focus",onFocus);
+    document.addEventListener("visibilitychange",onVis);
+    window.addEventListener("pageshow",onPageShow);
+    return()=>{
+      window.removeEventListener("focus",onFocus);
+      document.removeEventListener("visibilitychange",onVis);
+      window.removeEventListener("pageshow",onPageShow);
+    };
+  },[]);
+
+  useEffect(()=>{
+    const goOnline=async()=>{
+      setIsOnline(true);
+      setSyncRecoverableError(false);
+      showToastRef.current("Back online — syncing...","success");
+      const { conflict }=await flushPendingSync();
+      if(conflict)showToastRef.current("Another device had newer data — syncing this device to match.","info");
+      const s=authSessionRef.current;
+      if(s?.user?.id)await loadFromSupabaseRef.current?.(s);
+    };
+    const goOffline=()=>{setIsOnline(false);};
+    window.addEventListener("online",goOnline);
+    window.addEventListener("offline",goOffline);
+    return()=>{window.removeEventListener("online",goOnline);window.removeEventListener("offline",goOffline);};
+  },[]);
+
+  /** While the tab is visible, refresh periodically so a second browser doesn’t stay stale for long. */
+  useEffect(()=>{
+    if(!authSession?.user?.id)return;
+    const id=setInterval(()=>{
+      if(document.visibilityState!=="visible"||isTrackfiDemoMode())return;
+      void (async()=>{
+        const { conflict }=await flushPendingSync();
+        if(conflict)showToastRef.current("Synced latest from your other device.","info");
+        await loadFromSupabaseRef.current?.(authSessionRef.current);
+      })();
+    },90000);
+    return()=>clearInterval(id);
+  },[authSession?.user?.id]);
 
   const[isDemoMode,setIsDemoMode]=useState(()=>{try{return localStorage.getItem("fv_demo")==="1";}catch{return false;}});
   const[demoBannerVisible,setDemoBannerVisible]=useState(true);
@@ -6152,13 +6189,15 @@ function AppInner(){
           }
         }else if(uid_boot){
           try{
-            const bulk=await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid_boot)}&select=key,value`);
+            const bulk=await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid_boot)}&select=key,value,updated_at`);
             if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length===0){
+              applyPulledUserDataRows([]);
               resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
               setReady(true);
               return;
             }
             if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length>0){
+              applyPulledUserDataRows(bulk.data);
               const raw={};
               bulk.data.forEach(r=>{raw[r.key]=r.value;});
               const fullMap=buildAuthoritativeCloudMap(raw);
