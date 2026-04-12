@@ -5949,8 +5949,15 @@ function AppInner(){
   },[authSession?.refresh_token]);
 
   useEffect(()=>{
-    // Safety net: if auth hasn't resolved in 15s, unblock the UI
-    const authTimeout=setTimeout(()=>setAuthLoading(false),15000);
+    // "Try without account" — don't block on session refresh / network.
+    try{
+      if(localStorage.getItem("fv_skip_auth")==="1"){
+        setAuthLoading(false);
+        return undefined;
+      }
+    }catch{}
+    const authMaxMs=isSupabaseConfigured()?12000:5000;
+    const authTimeout=setTimeout(()=>setAuthLoading(false),authMaxMs);
     // Handle email confirmation callback — Supabase puts tokens in the URL hash
     const hash = window.location.hash;
     if(hash && hash.includes("access_token=")) {
@@ -5976,12 +5983,12 @@ function AppInner(){
           window.history.replaceState(null,"",window.location.pathname);
           setAuthLoading(false);
         }).catch(()=>{window.history.replaceState(null,"",window.location.pathname);setAuthLoading(false);});
-        return;
+        return()=>clearTimeout(authTimeout);
       }
     }
     // Normal boot: validate + refresh existing session
     const s=(()=>{try{return JSON.parse(localStorage.getItem("fv_session")||"null");}catch{return null;}})();
-    if(!s?.access_token){setAuthLoading(false);return;}
+    if(!s?.access_token){setAuthLoading(false);return()=>clearTimeout(authTimeout);}
     // Try to refresh the token first (handles expired access tokens)
     async function tryRefresh(session){
       if(!session?.refresh_token) return session;
@@ -6344,6 +6351,13 @@ function AppInner(){
   useEffect(()=>{if(!isDemoMode)return;const t=setTimeout(()=>setDemoBannerVisible(false),6000);return()=>clearTimeout(t);},[isDemoMode]);
 
   useEffect(()=>{
+    let bootDone=false;
+    const bootSafety=setTimeout(()=>{
+      if(!bootDone){
+        bootDone=true;
+        setReady(true);
+      }
+    },12000);
     (async()=>{
       try{
         // Bulk fetch all keys in one query when logged in (1 read vs N).
@@ -6366,7 +6380,6 @@ function AppInner(){
             if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length===0){
               applyPulledUserDataRows([]);
               resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
-              setReady(true);
               return;
             }
             if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length>0){
@@ -6399,7 +6412,6 @@ function AppInner(){
           }catch{}
         }
         if(cloudHydratedFromBulk){
-          setReady(true);
           return;
         }
         async function _sg_boot(bare){
@@ -6447,8 +6459,15 @@ function AppInner(){
         // After all boot setState calls so ss() effects never see cloudLoadedRef + stale [] (would overwrite Supabase).
         if(Object.keys(_bulkMap).length>0)cloudLoadedRef.current=true;
       }catch(e){console.error("Load error",e);}
-      setReady(true);
+      finally{
+        clearTimeout(bootSafety);
+        if(!bootDone){
+          bootDone=true;
+          setReady(true);
+        }
+      }
     })();
+    return()=>clearTimeout(bootSafety);
   },[]);
 
   useEffect(()=>{
@@ -7181,6 +7200,24 @@ function AppInner(){
       </div>
     </div>
   );}
+  if(sessionExpired&&!authSession&&!skipAuth){
+    return(
+      <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 55%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <style>{CSS}</style>
+        <div style={{background:C.surface,borderRadius:20,padding:28,maxWidth:340,width:"100%",boxShadow:"0 24px 64px rgba(10,22,40,.25)",textAlign:"center"}}>
+          <div style={{fontSize:36,marginBottom:12}}>🔒</div>
+          <div style={{fontFamily:MF,fontSize:17,fontWeight:800,color:C.text,marginBottom:8}}>Session expired</div>
+          <div style={{fontSize:13,color:C.textMid,marginBottom:22,lineHeight:1.5}}>Sign in again to sync across devices. Your data on this device is still here.</div>
+          <button type="button" onClick={()=>setSessionExpired(false)} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.accent},${C.teal})`,color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",marginBottom:10,fontFamily:MF}}>
+            Sign in again
+          </button>
+          <button type="button" onClick={()=>{setSessionExpired(false);handleSkip();}} style={{width:"100%",padding:"10px",borderRadius:12,border:`1px solid ${C.border}`,background:"none",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>
+            Continue without account
+          </button>
+        </div>
+      </div>
+    );
+  }
   if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip}/>;
   if(!ready)return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.navyMid} 100%)`,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:20}}>💰 Trackfi</div><div style={{width:36,height:36,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading your data...</div></div></div>);
   if(!onboarded&&ready)return(<><style>{CSS}</style><OnboardingWizard onComplete={async d=>{
@@ -8001,23 +8038,6 @@ function AppInner(){
       {showExport&&<ExportModal expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} budgetGoals={budgetGoals} trades={trades} shifts={shifts} categories={categories} appName={appName} greetName={greetName} tradingAccount={tradingAccount} onClose={()=>setShowExport(false)}/>}
       {paycheckDepCtx&&<PaycheckDepositModal ctx={paycheckDepCtx} onClose={()=>setPaycheckDepCtx(null)} accounts={accounts} income={income} settings={settings} setAccounts={setAccounts} setIncome={setIncome} setSettings={setSettings} showToast={showToast}/>}
       {confirm&&<ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)} danger={confirm.danger}/>}
-      {sessionExpired&&(
-        <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(10,22,40,.7)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(6px)"}}>
-          <div style={{background:C.card,borderRadius:20,padding:28,maxWidth:320,width:"100%",boxShadow:"0 24px 64px rgba(10,22,40,.3)",textAlign:"center"}}>
-            <div style={{fontSize:36,marginBottom:12}}>🔒</div>
-            <div style={{fontSize:17,fontWeight:800,color:C.text,marginBottom:8}}>Session Expired</div>
-            <div style={{fontSize:13,color:C.textMid,marginBottom:24,lineHeight:1.5}}>Your login session has expired. Sign in again to keep your data syncing — nothing has been lost.</div>
-            <button onClick={()=>{setSessionExpired(false);setSkipAuth(false);try{localStorage.removeItem("fv_skip_auth");}catch{};}}
-              style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.accent},${C.teal})`,color:"#fff",fontWeight:800,fontSize:15,cursor:"pointer",marginBottom:10}}>
-              Sign In Again
-            </button>
-            <button onClick={()=>setSessionExpired(false)}
-              style={{width:"100%",padding:"10px",borderRadius:12,border:`1px solid ${C.border}`,background:"none",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>
-              Continue Offline
-            </button>
-          </div>
-        </div>
-      )}
       {editItem&&editItem.type==="expense"&&<EditModal item={editItem} categories={categories} household={household} debts={debts} accounts={accounts} settings={settings} onSave={u=>{const oldA=parseFloat(editItem.data.amount)||0;const newA=parseFloat(u.amount)||0;const oldP=normalizePaidFrom(editItem.data.paidFrom);const newP=normalizePaidFrom(u.paidFrom);const oldC=editItem.data.creditDebtId?String(editItem.data.creditDebtId):"";const newC=newP==="credit"?(String(u.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts)):"";const oldB=resolveBankAccountIdForExpense(oldP,editItem.data.bankAccountId,accounts,settings);const newB=resolveBankAccountIdForExpense(newP,u.bankAccountId,accounts,settings);if(newP==="credit"&&cardDebtsList(debts).length&&!newC){showToast("Select which credit card, or set a default in Settings \u2192 Defaults","error");return;}if(newP==="credit"&&!cardDebtsList(debts).length){showToast("Add a credit card debt first","error");return;}if(oldA>0&&oldP!=="none"&&!canReverseExpenseBalance(oldP,oldC,editItem.data.bankAccountId,accounts,debts,settings)){showToast("Can\u2019t save: this expense no longer has valid pay-from targets for balance moves. Delete it or fix Accounts/Debt first.","error");return;}applyRefund(oldP,oldA,oldC||undefined,oldB||undefined);applySpend(newP,newA,newC||undefined,newB||undefined);setExpenses(p=>p.map(x=>x.id===editItem.data.id?{...x,...u,paidFrom:newP,creditDebtId:newP==="credit"?newC:undefined,bankAccountId:newB||undefined}:x));showToast("✓ Expense updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Expense",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{const ob=resolveBankAccountIdForExpense(normalizePaidFrom(editItem.data.paidFrom),editItem.data.bankAccountId,accounts,settings);const oa=parseFloat(editItem.data.amount)||0;const opf=normalizePaidFrom(editItem.data.paidFrom);const ocbd=canReverseExpenseBalance(opf,editItem.data.creditDebtId,editItem.data.bankAccountId,accounts,debts,settings);if(applyRefund&&oa>0&&ocbd)applyRefund(opf,oa,editItem.data.creditDebtId||undefined,ob||undefined);else if(oa>0&&!ocbd)showToast("Deleted — balances unchanged (expense had invalid pay-from).","error");setExpenses(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} debts={debts} accounts={accounts} settings={settings} onSave={u=>{const ld=u.linkedDebtId&&String(u.linkedDebtId).trim()!==""?String(u.linkedDebtId):undefined;setBills(p=>p.map(x=>x.id===editItem.data.id?{...x,...u,linkedDebtId:ld}:x));showToast("✓ Bill updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setBills(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="debt"&&<EditModal key={editItem.data.id} item={editItem} categories={categories} household={household} debts={debts} bills={bills} accounts={accounts} settings={settings} onSave={u=>{const {addLoanBill,loanBillDueDate,billPaidFrom,billBankAccountId,...debtRest}=u;const did=editItem.data.id;const dk=u.debtKind==="credit_card"?"credit_card":"loan";const resetIntAcc=dk!=="credit_card"&&(parseFloat(debtRest.balance||0)!==parseFloat(editItem.data.balance||0)||String(debtRest.rate??"")!==String(editItem.data.rate??""));const becameLoan=dk!=="credit_card"&&editItem.data.debtKind==="credit_card";setDebts(p=>p.map(x=>String(x.id)!==String(did)?x:(()=>{const row={...x,...debtRest};if(resetIntAcc||becameLoan){row.loanInterestAsOfDate=todayStr();delete row.loanAccruedInterest;}return row;})()));setBills(p=>{if(dk==="credit_card")return p.filter(b=>String(b.linkedDebtId)!==String(did));const mp=parseFloat(u.minPayment||0);const want=addLoanBill!==false&&mp>0;if(want){let bpf=normalizePaidFrom(billPaidFrom||settings.defaultBillPaidFrom||"checking");if(bpf==="credit")bpf="checking";const bch=cashAccountsByKind(accounts,"checking");const bsv=cashAccountsByKind(accounts,"savings");let bbid="";if(bpf==="checking"){if(bch.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");else if(bch.length===1)bbid=String(bch[0].id);}else if(bpf==="savings"){if(bsv.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");else if(bsv.length===1)bbid=String(bsv[0].id);}const due=loanBillDueDate||todayStr();const payName=(u.name||"Loan")+" payment";const linked=p.filter(b=>String(b.linkedDebtId)===String(did));if(linked.length)return p.map(b=>String(b.linkedDebtId)!==String(did)?b:{...b,name:payName,amount:String(mp),dueDate:due,paidFrom:bpf,...(bbid?{bankAccountId:bbid}:{})});return[...p,{id:Date.now(),name:payName,amount:String(mp),dueDate:due,recurring:"Monthly",paid:false,autoPay:false,paidBy:"me",paidFrom:bpf,linkedDebtId:String(did),...(bbid?{bankAccountId:bbid}:{})}];}return p.filter(b=>String(b.linkedDebtId)!==String(did));});showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{const did=editItem.data.id;setDebts(p=>p.filter(x=>x.id!==did));setBills(p=>p.filter(x=>String(x.linkedDebtId)!==String(did)));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
