@@ -52,9 +52,26 @@ describe('supabase helpers', () => {
     const scope = getScope()
     localStorage.setItem(scope + 'expenses', JSON.stringify([{ id: 1 }]))
     localStorage.setItem('fv6:expenses', JSON.stringify([{ id: 2 }]))
+    localStorage.setItem(scope + 'recurring_last', '2024-01-01')
+    localStorage.setItem(scope + 'recurring_skip_err', '2024-01-01')
     clearScopedUserDataCache()
     expect(localStorage.getItem(scope + 'expenses')).toBeNull()
     expect(localStorage.getItem('fv6:expenses')).toBeNull()
+    expect(localStorage.getItem(scope + 'recurring_last')).toBeNull()
+    expect(localStorage.getItem(scope + 'recurring_skip_err')).toBeNull()
+  })
+
+  it('isSupabaseConfigured is false without url/key and true when both set', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', '')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', '')
+    vi.resetModules()
+    let { isSupabaseConfigured } = await import('./supabase.js')
+    expect(isSupabaseConfigured()).toBe(false)
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.resetModules()
+    ;({ isSupabaseConfigured } = await import('./supabase.js'))
+    expect(isSupabaseConfigured()).toBe(true)
   })
 
   it('supaFetch returns config error when env missing', async () => {

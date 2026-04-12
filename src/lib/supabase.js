@@ -20,6 +20,10 @@ export function triggerSessionExpired() {
 
 export { SUPA_URL, SUPA_KEY, VAPID_PUBLIC_KEY };
 
+export function isSupabaseConfigured() {
+  return !!(SUPA_URL && SUPA_KEY);
+}
+
 export async function supaFetch(path, opts = {}) {
   if (!SUPA_URL || !SUPA_KEY)
     return { data: null, error: { message: "Supabase is not configured (set VITE_SUPABASE_* in .env)" } };
@@ -181,11 +185,27 @@ export function clearScopedUserDataCache() {
         localStorage.removeItem("fv6:" + bare);
       } catch {}
     }
+    try {
+      localStorage.removeItem(scope + "recurring_last");
+    } catch {}
+    try {
+      localStorage.removeItem(scope + "recurring_skip_err");
+    } catch {}
   } catch {}
 }
 
 const _ssBuffer = {};
 let _lsQuotaWarned = false;
+/** @type {null | (() => void)} */
+let _lsQuotaHandler = null;
+
+export function setLocalStorageQuotaHandler(fn) {
+  _lsQuotaHandler = typeof fn === "function" ? fn : null;
+}
+
+export function resetLocalStorageQuotaWarned() {
+  _lsQuotaWarned = false;
+}
 
 /** Last `updated_at` we saw from Supabase per key — used so stale tabs cannot overwrite newer cloud rows. */
 const _lastKnownRowUpdatedAt = Object.create(null);
@@ -319,6 +339,9 @@ export async function ss(k, v) {
       console.warn(
         "[Trackfi] Storage is full — data may not save offline. Export JSON in Settings → Data, then free space or reset old data."
       );
+      try {
+        _lsQuotaHandler?.();
+      } catch {}
     }
   }
   if (uid && !isTrackfiDemoMode()) {

@@ -27,6 +27,9 @@ import {
   applyPulledUserDataRows,
   clearUserDataRowVersions,
   setUploadConflictHandler,
+  setLocalStorageQuotaHandler,
+  resetLocalStorageQuotaWarned,
+  isSupabaseConfigured,
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import { shiftRecurringBillDueDate } from "./lib/billDueDates.js";
@@ -4243,7 +4246,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   </div>);
 }
 
-function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo,backupExport,backupImport,onLoadDemo}){
+function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo,backupExport,backupImport,onLoadDemo,cloudSyncBump,supabaseConfigured,skipAuthMode,signedInForSync,netOnline}){
   const[nm,setNm]=useState(appName||"");
   const[showPIN,setShowPIN]=useState(false);
   const[showEmailChange,setShowEmailChange]=useState(false);
@@ -4372,6 +4375,46 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
       {Tog("showHealth","Health Score","A–F grade on your finances","🏆")}
       {Tog("showSavings","Savings Goals","Goal rings with projected dates","🎯")}
       {Tog("showForecast","Month Forecast","Burn rate + spending projection","🔮")}
+    </div>
+
+    {/* ── Cloud & device ─────────────────────────── */}
+    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <span style={{fontSize:18}}>☁️</span>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Cloud & device</div>
+      </div>
+      {(()=>{
+        void cloudSyncBump;
+        let lastSyncLabel="Not yet";
+        try{
+          const raw=localStorage.getItem("fv_last_sync");
+          const ms=raw?parseInt(raw,10):0;
+          if(ms>0)lastSyncLabel=new Date(ms).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"});
+        }catch{}
+        return(
+          <>
+            {!supabaseConfigured&&(
+              <div style={{fontSize:13,color:C.amber,background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:10,padding:"10px 12px",marginBottom:10,lineHeight:1.5}}>
+                Cloud sign-in and sync aren’t configured in this build (add <code style={{fontSize:11}}>VITE_SUPABASE_URL</code> and <code style={{fontSize:11}}>VITE_SUPABASE_ANON_KEY</code>, then rebuild). Your data stays in this browser only.
+              </div>
+            )}
+            {supabaseConfigured&&skipAuthMode&&!signedInForSync&&(
+              <div style={{fontSize:13,color:C.textMid,marginBottom:10,lineHeight:1.5}}>
+                You’re using <strong>Try without account</strong> — everything is stored in this browser only and does not sync to the cloud. Sign in from the splash screen to enable backup across devices.
+              </div>
+            )}
+            {supabaseConfigured&&signedInForSync&&(
+              <div style={{fontSize:13,color:C.textMid,marginBottom:10,lineHeight:1.45}}>
+                <strong>Last successful cloud refresh:</strong> {lastSyncLabel}
+                {netOnline===false&&<span style={{display:"block",marginTop:6,color:C.amber}}>You’re offline — edits stay on this device and sync when you reconnect.</span>}
+              </div>
+            )}
+            <div style={{fontSize:12,color:C.textLight,lineHeight:1.5}}>
+              <strong>Offline.</strong> Trackfi keeps working without internet. Data lives in this browser; when you’re signed in with cloud configured, changes upload when you’re back online.
+            </div>
+          </>
+        );
+      })()}
     </div>
 
     {/* ── 5. DATA ────────────────────────────────── */}
@@ -5156,6 +5199,11 @@ function AuthScreen({onAuth,onSkip}){
   if(confirmed)return(
     <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 50%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <style>{CSS}</style>
+      {!isSupabaseConfigured()&&(
+        <div role="alert" style={{position:"fixed",top:0,left:0,right:0,zIndex:50,background:"#fef3c7",borderBottom:"1px solid #f59e0b",color:"#92400e",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 14px",lineHeight:1.4}}>
+          Supabase isn’t configured in this build — use <strong>Try without account</strong> for local-only mode, or set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY and rebuild.
+        </div>
+      )}
       <div style={{background:"#fff",borderRadius:28,width:"100%",maxWidth:400,padding:"40px 32px",textAlign:"center",boxShadow:"0 32px 80px rgba(0,0,0,.35)"}}>
         <div style={{width:80,height:80,borderRadius:"50%",background:`linear-gradient(135deg,${C.accentBg},${C.purpleBg})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",fontSize:36}}>📧</div>
         <div style={{fontFamily:MF,fontSize:24,fontWeight:900,color:C.navy,marginBottom:8,letterSpacing:-.5}}>Check your inbox</div>
@@ -5185,6 +5233,11 @@ function AuthScreen({onAuth,onSkip}){
   return(
     <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 55%,${C.accent} 100%)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20,position:"relative",overflow:"hidden"}}>
       <style>{CSS}</style>
+      {!isSupabaseConfigured()&&(
+        <div role="alert" style={{position:"fixed",top:0,left:0,right:0,zIndex:50,background:"#fef3c7",borderBottom:"1px solid #f59e0b",color:"#92400e",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 14px",lineHeight:1.4}}>
+          Cloud login isn’t available in this build (missing Supabase env). Use <strong>Try without account</strong> below, or configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
+        </div>
+      )}
       {/* Background decoration */}
       <div style={{position:"absolute",top:-80,right:-80,width:300,height:300,borderRadius:"50%",background:"rgba(99,102,241,.12)",pointerEvents:"none"}}/>
       <div style={{position:"absolute",bottom:-60,left:-60,width:240,height:240,borderRadius:"50%",background:"rgba(13,148,136,.1)",pointerEvents:"none"}}/>
@@ -5550,7 +5603,7 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
     };
     const next=[entry,...settlements].slice(0,12);
     setSettlements(next);
-    showToast("✅ Settled up! Balances reset.");
+    showToast("✅ Settlement saved to history. Expenses and balances stay as-is until you edit them.");
   }
 
   function saveHhBudgets(next){setHhBudgets(next);}
@@ -5697,6 +5750,7 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
                   ))
                 ));
               })()}
+              <div style={{fontSize:11,color:"rgba(255,255,255,.65)",marginTop:10,lineHeight:1.45}}>This records who settled with whom; it does not change or delete expenses.</div>
               <button onClick={markSettled} style={{marginTop:12,width:"100%",background:"#6366F1",border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:MF}}>
                 Mark as Settled ✓
               </button>
@@ -5812,6 +5866,8 @@ function AppInner(){
   const[tab,setTabRaw]=useState("home");
   const[tabHistory,setTabHistory]=useState([]);
   function navTo(t){if(t===tab)return;setTabHistory(h=>[...h.slice(-19),tab]);setTabRaw(t);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));}
+  const navToRef=useRef(navTo);
+  navToRef.current=navTo;
   function goBack(){setTabHistory(h=>{if(!h.length)return h;const p=h[h.length-1];setTabRaw(p);requestAnimationFrame(()=>requestAnimationFrame(()=>{const el=document.getElementById("fv-scroll");if(el)el.scrollTop=0;}));return h.slice(0,-1);});}
   const canGoBack=tabHistory.length>0;
   const[rechartsMod,setRechartsMod]=useState(null);
@@ -5847,6 +5903,8 @@ function AppInner(){
   const[pwResetMode,setPwResetMode]=useState(()=>{try{return localStorage.getItem("fv_pw_reset")==="1";}catch{return false;}});
   const[newPw,setNewPw]=useState("");const[pwMsg,setPwMsg]=useState("");const[pwLoading,setPwLoading]=useState(false);
   const[skipAuth,setSkipAuth]=useState(()=>{try{return localStorage.getItem("fv_skip_auth")==="1";}catch{return false;}});
+  const[storageQuotaBlocked,setStorageQuotaBlocked]=useState(false);
+  const[cloudSyncMetaBump,setCloudSyncMetaBump]=useState(0);
   const[sessionExpired,setSessionExpired]=useState(false);
   useEffect(()=>{
     setSessionExpiredHandler(()=>{
@@ -5992,7 +6050,7 @@ function AppInner(){
         const res=await supaFetchUserDataRows(uid);
         if(gen!==remotePullGenRef.current)return;
         if(!res?.data||!Array.isArray(res.data)){
-          if(navigator.onLine&&!background)setSyncRecoverableError(true);
+          if(navigator.onLine)setSyncRecoverableError(true);
           if(!background)showToast("Sync failed — check your connection","error");
           return;
         }
@@ -6002,6 +6060,7 @@ function AppInner(){
           resetUserState({clearOnboarding:true,cloudLoadedRefTarget:true});
           setSyncRecoverableError(false);
           try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
+          setCloudSyncMetaBump(b=>b+1);
           return;
         }
         applyPulledUserDataRows(res.data);
@@ -6032,9 +6091,10 @@ function AppInner(){
           try{localStorage.setItem(scope+key,JSON.stringify(fullMap[key]));}catch{}
         }
         try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
+        setCloudSyncMetaBump(b=>b+1);
       }catch(e){
         console.error("loadFromSupabase error",e);
-        if(gen===remotePullGenRef.current&&navigator.onLine&&!background)setSyncRecoverableError(true);
+        if(gen===remotePullGenRef.current&&navigator.onLine)setSyncRecoverableError(true);
         if(!background)showToast("Sync failed — check your connection","error");
       }finally{
         if(!background&&gen===remotePullGenRef.current)setSyncing(false);
@@ -6071,6 +6131,8 @@ function AppInner(){
     try{localStorage.removeItem("fv_demo");}catch{}
     try{window._merchantCats={};}catch{}
     try{localStorage.removeItem("fv_account_rates");}catch{}
+    try{localStorage.removeItem("fv_last_sync");}catch{}
+    try{localStorage.removeItem("fv_bills_reset_month");}catch{}
     clearScopedUserDataCache();
     if(clearOnboarding){
       setOnboarded(false);
@@ -6103,6 +6165,8 @@ function AppInner(){
     try{localStorage.removeItem("fv_skip_auth");}catch{}
     setSkipAuth(false);
     setSyncRecoverableError(false);
+    setStorageQuotaBlocked(false);
+    resetLocalStorageQuotaWarned();
   }
   const[ready,setReady]=useState(false);
   useEffect(()=>{readyRef.current=ready;},[ready]);
@@ -6188,6 +6252,18 @@ function AppInner(){
   const showUndoToast=(msg,undoFn)=>showToast(msg,"error",{label:"Undo",fn:undoFn});
   const showToastRef=useRef(showToast);
   showToastRef.current=showToast;
+
+  useEffect(()=>{
+    setLocalStorageQuotaHandler(()=>{
+      setStorageQuotaBlocked(true);
+      showToastRef.current(
+        "Device storage is full — changes may not save. Export a backup from More → Export Data, then free browser storage.",
+        "error",
+        { label: "Open Export", fn: () => navToRef.current?.("export") }
+      );
+    });
+    return()=>setLocalStorageQuotaHandler(null);
+  },[]);
 
   useEffect(()=>{
     setUploadConflictHandler(()=>{
@@ -7125,8 +7201,9 @@ function AppInner(){
     <div style={{flex:1,minHeight:0,width:"100%",maxWidth:640,margin:"0 auto",background:darkMode?C.navy:C.bg,fontFamily:IF,display:"flex",flexDirection:"column",position:"relative",overflow:"hidden",boxSizing:"border-box",height:"100%",maxHeight:"100dvh"}}>
       <style>{CSS}</style>
       <div id="fv-scroll" style={{flex:1,minHeight:0,minWidth:0,width:"100%",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",padding:"max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-left)) max(110px, calc(88px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-right))",boxSizing:"border-box"}}>
-        {!isOnline&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:"#1e293b",color:"#f1f5f9",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35}}>📡 No internet — changes sync when you’re back online</div>}
-        {syncRecoverableError&&isOnline&&authSession?.user?.id&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.red,border:`1px solid ${C.redMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Couldn’t refresh data from the cloud. You’re still using what’s on this device.</span><button type="button" className="ba" onClick={()=>{void loadFromSupabase(authSession);}} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Try again</button></div>}
+        {!isOnline&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:"#1e293b",color:"#f1f5f9",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35}}>{authSession?.user?.id&&isSupabaseConfigured()?"📡 No internet — edits stay on this device and sync when you’re back online.":skipAuth?"📡 No internet — you can keep editing; everything stays in this browser.":"📡 No internet — you can keep editing on this device."}</div>}
+        {storageQuotaBlocked&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.amber,border:`1px solid ${C.amberMid}`,color:"#78350f",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Storage full — this browser can’t save more data. Export a backup, then free space or clear old data.</span><button type="button" className="ba" onClick={()=>navTo("export")} style={{background:"rgba(255,255,255,.35)",border:"1px solid rgba(120,53,15,.25)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Export</button><button type="button" className="ba" onClick={()=>{setStorageQuotaBlocked(false);resetLocalStorageQuotaWarned();}} style={{background:"transparent",border:"1px solid rgba(120,53,15,.35)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Dismiss</button></div>}
+        {syncRecoverableError&&isOnline&&authSession?.user?.id&&isSupabaseConfigured()&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.red,border:`1px solid ${C.redMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Couldn’t refresh data from the cloud. You’re still using what’s on this device.</span><button type="button" className="ba" onClick={()=>{void loadFromSupabase(authSession);}} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Try again</button></div>}
         {["spend","home","bills"].includes(tab)&&<button className="ba" onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:16,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
@@ -7783,7 +7860,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast} settlements={settlements} setSettlements={setSettlements} hhBudgets={hhBudgets} setHhBudgets={setHhBudgets}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This will permanently delete all your expenses, bills, debts, goals and settings — including synced cloud data. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast} onLoadDemo={isDemoMode?undefined:requestLoadDemo}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This removes expenses, bills, debts, goals, household, recurring, notifications, chart history, categories, and settings from this device, and deletes synced cloud rows for this account. Your session stays signed in; PIN and other browser site data outside cleared keys are unchanged. Export JSON under Data first if you need a backup. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}setSyncRecoverableError(false);setStorageQuotaBlocked(false);resetLocalStorageQuotaWarned();const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast} onLoadDemo={isDemoMode?undefined:requestLoadDemo} cloudSyncBump={cloudSyncMetaBump} supabaseConfigured={isSupabaseConfigured()} skipAuthMode={skipAuth} signedInForSync={!!authSession?.user?.id} netOnline={isOnline}/>}
 
         {tab==="notifs"&&(
           <div className="fu">

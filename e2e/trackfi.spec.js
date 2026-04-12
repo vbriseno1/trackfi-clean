@@ -57,6 +57,16 @@ test.describe('Trackfi release pass', () => {
     await expect(page.getByText('Dark Mode').first()).toBeVisible()
   })
 
+  test('Settings shows Cloud & device section', async ({ page }) => {
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await expect(page.getByText('Cloud & device')).toBeVisible()
+    await expect(page.getByText(/Offline/i).first()).toBeVisible()
+  })
+
   test('More → Accounts & Income', async ({ page }) => {
     await page.goto('/')
     await expectHomeLoaded(page)
