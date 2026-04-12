@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 
 /**
  * Offline, post-onboarding shell. Avoids auth screen and PIN.
+ * No real Supabase session — cloud sync paths are not covered here.
  */
 test.beforeEach(async ({ context }) => {
   await context.addInitScript(() => {
@@ -65,6 +66,18 @@ test.describe('Trackfi release pass', () => {
     await page.getByRole('button', { name: 'Settings' }).click()
     await expect(page.getByText('Cloud & device')).toBeVisible()
     await expect(page.getByText(/Offline/i).first()).toBeVisible()
+  })
+
+  test('More → Household / Shared and Settle Up tab', async ({ page }) => {
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'More' }).click()
+    await expect(page.getByText('All your financial tools')).toBeVisible()
+    await page.getByRole('button', { name: 'Household / Shared' }).click()
+    await expect(page.getByText('My Finances').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Settle Up' }).click()
+    await expect(page.getByText('Current Balances')).toBeVisible()
   })
 
   test('More → Accounts & Income', async ({ page }) => {

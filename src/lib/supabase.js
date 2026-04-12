@@ -207,6 +207,23 @@ export function resetLocalStorageQuotaWarned() {
   _lsQuotaWarned = false;
 }
 
+/** @type {null | (() => void)} */
+let _lastSyncUiBumpHandler = null;
+
+/** Optional: bump React/UI when a successful upload updates `fv_last_sync` (e.g. Settings “last cloud refresh”). */
+export function setLastSyncUiBumpHandler(fn) {
+  _lastSyncUiBumpHandler = typeof fn === "function" ? fn : null;
+}
+
+function touchLastSyncTimestamp() {
+  try {
+    localStorage.setItem("fv_last_sync", String(Date.now()));
+  } catch {}
+  try {
+    _lastSyncUiBumpHandler?.();
+  } catch {}
+}
+
 /** Last `updated_at` we saw from Supabase per key — used so stale tabs cannot overwrite newer cloud rows. */
 const _lastKnownRowUpdatedAt = Object.create(null);
 
@@ -263,9 +280,7 @@ async function _flushKey(uid, bare, v) {
       if (Array.isArray(raw)) {
         if (raw.length === 1 && raw[0]?.updated_at != null) {
           _lastKnownRowUpdatedAt[bare] = String(raw[0].updated_at);
-          try {
-            localStorage.setItem("fv_last_sync", String(Date.now()));
-          } catch {}
+          touchLastSyncTimestamp();
           return { ok: true };
         }
         if (raw.length === 0) {
@@ -275,9 +290,7 @@ async function _flushKey(uid, bare, v) {
         return { error: true };
       }
       _lastKnownRowUpdatedAt[bare] = nextUpdatedAt;
-      try {
-        localStorage.setItem("fv_last_sync", String(Date.now()));
-      } catch {}
+      touchLastSyncTimestamp();
       return { ok: true };
     }
     const r2 = await supaFetch("/rest/v1/user_data?on_conflict=user_id,key", {
@@ -289,9 +302,7 @@ async function _flushKey(uid, bare, v) {
     const rows2 = Array.isArray(r2.data) ? r2.data : [];
     if (rows2.length === 1 && rows2[0]?.updated_at != null) _lastKnownRowUpdatedAt[bare] = String(rows2[0].updated_at);
     else _lastKnownRowUpdatedAt[bare] = nextUpdatedAt;
-    try {
-      localStorage.setItem("fv_last_sync", String(Date.now()));
-    } catch {}
+    touchLastSyncTimestamp();
     return { ok: true };
   } catch {
     return { error: true };

@@ -30,6 +30,7 @@ import {
   setLocalStorageQuotaHandler,
   resetLocalStorageQuotaWarned,
   isSupabaseConfigured,
+  setLastSyncUiBumpHandler,
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import { shiftRecurringBillDueDate } from "./lib/billDueDates.js";
@@ -6263,6 +6264,11 @@ function AppInner(){
       );
     });
     return()=>setLocalStorageQuotaHandler(null);
+  },[]);
+
+  useEffect(()=>{
+    setLastSyncUiBumpHandler(()=>setCloudSyncMetaBump(b=>b+1));
+    return()=>setLastSyncUiBumpHandler(null);
   },[]);
 
   useEffect(()=>{
