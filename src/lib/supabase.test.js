@@ -100,6 +100,7 @@ describe('supabase helpers', () => {
       'https://example.supabase.co/rest/v1/user_data?select=*',
       expect.objectContaining({
         cache: 'no-store',
+        signal: expect.any(AbortSignal),
         headers: expect.objectContaining({
           apikey: 'anon',
           'Content-Type': 'application/json',
@@ -108,6 +109,24 @@ describe('supabase helpers', () => {
     )
     expect(r.error).toBeNull()
     expect(r.data).toEqual([{ id: 1 }])
+  })
+
+  it('supaFetch returns timeout message when fetch is aborted', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    vi.resetModules()
+    const { supaFetch } = await import('./supabase.js')
+    globalThis.fetch = vi.fn((_url, init) => {
+      return new Promise((_res, rej) => {
+        init.signal.addEventListener('abort', () => {
+          rej(Object.assign(new Error('Aborted'), { name: 'AbortError' }))
+        })
+      })
+    })
+    const r = await supaFetch('/slow', { timeoutMs: 1 })
+    expect(r.data).toBeNull()
+    expect(r.error?.message).toMatch(/timed out/i)
   })
 
   it('supaFetch uses no-store by default for caching', async () => {

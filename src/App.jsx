@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import * as Sentry from '@sentry/react';
 import { LayoutDashboard, Wallet, CalendarClock, CreditCard, Target, PiggyBank,
   Plus, Trash2, CheckCircle2, Circle, TrendingUp, AlertCircle, X, Scan,
   Calculator, Edit3, Save, MessageCircle, Send, DollarSign,
@@ -34,6 +35,8 @@ import {
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import { shiftRecurringBillDueDate } from "./lib/billDueDates.js";
+import BankImportModal from "./modals/BankImportModal.jsx";
+import ExportModal from "./modals/ExportModal.jsx";
 
 /** Prefer `updated_at` for versioned sync; fall back if the column isn’t exposed (avoids hard sync failure). */
 async function supaFetchUserDataRows(uid) {
@@ -44,8 +47,25 @@ async function supaFetchUserDataRows(uid) {
   if (!primary.error && Array.isArray(primary.data)) return primary;
   return supaFetch(`/rest/v1/user_data?user_id=eq.${q}&select=key,value`);
 }
-import BankImportModal from "./modals/BankImportModal.jsx";
-import ExportModal from "./modals/ExportModal.jsx";
+
+/** Bounded wait so a stuck auth refresh cannot hang the app indefinitely */
+async function trackfiAuthRefreshFetch(refreshToken){
+  if(!SUPA_URL||!SUPA_KEY||!refreshToken)return null;
+  const ac=new AbortController();
+  const tid=setTimeout(()=>ac.abort(),12000);
+  try{
+    return await fetch(SUPA_URL+"/auth/v1/token?grant_type=refresh_token",{
+      method:"POST",
+      headers:{"Content-Type":"application/json",apikey:SUPA_KEY},
+      body:JSON.stringify({refresh_token:refreshToken}),
+      signal:ac.signal,
+    });
+  }catch{
+    return null;
+  }finally{
+    clearTimeout(tid);
+  }
+}
 
 // ── Confetti burst — pure canvas, no library ──────────────────────────────────
 function launchConfetti(){
@@ -871,16 +891,24 @@ function RechartsReady({minHeight,render}){
 class ErrorBoundary extends React.Component {
   constructor(p){super(p);this.state={err:null};}
   static getDerivedStateFromError(e){return{err:e};}
-  componentDidCatch(e,info){console.error('Trackfi Error:',e?.message,info);}
+  componentDidCatch(e,info){
+    console.error("Trackfi Error:",e?.message,info);
+    if(import.meta.env.VITE_SENTRY_DSN){
+      try{
+        Sentry.captureException(e,{contexts:{react:{componentStack:info?.componentStack}}});
+      }catch{}
+    }
+  }
   render(){
     if(this.state.err) return(
-      <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} role="alert">
         <div style={{background:C.surface,borderRadius:18,padding:28,maxWidth:380,width:"100%",textAlign:"center",boxShadow:"0 4px 24px rgba(0,0,0,.1)"}}>
-          <div style={{fontSize:40,marginBottom:12}}>⚠️</div>
+          <div style={{fontSize:40,marginBottom:12}} aria-hidden>⚠️</div>
           <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>Something went wrong</div>
-          <div style={{fontSize:13,color:C.textLight,marginBottom:20,lineHeight:1.5}}>{this.state.err?.message||"Unexpected error. Your data is safe."}</div>
-          <button onClick={()=>window.location.reload()} style={{background:C.accent,border:"none",borderRadius:10,padding:"12px 24px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",marginBottom:8}}>Reload App</button>
-          <div style={{fontSize:11,color:C.textLight}}>Data stored separately — won't be affected</div>
+          <div style={{fontSize:13,color:C.textLight,marginBottom:20,lineHeight:1.5}}>{this.state.err?.message||"Unexpected error. Your data in this browser is still saved locally."}</div>
+          <button type="button" onClick={()=>this.setState({err:null})} style={{background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 24px",color:C.text,fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",marginBottom:8}}>Try again</button>
+          <button type="button" onClick={()=>window.location.reload()} style={{background:C.accent,border:"none",borderRadius:10,padding:"12px 24px",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",marginBottom:8}}>Reload app</button>
+          <div style={{fontSize:11,color:C.textLight}}>If this keeps happening, export a backup from Settings before reloading.</div>
         </div>
       </div>
     );
@@ -5929,10 +5957,8 @@ function AppInner(){
       try{
         const s=(()=>{try{return JSON.parse(localStorage.getItem("fv_session")||"null");}catch{return null;}})();
         if(!s?.refresh_token)return;
-        const res=await fetch(SUPA_URL+"/auth/v1/token?grant_type=refresh_token",{
-          method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
-          body:JSON.stringify({refresh_token:s.refresh_token})
-        });
+        const res=await trackfiAuthRefreshFetch(s.refresh_token);
+        if(!res)return;
         const r=await res.json().catch(()=>({}));
         if(r.access_token){
           const newSess={...s,...r};
@@ -5993,12 +6019,9 @@ function AppInner(){
     async function tryRefresh(session){
       if(!session?.refresh_token) return session;
       try{
-        const res=await fetch(SUPA_URL+"/auth/v1/token?grant_type=refresh_token",{
-          method:"POST",
-          headers:{"Content-Type":"application/json","apikey":SUPA_KEY},
-          body:JSON.stringify({refresh_token:session.refresh_token})
-        });
-        const r=await res.json();
+        const res=await trackfiAuthRefreshFetch(session.refresh_token);
+        if(!res)return session;
+        const r=await res.json().catch(()=>({}));
         if(r.access_token){
           const newSess={...session,...r};
           try{localStorage.setItem("fv_session",JSON.stringify(newSess));}catch{}
@@ -7995,7 +8018,7 @@ function AppInner(){
           <button onClick={()=>setMonthlySummary(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.teal})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer"}}>Got it 👍</button>
         </div>
       </div>}
-      {toast&&<div role="status" aria-live="polite" aria-atomic="true" style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 18px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:10,maxWidth:340,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}} onClick={()=>setToast(null)}>
+      {toast&&<div role="status" aria-live={toast.type==="error"?"assertive":"polite"} aria-atomic="true" style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 18px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:10,maxWidth:340,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}} onClick={()=>setToast(null)}>
         <span>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</span>
         {toast.action&&<button onClick={e=>{e.stopPropagation();toast.action.fn();setToast(null);}} style={{background:"rgba(255,255,255,.22)",border:"none",borderRadius:8,padding:"3px 10px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0,marginLeft:4}}>{toast.action.label}</button>}
       </div>}

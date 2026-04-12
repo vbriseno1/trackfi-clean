@@ -41,6 +41,10 @@ if (sentryDsn) {
       return event
     },
   })
+  window.addEventListener('unhandledrejection', (event) => {
+    const r = event.reason
+    Sentry.captureException(r instanceof Error ? r : new Error(typeof r === 'string' ? r : 'Unhandled rejection'))
+  })
   // Call from browser console so Sentry receives a real event (Issues stays empty until then).
   window.__TRACKFI_SENTRY_TEST__ = () => {
     Sentry.captureException(new Error('Trackfi Sentry test'))
@@ -56,9 +60,54 @@ const tree = (
   </React.StrictMode>
 )
 
+function SentryShellFallback () {
+  return (
+    <div
+      role="alert"
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        background: '#0f172a',
+        color: '#f1f5f9',
+        fontFamily: 'system-ui, sans-serif',
+        textAlign: 'center',
+        boxSizing: 'border-box',
+      }}
+    >
+      <div style={{ maxWidth: 360 }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }} aria-hidden>⚠️</div>
+        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 10 }}>Something went wrong</div>
+        <div style={{ fontSize: 14, opacity: 0.85, lineHeight: 1.5, marginBottom: 20 }}>
+          The app hit an unexpected error. Your data in this browser is usually still safe — try reloading.
+        </div>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          style={{
+            width: '100%',
+            padding: '12px 16px',
+            borderRadius: 10,
+            border: 'none',
+            background: 'linear-gradient(135deg,#6366f1,#0d9488)',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: 15,
+            cursor: 'pointer',
+          }}
+        >
+          Reload app
+        </button>
+      </div>
+    </div>
+  )
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   sentryDsn ? (
-    <Sentry.ErrorBoundary fallback={<p style={{ padding: 24, fontFamily: 'system-ui' }}>Something went wrong.</p>}>
+    <Sentry.ErrorBoundary fallback={<SentryShellFallback />}>
       {tree}
     </Sentry.ErrorBoundary>
   ) : (

@@ -27,6 +27,8 @@ export function isSupabaseConfigured() {
 export async function supaFetch(path, opts = {}) {
   if (!SUPA_URL || !SUPA_KEY)
     return { data: null, error: { message: "Supabase is not configured (set VITE_SUPABASE_* in .env)" } };
+  const timeoutMs = typeof opts.timeoutMs === "number" ? opts.timeoutMs : 28000;
+  const { timeoutMs: _t, signal: userSignal, ...restOpts } = opts;
   const session = (() => {
     try {
       return JSON.parse(localStorage.getItem("fv_session") || "null");
@@ -39,20 +41,46 @@ export async function supaFetch(path, opts = {}) {
     "Content-Type": "application/json",
     apikey: SUPA_KEY,
     ...(token ? { Authorization: "Bearer " + token } : {}),
-    ...(opts.headers || {}),
+    ...(restOpts.headers || {}),
   };
-  const res = await fetch(SUPA_URL + path, {
-    ...opts,
-    cache: opts.cache ?? "no-store",
-    headers,
-  });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({ message: "Request failed" }));
-    if (res.status === 401) _onSessionExpired?.();
-    return { data: null, error: e };
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+  const onUserAbort = () => ctrl.abort();
+  if (userSignal) {
+    if (userSignal.aborted) {
+      clearTimeout(tid);
+      return { data: null, error: { message: "Cancelled" } };
+    }
+    userSignal.addEventListener("abort", onUserAbort, { once: true });
   }
-  const data = await res.json().catch(() => ({}));
-  return { data, error: null };
+  try {
+    const res = await fetch(SUPA_URL + path, {
+      ...restOpts,
+      cache: restOpts.cache ?? "no-store",
+      headers,
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ message: "Request failed" }));
+      if (res.status === 401) _onSessionExpired?.();
+      return { data: null, error: e };
+    }
+    const data = await res.json().catch(() => ({}));
+    return { data, error: null };
+  } catch (e) {
+    const aborted = e?.name === "AbortError" || ctrl.signal.aborted;
+    if (aborted) {
+      const cancelled = userSignal?.aborted === true;
+      return {
+        data: null,
+        error: { message: cancelled ? "Cancelled" : "Request timed out — check your connection" },
+      };
+    }
+    return { data: null, error: { message: e?.message || "Network error" } };
+  } finally {
+    clearTimeout(tid);
+    if (userSignal) userSignal.removeEventListener("abort", onUserAbort);
+  }
 }
 
 export async function signUp(email, password) {
