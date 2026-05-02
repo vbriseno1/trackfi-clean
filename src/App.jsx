@@ -7160,23 +7160,31 @@ function AppInner(){
   }
 
   function backupExport(){
-    const d={
-      exportedAt:new Date().toISOString(),
-      version:"3.2",
-      ...(typeof window!=="undefined"&&window.__trackfiDemoInfo?.modelVersion?{demoModelVersion:window.__trackfiDemoInfo.modelVersion}:{}),
-      appName,greetName,onboarded,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,
-      categories,settings,calColors,dashConfig,household,recurrings,settlements,hhBudgets,nwGoal,subDismissed,
-      profCategory,profSub,tradingAccount,accountRates,balHist,notifs,
-      merchantCats:typeof window!=="undefined"?window._merchantCats:void 0
-    };
-    const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});
-    const u=URL.createObjectURL(b);
-    const a=document.createElement("a");
-    a.href=u;
-    a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;
-    a.click();
-    URL.revokeObjectURL(u);
-    showToast("✓ Full backup downloaded");
+    try{
+      const d={
+        exportedAt:new Date().toISOString(),
+        version:"3.2",
+        ...(typeof window!=="undefined"&&window.__trackfiDemoInfo?.modelVersion?{demoModelVersion:window.__trackfiDemoInfo.modelVersion}:{}),
+        appName,greetName,onboarded,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,
+        categories,settings,calColors,dashConfig,household,recurrings,settlements,hhBudgets,nwGoal,subDismissed,
+        profCategory,profSub,tradingAccount,accountRates,balHist,notifs,
+        merchantCats:typeof window!=="undefined"?window._merchantCats:void 0
+      };
+      const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});
+      const u=URL.createObjectURL(b);
+      const a=document.createElement("a");
+      a.href=u;
+      a.download=`${(appName||"finances").replace(/\s+/g,"-")}-backup.json`;
+      a.rel="noopener";
+      a.style.display="none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{try{URL.revokeObjectURL(u);a.remove();}catch{}},4000);
+      showToast("✓ Full backup downloaded");
+    }catch(e){
+      console.error("Backup export failed",e);
+      showToast("Backup export failed — try again after refreshing.","error");
+    }
   }
   async function backupImport(file){
     try{

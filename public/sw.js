@@ -2,7 +2,7 @@
 // Caches the app shell for offline use and fast loads
 
 // Bump when changing caching rules so clients drop old caches on activate.
-const CACHE_NAME = 'trackfi-v4';
+const CACHE_NAME = 'trackfi-v5';
 const SHELL = [
   '/',
   '/index.html',
@@ -65,9 +65,9 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Cache-first for static assets (JS, CSS, fonts, images)
+  // Cache-first for static fonts/images. JS/CSS chunks are handled above as network-first.
   if (
-    url.pathname.match(/\.(js|css|woff2?|ttf|png|svg|ico)$/) ||
+    url.pathname.match(/\.(woff2?|ttf|png|svg|ico)$/) ||
     url.hostname.includes('fonts.googleapis.com') ||
     url.hostname.includes('fonts.gstatic.com')
   ) {

@@ -319,6 +319,7 @@ async function _flushKey(uid, bare, v) {
         `/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&key=eq.${encodeURIComponent(bare)}&updated_at=eq.${encodeURIComponent(lastTs)}`,
         {
           method: "PATCH",
+          keepalive: true,
           headers: { "Content-Type": "application/json", Prefer: "return=representation" },
           body: JSON.stringify({ value: v, updated_at: nextUpdatedAt }),
         }
@@ -343,6 +344,7 @@ async function _flushKey(uid, bare, v) {
     }
     const r2 = await supaFetch("/rest/v1/user_data?on_conflict=user_id,key", {
       method: "POST",
+      keepalive: true,
       headers: { Prefer: "resolution=merge-duplicates,return=representation" },
       body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: nextUpdatedAt }),
     });
