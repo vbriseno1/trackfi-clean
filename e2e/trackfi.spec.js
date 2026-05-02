@@ -93,6 +93,27 @@ test.describe('Trackfi release pass', () => {
     await expect(page.getByText('$4.75').first()).toBeVisible()
   })
 
+  test('core flow: edit and delete an expense', async ({ page }) => {
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'Log expense' }).click()
+    await page.getByLabel('Name').fill('E2E Edit Coffee')
+    await page.getByLabel('Amount ($)').fill('5.25')
+    await page.getByLabel('Category').selectOption('Coffee')
+    await page.getByRole('button', { name: 'Add Expense' }).click()
+    await page.getByRole('button', { name: 'Spending' }).click()
+    await page.getByText('E2E Edit Coffee').click()
+    await expect(page.getByText('Edit Expense')).toBeVisible()
+    await page.getByLabel('Name').fill('E2E Edited Coffee')
+    await page.getByRole('button', { name: 'Save Changes' }).click()
+    await expect(page.getByText('E2E Edited Coffee')).toBeVisible()
+    await page.getByText('E2E Edited Coffee').click()
+    await page.getByRole('button', { name: /Delete/i }).click()
+    await page.getByRole('button', { name: 'Delete' }).click()
+    await expect(page.getByText('E2E Edited Coffee')).toHaveCount(0)
+  })
+
   test('core flow: add a bill and mark it paid', async ({ page }) => {
     await page.goto('/')
     await expectHomeLoaded(page)
@@ -112,6 +133,28 @@ test.describe('Trackfi release pass', () => {
     await expect(page.getByText(/Paid — E2E Internet/i).first()).toBeVisible({ timeout: 10_000 })
     await page.getByRole('button', { name: /Paid History/ }).click()
     await expect(page.getByText('E2E Internet')).toBeVisible()
+  })
+
+  test('core flow: add debt with linked bill and mark payment paid', async ({ page }) => {
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('button', { name: 'Debt Tracker' }).click()
+    await page.getByRole('button', { name: /Add Debt/i }).click()
+    await expect(page.getByText('Add Debt')).toBeVisible()
+    await page.getByLabel('Name').fill('E2E Car Loan')
+    await page.getByLabel('Balance ($)').fill('1000')
+    await page.getByLabel('Original ($)').fill('1000')
+    await page.getByLabel('Rate %').fill('6')
+    await page.getByLabel('Min Payment ($)').fill('100')
+    await page.getByRole('button', { name: 'Track Debt' }).click()
+    await expect(page.getByText('E2E Car Loan')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Bills' }).click()
+    await expect(page.getByText('E2E Car Loan payment')).toBeVisible()
+    await page.getByRole('button', { name: 'Mark E2E Car Loan payment paid' }).click()
+    await expect(page.getByText(/Paid — E2E Car Loan payment/i).first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('AI Logger tab', async ({ page }) => {
@@ -241,6 +284,21 @@ test.describe('Trackfi release pass', () => {
     await page.getByRole('button', { name: 'Export JSON' }).click()
     const download = await downloadPromise
     expect(download.suggestedFilename()).toMatch(/backup\.json$/)
+  })
+
+  test('Settings reset all data can be cancelled and confirmed', async ({ page }) => {
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await page.getByRole('button', { name: 'Reset All Data' }).click()
+    await expect(page.getByText('Reset All Data')).toBeVisible()
+    await page.getByRole('button', { name: 'Cancel' }).click()
+    await expect(page.getByText('Profile').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Reset All Data' }).click()
+    await page.getByRole('button', { name: 'Delete' }).click()
+    await expect(page.getByRole('button', { name: /Get Started/i })).toBeVisible({ timeout: 15_000 })
   })
 
   test('Bank Import path from More', async ({ page }) => {

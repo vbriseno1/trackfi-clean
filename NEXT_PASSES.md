@@ -22,10 +22,11 @@
 - Review pagehide/beforeunload sync behavior after `keepalive` changes.
 
 ## Pass 4: Main Money Flows
-- Add e2e coverage for adding debt.
-- Add e2e coverage for linked loan bill creation and payment.
-- Add e2e coverage for editing and deleting an expense/bill.
-- Add e2e coverage for reset data cancel/confirm.
+- Done: Add e2e coverage for adding debt.
+- Done: Add e2e coverage for linked loan bill creation and payment.
+- Done: Add e2e coverage for editing and deleting an expense.
+- Done: Add e2e coverage for reset data cancel/confirm.
+- Next: Add bill edit/delete coverage with paid-bill balance reversal assertions.
 
 ## Pass 5: PWA and Update UX
 - Add "new version available, reload" UX when the service worker updates.
