@@ -6,12 +6,14 @@
 - Added Settings backup download coverage.
 - Mirrored key flows into the release e2e runner.
 - Added accessible labels for shared form fields and bill paid/unpaid controls.
+- Added fresh onboarding, try-without-account, and seeded PIN unlock coverage.
+- Moved auth resend/recover requests onto bounded timeout handling.
 
 ## Pass 2: Auth, Onboarding, PIN
-- Add e2e coverage for first-run onboarding completion.
-- Add e2e coverage for "Try without account" entering the app immediately.
-- Add PIN setup and unlock coverage, or a test-only way to seed a valid PIN hash.
-- Make auth resend/recover requests use the same bounded timeout behavior as sign in/sign up.
+- Done: Add e2e coverage for first-run onboarding completion.
+- Done: Add e2e coverage for "Try without account" entering the app immediately.
+- Done: Add seeded PIN unlock coverage.
+- Done: Make auth resend/recover requests use the same bounded timeout behavior as sign in/sign up.
 
 ## Pass 3: Sync and Save Confidence
 - Add visible saved/syncing/synced/offline states near Settings or account status.

@@ -4,15 +4,20 @@ import { test, expect } from '@playwright/test'
  * Offline, post-onboarding shell. Avoids auth screen and PIN.
  * No real Supabase session — cloud sync paths are not covered here.
  */
-test.beforeEach(async ({ context }) => {
-  await context.addInitScript(() => {
+const PIN_1234_HASH = 'ccdf7233fe3d5f2964fc6e67635bd6119e822f998128017239377d6c82402e6e'
+
+test.beforeEach(async ({ context }, testInfo) => {
+  if (testInfo.title.includes('[fresh]')) return
+  const pinHash = testInfo.title.includes('[pin]') ? PIN_1234_HASH : null
+  await context.addInitScript((hash) => {
     localStorage.setItem('fv_skip_auth', '1')
     localStorage.setItem('fv_onboarded', '1')
-    localStorage.removeItem('fv_pin_hash')
+    if (hash) localStorage.setItem('fv_pin_hash', hash)
+    else localStorage.removeItem('fv_pin_hash')
     localStorage.removeItem('fv_session')
     localStorage.removeItem('fv_pw_reset')
     localStorage.removeItem('fv_demo')
-  })
+  }, pinHash)
 })
 
 async function expectHomeLoaded(page) {
@@ -26,6 +31,35 @@ function futureDate(days = 3) {
 }
 
 test.describe('Trackfi release pass', () => {
+  test('[fresh] Try without account opens onboarding', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByText('Trackfi').first()).toBeVisible({ timeout: 45_000 })
+    await page.getByRole('button', { name: /Try without account/i }).click()
+    await expect(page.getByText(/The finance app that actually works/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: /Get Started/i })).toBeVisible()
+  })
+
+  test('[fresh] onboarding can complete with skipped financial details', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Try without account/i }).click()
+    await page.getByRole('button', { name: /Get Started/i }).click()
+    await page.getByPlaceholder('Your name').fill('E2E User')
+    await page.getByRole('button', { name: /Continue/i }).click()
+    await page.getByRole('button', { name: /Just me/i }).click()
+    await page.getByRole('button', { name: /Continue/i }).click()
+    await page.getByRole('button', { name: /Skip for now/i }).click()
+    await page.getByRole('button', { name: /Skip for now/i }).click()
+    await expectHomeLoaded(page)
+  })
+
+  test('[pin] PIN lock unlocks with a seeded valid PIN', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByText('Enter your PIN to continue')).toBeVisible({ timeout: 45_000 })
+    await page.locator('input[type="password"]').fill('1234')
+    await page.getByRole('button', { name: 'Unlock' }).click()
+    await expectHomeLoaded(page)
+  })
+
   test('home loads after boot', async ({ page }) => {
     await page.goto('/')
     await expectHomeLoaded(page)

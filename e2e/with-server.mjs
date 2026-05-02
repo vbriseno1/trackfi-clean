@@ -52,14 +52,6 @@ try {
   await waitForOk(`${origin}/`)
   const browser = await chromium.launch({ headless: true })
   const context = await browser.newContext({ baseURL: origin })
-  await context.addInitScript(() => {
-    localStorage.setItem('fv_skip_auth', '1')
-    localStorage.setItem('fv_onboarded', '1')
-    localStorage.removeItem('fv_pin_hash')
-    localStorage.removeItem('fv_session')
-    localStorage.removeItem('fv_pw_reset')
-    localStorage.removeItem('fv_demo')
-  })
   const page = await context.newPage()
   try {
     await runReleaseChecks(page)

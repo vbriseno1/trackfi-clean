@@ -5187,6 +5187,28 @@ function AuthScreen({onAuth,onSkip}){
   useEffect(()=>()=>clearInterval(cooldownRef.current),[]);
   const passStrength=pass.length===0?0:pass.length<6?1:pass.length<10&&!/[^a-zA-Z0-9]/.test(pass)?2:3;
   const strengthLabel=["","Weak","Fair","Strong"];const strengthColor=["",C.red,C.amber,C.green];
+  async function resendConfirmation(){
+    if(!isSupabaseConfigured()){setErr("Can't resend — Supabase is not configured.");return;}
+    const r=await supaFetch("/auth/v1/resend",{
+      method:"POST",
+      body:JSON.stringify({type:"signup",email:email.trim()}),
+      timeoutMs:20000,
+    });
+    if(r.error){setErr(r.error.message||"Couldn't resend — try signing up again.");return;}
+    setErr("Confirmation email resent — check your inbox.");
+  }
+  async function sendPasswordReset(){
+    if(!email.trim()){setErr("Enter your email first.");return;}
+    if(!isSupabaseConfigured()){setErr("Account features require Supabase — use offline mode instead.");return;}
+    const redirectTo=window.location.origin+window.location.pathname;
+    const r=await supaFetch("/auth/v1/recover",{
+      method:"POST",
+      body:JSON.stringify({email:email.trim(),options:{emailRedirectTo:redirectTo}}),
+      timeoutMs:20000,
+    });
+    if(r.error){setErr(r.error.message||"Couldn't send reset link — check your email and try again.");return;}
+    setErr("✓ Reset link sent to "+email+" — check your inbox.");
+  }
   async function submit(){
     if(cooldown>0){return;}
     if(!email.trim()||!pass.trim()){setErr("Please fill in all fields.");return;}
@@ -5248,13 +5270,7 @@ function AuthScreen({onAuth,onSkip}){
           <div>3. Come back here and sign in</div>
         </div>
         <button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12,letterSpacing:.2}}>✓ I confirmed — Sign In</button>
-        <button onClick={async()=>{
-          if(!SUPA_URL||!SUPA_KEY){setErr("Can't resend — Supabase is not configured.");return;}
-          try{
-            await fetch(SUPA_URL+"/auth/v1/resend",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},body:JSON.stringify({type:"signup",email:email.trim()})});
-            setErr("Confirmation email resent — check your inbox.");
-          }catch{setErr("Couldn't resend — try signing up again.");}
-        }} style={{width:"100%",padding:"12px",borderRadius:14,border:`1.5px solid ${C.accentMid}`,background:C.accentBg,color:C.accent,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:12}}>
+        <button onClick={resendConfirmation} style={{width:"100%",padding:"12px",borderRadius:14,border:`1.5px solid ${C.accentMid}`,background:C.accentBg,color:C.accent,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:12}}>
           ↻ Resend confirmation email
         </button>
         <button onClick={()=>setConfirmed(false)} style={{width:"100%",padding:"12px",borderRadius:14,border:`1.5px solid ${C.border}`,background:"transparent",color:C.textLight,fontWeight:600,fontSize:14,cursor:"pointer",marginBottom:12}}>← Back</button>
@@ -5309,7 +5325,7 @@ function AuthScreen({onAuth,onSkip}){
         <div style={{marginBottom:err?8:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
             <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Password</div>
-            {mode==="login"&&<button onClick={async()=>{if(!email.trim()){setErr("Enter your email first.");return;}if(!SUPA_URL||!SUPA_KEY){setErr("Account features require Supabase — use offline mode instead.");return;}const redirectTo=window.location.origin+window.location.pathname;try{const _r=await fetch(SUPA_URL+"/auth/v1/recover",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY},body:JSON.stringify({email:email.trim(),options:{emailRedirectTo:redirectTo}})});if(!_r.ok){setErr("Couldn't send reset link — check your email and try again.");return;}}catch{setErr("Network error — check your connection.");return;}setErr("✓ Reset link sent to "+email+" — check your inbox.");}} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot?</button>}
+            {mode==="login"&&<button onClick={sendPasswordReset} style={{background:"none",border:"none",color:C.accent,fontSize:12,fontWeight:600,cursor:"pointer"}}>Forgot?</button>}
           </div>
           <div style={{position:"relative"}}>
             <input id="pw-inp" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder={mode==="login"?"Your password":"Min. 6 characters"} style={{width:"100%",background:"#f8f9fc",border:`1.5px solid ${err&&(err.toLowerCase().includes("password")||err.toLowerCase().includes("6 char"))?C.red:C.border}`,borderRadius:12,padding:"12px 44px 12px 14px",fontSize:15,color:C.text,outline:"none",boxSizing:"border-box"}} onKeyDown={e=>e.key==="Enter"&&!loading&&submit()}/>

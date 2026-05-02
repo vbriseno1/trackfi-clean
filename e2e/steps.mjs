@@ -2,6 +2,7 @@
  * Browser checks for `npm run test:e2e` (invoked from with-server.mjs via Playwright library).
  */
 export async function runReleaseChecks(page) {
+  const PIN_1234_HASH = 'ccdf7233fe3d5f2964fc6e67635bd6119e822f998128017239377d6c82402e6e'
   const home = async () => {
     await page.goto('/')
     await page.getByText(/Good (morning|afternoon|evening)/).waitFor({ state: 'visible', timeout: 45_000 })
@@ -11,6 +12,35 @@ export async function runReleaseChecks(page) {
     d.setDate(d.getDate() + days)
     return d.toISOString().slice(0, 10)
   }
+
+  await page.goto('/')
+  await page.evaluate(() => {
+    localStorage.clear()
+  })
+  await page.reload()
+  await page.getByText('Trackfi').first().waitFor({ state: 'visible', timeout: 45_000 })
+  await page.getByRole('button', { name: /Try without account/i }).click()
+  await page.getByText(/The finance app that actually works/i).waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: /Get Started/i }).click()
+  await page.getByPlaceholder('Your name').fill('E2E User')
+  await page.getByRole('button', { name: /Continue/i }).click()
+  await page.getByRole('button', { name: /Just me/i }).click()
+  await page.getByRole('button', { name: /Continue/i }).click()
+  await page.getByRole('button', { name: /Skip for now/i }).click()
+  await page.getByRole('button', { name: /Skip for now/i }).click()
+  await page.getByText(/Good (morning|afternoon|evening)/).waitFor({ state: 'visible', timeout: 45_000 })
+
+  await page.evaluate((hash) => {
+    localStorage.setItem('fv_pin_hash', hash)
+  }, PIN_1234_HASH)
+  await page.reload()
+  await page.getByText('Enter your PIN to continue').waitFor({ state: 'visible', timeout: 45_000 })
+  await page.locator('input[type="password"]').fill('1234')
+  await page.getByRole('button', { name: 'Unlock' }).click()
+  await page.getByText(/Good (morning|afternoon|evening)/).waitFor({ state: 'visible', timeout: 45_000 })
+  await page.evaluate(() => {
+    localStorage.removeItem('fv_pin_hash')
+  })
 
   const untilDarkMode = async (expected, timeout = 15_000) => {
     const start = Date.now()
