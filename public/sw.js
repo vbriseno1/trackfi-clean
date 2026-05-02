@@ -26,6 +26,12 @@ self.addEventListener('activate', e => {
   );
 });
 
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 // Fetch: network-first for API calls, cache-first for assets
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);

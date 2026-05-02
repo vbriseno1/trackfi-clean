@@ -17,6 +17,17 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     void navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
       .then((reg) => {
+        const notifyUpdateReady = () => {
+          window.dispatchEvent(new CustomEvent('trackfi:pwa-update-ready'))
+        }
+        if (reg.waiting && navigator.serviceWorker.controller) notifyUpdateReady()
+        reg.addEventListener('updatefound', () => {
+          const worker = reg.installing
+          if (!worker) return
+          worker.addEventListener('statechange', () => {
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) notifyUpdateReady()
+          })
+        })
         const safeUpdate = () => {
           void reg.update().catch(() => {})
         }

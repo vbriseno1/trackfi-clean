@@ -30,6 +30,9 @@
 - Done: Add paid bill edit coverage with balance adjustment assertion.
 - Done: Guard duplicate bill payment actions and reshow recurring bills for the next cycle.
 - Done: Add e2e coverage for duplicate paid clicks and recurring bill reshow.
+- Done: Guard debt deletion when expenses/bills still depend on that debt or card.
+- Done: Optimize household settle-up into real payment pairs instead of cross-product suggestions.
+- Done: Add PWA "new version available" reload UX.
 - Next: Audit import/export/reset edge cases around corrupted local data and backup restore.
 
 ## Pass 5: PWA and Update UX

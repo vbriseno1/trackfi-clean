@@ -35,6 +35,7 @@ import {
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import { shiftRecurringBillDueDate } from "./lib/billDueDates.js";
+import { optimizedSettlementPairs } from "./lib/household.js";
 import BankImportModal from "./modals/BankImportModal.jsx";
 import ExportModal from "./modals/ExportModal.jsx";
 
@@ -5694,7 +5695,7 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
     return n||"Member";
   };
 
-  const{now,ms,thisMonthExp,sharedExp,sharedTotal,splitPer,memberStats,avgOwed,balances}=useMemo(()=>{
+  const{now,ms,thisMonthExp,sharedExp,sharedTotal,splitPer,memberStats,avgOwed,balances,settlementPairs}=useMemo(()=>{
     const now=new Date();
     const ms=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
     const thisMonthExp=expenses.filter(e=>e.date?.startsWith(ms));
@@ -5713,7 +5714,8 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
     });
     const avgOwed=memberStats.length>0?memberStats.reduce((s,m)=>s+m.totalOwed,0)/memberStats.length:0;
     const balances=memberStats.map(m=>({...m,balance:m.totalOwed-avgOwed}));
-    return{now,ms,thisMonthExp,sharedExp,sharedTotal,splitPer,memberStats,avgOwed,balances};
+    const settlementPairs=optimizedSettlementPairs(balances);
+    return{now,ms,thisMonthExp,sharedExp,sharedTotal,splitPer,memberStats,avgOwed,balances,settlementPairs};
   },[expenses,bills,household.members]);
 
   // ── Split math (in useMemo above): personal + fair share of shared ────────
@@ -5723,9 +5725,10 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
 
   function markSettled(){
     const entry={date:todayStr(),month:ms,
-      from:balances.filter(m=>m.balance<-0.5).map(m=>memberLabel(m)).join(", "),
-      to:balances.filter(m=>m.balance>0.5).map(m=>memberLabel(m)).join(", "),
-      amount:Math.abs(balances.filter(m=>m.balance<-0.5).reduce((s,m)=>s+m.balance,0)).toFixed(2)
+      from:settlementPairs.map(p=>memberLabel(p.from)).filter((v,i,a)=>a.indexOf(v)===i).join(", "),
+      to:settlementPairs.map(p=>memberLabel(p.to)).filter((v,i,a)=>a.indexOf(v)===i).join(", "),
+      amount:settlementPairs.reduce((s,p)=>s+p.amount,0).toFixed(2),
+      pairs:settlementPairs.map(p=>({from:memberLabel(p.from),to:memberLabel(p.to),amount:p.amount.toFixed(2)})),
     };
     const next=[entry,...settlements].slice(0,12);
     setSettlements(next);
@@ -5865,17 +5868,11 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
           {balances.some(m=>Math.abs(m.balance)>0.5)&&(
             <div style={{background:"#0A1628",borderRadius:16,padding:18,marginBottom:14}}>
               <div style={{fontFamily:MF,fontWeight:800,fontSize:15,color:"#fff",marginBottom:4}}>Ready to settle?</div>
-              {(()=>{
-                const payers=balances.filter(m=>m.balance<-0.5);
-                const receivers=balances.filter(m=>m.balance>0.5);
-                return payers.map(p=>(
-                  receivers.map(r=>(
-                    <div key={p.id+r.id} style={{fontSize:13,color:"rgba(255,255,255,.7)",marginBottom:4}}>
-                      {p.emoji} <strong style={{color:"#fff"}}>{memberLabel(p)}</strong> pays {r.emoji} <strong style={{color:"#fff"}}>{memberLabel(r)}</strong> → <span style={{color:"#34D399",fontWeight:700}}>{fmt(Math.min(Math.abs(p.balance),r.balance))}</span>
-                    </div>
-                  ))
-                ));
-              })()}
+              {settlementPairs.map(p=>(
+                <div key={p.from.id+p.to.id} style={{fontSize:13,color:"rgba(255,255,255,.7)",marginBottom:4}}>
+                  {p.from.emoji} <strong style={{color:"#fff"}}>{memberLabel(p.from)}</strong> pays {p.to.emoji} <strong style={{color:"#fff"}}>{memberLabel(p.to)}</strong> → <span style={{color:"#34D399",fontWeight:700}}>{fmt(p.amount)}</span>
+                </div>
+              ))}
               <div style={{fontSize:11,color:"rgba(255,255,255,.65)",marginTop:10,lineHeight:1.45}}>This records who settled with whom; it does not change or delete expenses.</div>
               <button onClick={markSettled} style={{marginTop:12,width:"100%",background:"#6366F1",border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:MF}}>
                 Mark as Settled ✓
@@ -6372,11 +6369,17 @@ function AppInner(){
   const[heroIdx,setHeroIdx]=useState(0);
   const[pwaPrompt,setPwaPrompt]=useState(null);
   const[pwaInstalled,setPwaInstalled]=useState(()=>{try{return localStorage.getItem("fv_pwa_dismissed")==="1";}catch{return false;}});
+  const[pwaUpdateReady,setPwaUpdateReady]=useState(false);
   useEffect(()=>{
     const handler=e=>{e.preventDefault();setPwaPrompt(e);};
     window.addEventListener("beforeinstallprompt",handler);
     window.addEventListener("appinstalled",()=>{setPwaInstalled(true);localStorage.setItem("fv_pwa_dismissed","1");});
     return()=>window.removeEventListener("beforeinstallprompt",handler);
+  },[]);
+  useEffect(()=>{
+    const handler=()=>setPwaUpdateReady(true);
+    window.addEventListener("trackfi:pwa-update-ready",handler);
+    return()=>window.removeEventListener("trackfi:pwa-update-ready",handler);
   },[]);
   const[isOnline,setIsOnline]=useState(()=>navigator.onLine);
   const[syncRecoverableError,setSyncRecoverableError]=useState(false);
@@ -7087,6 +7090,29 @@ function AppInner(){
     setEditItem(null);
     return true;
   }
+  function deleteDebtSafely(debt){
+    const did=String(debt?.id);
+    const cardExpenseRefs=expenses.filter(e=>String(e.creditDebtId||"")===did);
+    const cardBillRefs=bills.filter(b=>String(b.creditDebtId||"")===did);
+    const paidLinkedBills=bills.filter(b=>String(b.linkedDebtId||"")===did&&b.paid);
+    if(cardExpenseRefs.length){
+      showToast("Move or delete "+cardExpenseRefs.length+" expense"+(cardExpenseRefs.length!==1?"s":"")+" from this card before deleting it.","error");
+      return false;
+    }
+    if(cardBillRefs.length){
+      showToast("Edit or delete "+cardBillRefs.length+" bill"+(cardBillRefs.length!==1?"s":"")+" using this card before deleting it.","error");
+      return false;
+    }
+    if(paidLinkedBills.length){
+      showToast("Mark linked paid bill"+(paidLinkedBills.length!==1?"s":"")+" unpaid or delete them before deleting this loan.","error");
+      return false;
+    }
+    setDebts(p=>p.filter(x=>String(x.id)!==did));
+    setBills(p=>p.filter(x=>String(x.linkedDebtId)!==did));
+    setEditItem(null);
+    setConfirm(null);
+    return true;
+  }
 
   // ── THE FIX: submit function ──────────────────────────────────────────────
   function submit(){
@@ -7460,6 +7486,7 @@ function AppInner(){
       <style>{CSS}</style>
       <div id="fv-scroll" style={{flex:1,minHeight:0,minWidth:0,width:"100%",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",padding:"max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-left)) max(110px, calc(88px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-right))",boxSizing:"border-box"}}>
         {!isOnline&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:"#1e293b",color:"#f1f5f9",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35}}>{authSession?.user?.id&&isSupabaseConfigured()?"📡 No internet — edits stay on this device and sync when you’re back online.":skipAuth?"📡 No internet — you can keep editing; everything stays in this browser.":"📡 No internet — you can keep editing on this device."}</div>}
+        {pwaUpdateReady&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.accent,border:`1px solid ${C.accentMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>New version available — reload to get the latest fixes.</span><button type="button" className="ba" onClick={()=>{try{navigator.serviceWorker?.controller?.postMessage({type:"SKIP_WAITING"});}catch{}window.location.reload();}} style={{background:"rgba(255,255,255,.22)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Reload</button><button type="button" className="ba" onClick={()=>setPwaUpdateReady(false)} style={{background:"transparent",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Later</button></div>}
         {storageQuotaBlocked&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.amber,border:`1px solid ${C.amberMid}`,color:"#78350f",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Storage full — this browser can’t save more data. Export a backup, then free space or clear old data.</span><button type="button" className="ba" onClick={()=>navTo("export")} style={{background:"rgba(255,255,255,.35)",border:"1px solid rgba(120,53,15,.25)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Export</button><button type="button" className="ba" onClick={()=>{setStorageQuotaBlocked(false);resetLocalStorageQuotaWarned();}} style={{background:"transparent",border:"1px solid rgba(120,53,15,.35)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Dismiss</button></div>}
         {syncRecoverableError&&isOnline&&authSession?.user?.id&&isSupabaseConfigured()&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.red,border:`1px solid ${C.redMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Couldn’t refresh data from the cloud. You’re still using what’s on this device.</span><button type="button" className="ba" onClick={()=>{void loadFromSupabase(authSession);}} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Try again</button></div>}
         {["spend","home","bills"].includes(tab)&&<button className="ba" type="button" aria-label={tab==="bills"?"Add bill":"Log expense"} onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
@@ -8255,7 +8282,7 @@ function AppInner(){
       {confirm&&<ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)} danger={confirm.danger}/>}
       {editItem&&editItem.type==="expense"&&<EditModal item={editItem} categories={categories} household={household} debts={debts} accounts={accounts} settings={settings} onSave={u=>{const oldA=parseFloat(editItem.data.amount)||0;const newA=parseFloat(u.amount)||0;const oldP=normalizePaidFrom(editItem.data.paidFrom);const newP=normalizePaidFrom(u.paidFrom);const oldC=editItem.data.creditDebtId?String(editItem.data.creditDebtId):"";const newC=newP==="credit"?(String(u.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts)):"";const oldB=resolveBankAccountIdForExpense(oldP,editItem.data.bankAccountId,accounts,settings);const newB=resolveBankAccountIdForExpense(newP,u.bankAccountId,accounts,settings);if(newP==="credit"&&cardDebtsList(debts).length&&!newC){showToast("Select which credit card, or set a default in Settings \u2192 Defaults","error");return false;}if(newP==="credit"&&!cardDebtsList(debts).length){showToast("Add a credit card debt first","error");return false;}if(oldA>0&&oldP!=="none"&&!canReverseExpenseBalance(oldP,oldC,editItem.data.bankAccountId,accounts,debts,settings)){showToast("Can\u2019t save: this expense no longer has valid pay-from targets for balance moves. Delete it or fix Accounts/Debt first.","error");return false;}applyRefund(oldP,oldA,oldC||undefined,oldB||undefined);applySpend(newP,newA,newC||undefined,newB||undefined);setExpenses(p=>p.map(x=>x.id===editItem.data.id?{...x,...u,paidFrom:newP,creditDebtId:newP==="credit"?newC:undefined,bankAccountId:newB||undefined}:x));showToast("✓ Expense updated");setEditItem(null);return true;}} onDelete={()=>setConfirm({title:"Delete Expense",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{const ob=resolveBankAccountIdForExpense(normalizePaidFrom(editItem.data.paidFrom),editItem.data.bankAccountId,accounts,settings);const oa=parseFloat(editItem.data.amount)||0;const opf=normalizePaidFrom(editItem.data.paidFrom);const ocbd=canReverseExpenseBalance(opf,editItem.data.creditDebtId,editItem.data.bankAccountId,accounts,debts,settings);if(applyRefund&&oa>0&&ocbd)applyRefund(opf,oa,editItem.data.creditDebtId||undefined,ob||undefined);else if(oa>0&&!ocbd)showToast("Deleted — balances unchanged (expense had invalid pay-from).","error");setExpenses(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} debts={debts} accounts={accounts} settings={settings} onSave={u=>saveBillEditWithBalanceAdjustment(editItem.data,u)} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{const rev=reversePaidBillForDelete(editItem.data);setBills(p=>p.filter(x=>x.id!==editItem.data.id));if(editItem.data.paid)showToast(rev.reversed?"Bill removed — payment reversed":"Bill removed — balances unchanged (pay-from no longer resolves)","error");setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
-      {editItem&&editItem.type==="debt"&&<EditModal key={editItem.data.id} item={editItem} categories={categories} household={household} debts={debts} bills={bills} accounts={accounts} settings={settings} onSave={u=>{const {addLoanBill,loanBillDueDate,billPaidFrom,billBankAccountId,...debtRest}=u;const did=editItem.data.id;const dk=u.debtKind==="credit_card"?"credit_card":"loan";const resetIntAcc=dk!=="credit_card"&&(parseFloat(debtRest.balance||0)!==parseFloat(editItem.data.balance||0)||String(debtRest.rate??"")!==String(editItem.data.rate??""));const becameLoan=dk!=="credit_card"&&editItem.data.debtKind==="credit_card";setDebts(p=>p.map(x=>String(x.id)!==String(did)?x:(()=>{const row={...x,...debtRest};if(resetIntAcc||becameLoan){row.loanInterestAsOfDate=todayStr();delete row.loanAccruedInterest;}return row;})()));setBills(p=>{if(dk==="credit_card")return p.filter(b=>String(b.linkedDebtId)!==String(did));const mp=parseFloat(u.minPayment||0);const want=addLoanBill!==false&&mp>0;if(want){let bpf=normalizePaidFrom(billPaidFrom||settings.defaultBillPaidFrom||"checking");if(bpf==="credit")bpf="checking";const bch=cashAccountsByKind(accounts,"checking");const bsv=cashAccountsByKind(accounts,"savings");let bbid="";if(bpf==="checking"){if(bch.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");else if(bch.length===1)bbid=String(bch[0].id);}else if(bpf==="savings"){if(bsv.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");else if(bsv.length===1)bbid=String(bsv[0].id);}const due=loanBillDueDate||todayStr();const payName=(u.name||"Loan")+" payment";const linked=p.filter(b=>String(b.linkedDebtId)===String(did));if(linked.length)return p.map(b=>String(b.linkedDebtId)!==String(did)?b:{...b,name:payName,amount:String(mp),dueDate:due,paidFrom:bpf,...(bbid?{bankAccountId:bbid}:{})});return[...p,{id:Date.now(),name:payName,amount:String(mp),dueDate:due,recurring:"Monthly",paid:false,autoPay:false,paidBy:"me",paidFrom:bpf,linkedDebtId:String(did),...(bbid?{bankAccountId:bbid}:{})}];}return p.filter(b=>String(b.linkedDebtId)!==String(did));});showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{const did=editItem.data.id;setDebts(p=>p.filter(x=>x.id!==did));setBills(p=>p.filter(x=>String(x.linkedDebtId)!==String(did)));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
+      {editItem&&editItem.type==="debt"&&<EditModal key={editItem.data.id} item={editItem} categories={categories} household={household} debts={debts} bills={bills} accounts={accounts} settings={settings} onSave={u=>{const {addLoanBill,loanBillDueDate,billPaidFrom,billBankAccountId,...debtRest}=u;const did=editItem.data.id;const dk=u.debtKind==="credit_card"?"credit_card":"loan";const resetIntAcc=dk!=="credit_card"&&(parseFloat(debtRest.balance||0)!==parseFloat(editItem.data.balance||0)||String(debtRest.rate??"")!==String(editItem.data.rate??""));const becameLoan=dk!=="credit_card"&&editItem.data.debtKind==="credit_card";setDebts(p=>p.map(x=>String(x.id)!==String(did)?x:(()=>{const row={...x,...debtRest};if(resetIntAcc||becameLoan){row.loanInterestAsOfDate=todayStr();delete row.loanAccruedInterest;}return row;})()));setBills(p=>{if(dk==="credit_card")return p.filter(b=>String(b.linkedDebtId)!==String(did));const mp=parseFloat(u.minPayment||0);const want=addLoanBill!==false&&mp>0;if(want){let bpf=normalizePaidFrom(billPaidFrom||settings.defaultBillPaidFrom||"checking");if(bpf==="credit")bpf="checking";const bch=cashAccountsByKind(accounts,"checking");const bsv=cashAccountsByKind(accounts,"savings");let bbid="";if(bpf==="checking"){if(bch.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");else if(bch.length===1)bbid=String(bch[0].id);}else if(bpf==="savings"){if(bsv.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");else if(bsv.length===1)bbid=String(bsv[0].id);}const due=loanBillDueDate||todayStr();const payName=(u.name||"Loan")+" payment";const linked=p.filter(b=>String(b.linkedDebtId)===String(did));if(linked.length)return p.map(b=>String(b.linkedDebtId)!==String(did)?b:{...b,name:payName,amount:String(mp),dueDate:due,paidFrom:bpf,...(bbid?{bankAccountId:bbid}:{})});return[...p,{id:Date.now(),name:payName,amount:String(mp),dueDate:due,recurring:"Monthly",paid:false,autoPay:false,paidBy:"me",paidFrom:bpf,linkedDebtId:String(did),...(bbid?{bankAccountId:bbid}:{})}];}return p.filter(b=>String(b.linkedDebtId)!==String(did));});showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>deleteDebtSafely(editItem.data),danger:true})} onClose={()=>setEditItem(null)}/>}
       {modal==="quickactions"&&(()=>{
         const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Add from Photo",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Envelopes",ic:"📦"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📈"},{id:"insights",l:"Insights",ic:"📊"},{id:"paycheck",l:"Paycheck",ic:"💰"},{id:"health",l:"Health Score",ic:"❤️"},{id:"bills_nav",l:"View Bills",ic:"📅"},{id:"calendar_nav",l:"Calendar",ic:"📅"},{id:"recurring_nav",l:"Recurring",ic:"🔄"}];
         const active=settings.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];
