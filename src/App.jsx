@@ -2987,6 +2987,28 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
     }));
     showToast&&showToast("Undid loan payment — "+x.name);
   }
+  function reversePaidBillEffects(x){
+    if(!x?.paid)return{reversed:false};
+    const bamt=parseFloat(x.amount)||0;
+    const bpf=normalizePaidFrom(x.paidFrom);
+    const r=resolveBillSpendIds(x,accounts,debts,settings);
+    const canRefund=!!r.ok;
+    if(canRefund&&applyRefund&&bamt)applyRefund(bpf,bamt,r.cid,r.bid);
+    const addBack=parseFloat(x.loanPrincipalApplied)||0;
+    if(x.linkedDebtId&&(addBack>0||x.loanPrevInterestAsOfDate||x.loanPrevAccruedInterest!==undefined))setDebts(p=>p.map(d=>{
+      if(String(d.id)!==String(x.linkedDebtId))return d;
+      const o={...d};
+      if(addBack>0)o.balance=String(round2(parseFloat(d.balance||0)+addBack));
+      if(x.loanPrevInterestAsOfDate!=null&&x.loanPrevInterestAsOfDate!=="")o.loanInterestAsOfDate=x.loanPrevInterestAsOfDate;
+      if(x.loanPrevAccruedInterest!==undefined){
+        const vc=parseFloat(x.loanPrevAccruedInterest)||0;
+        if(vc>0.001)o.loanAccruedInterest=String(round2(vc));
+        else delete o.loanAccruedInterest;
+      }
+      return o;
+    }));
+    return{reversed:canRefund};
+  }
   return(
   <div className="fu">
       {notifSupported()&&notifPerm==="default"&&bills.length>0&&(
@@ -3055,7 +3077,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
               {billTab==="history"&&b.paid&&!billHasLoanUndoSnap(b)&&<button type="button" className="ba" onClick={()=>handleBillPaidChange(b,false)} style={{background:"none",border:"none",cursor:"pointer",color:C.amber,fontSize:11,fontWeight:700,padding:"4px 6px",whiteSpace:"nowrap"}}>Mark unpaid</button>}
               {billHasLoanUndoSnap(b)&&((billTab==="upcoming"&&!b.paid)||(billTab==="history"&&b.paid))&&<button type="button" className="ba" onClick={()=>undoLoanBillPayment(b)} style={{background:"none",border:"none",cursor:"pointer",color:C.amber,fontSize:11,fontWeight:700,padding:"4px 6px",whiteSpace:"nowrap"}}>Undo loan pay</button>}
               <button type="button" className="ba" onClick={()=>setEditItem({type:"bill",data:b})} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,fontSize:11,fontWeight:600,padding:"4px 6px"}}>Edit</button>
-              <button className="ba" onClick={()=>{const snap=b;setBills(p=>p.filter(x=>x.id!==snap.id));(showUndoToast||showToast)&&(showUndoToast?showUndoToast("Bill removed — "+snap.name,()=>setBills(p=>[...p,snap])):showToast("Bill removed","error"));}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
+              <button className="ba" type="button" aria-label={`Delete ${b.name}`} onClick={()=>{const snap=b;const rev=reversePaidBillEffects(snap);setBills(p=>p.filter(x=>x.id!==snap.id));const msg=snap.paid?(rev.reversed?"Bill removed — payment reversed":"Bill removed — balances unchanged (pay-from no longer resolves)"):"Bill removed";if(snap.paid){showToast&&showToast(msg,"error");}else{(showUndoToast||showToast)&&(showUndoToast?showUndoToast(msg+" — "+snap.name,()=>setBills(p=>[...p,snap])):showToast(msg,"error"));}}} style={{background:"none",border:"none",cursor:"pointer",color:C.textLight,padding:"4px 3px",display:"flex"}}><Trash2 size={13}/></button>
             </div>
           </div>
         );
@@ -6989,6 +7011,28 @@ function AppInner(){
       return n;
     });
   },[]);
+  function reversePaidBillForDelete(bill){
+    if(!bill?.paid)return{reversed:false};
+    const bamt=parseFloat(bill.amount)||0;
+    const bpf=normalizePaidFrom(bill.paidFrom);
+    const r=resolveBillSpendIds(bill,accounts,debts,settings);
+    const canRefund=!!r.ok;
+    if(canRefund&&bamt)applyRefund(bpf,bamt,r.cid,r.bid);
+    const addBack=parseFloat(bill.loanPrincipalApplied)||0;
+    if(bill.linkedDebtId&&(addBack>0||bill.loanPrevInterestAsOfDate||bill.loanPrevAccruedInterest!==undefined))setDebts(p=>p.map(d=>{
+      if(String(d.id)!==String(bill.linkedDebtId))return d;
+      const o={...d};
+      if(addBack>0)o.balance=String(round2(parseFloat(d.balance||0)+addBack));
+      if(bill.loanPrevInterestAsOfDate!=null&&bill.loanPrevInterestAsOfDate!=="")o.loanInterestAsOfDate=bill.loanPrevInterestAsOfDate;
+      if(bill.loanPrevAccruedInterest!==undefined){
+        const vc=parseFloat(bill.loanPrevAccruedInterest)||0;
+        if(vc>0.001)o.loanAccruedInterest=String(round2(vc));
+        else delete o.loanAccruedInterest;
+      }
+      return o;
+    }));
+    return{reversed:canRefund};
+  }
 
   // ── THE FIX: submit function ──────────────────────────────────────────────
   function submit(){
@@ -8156,7 +8200,7 @@ function AppInner(){
       {paycheckDepCtx&&<PaycheckDepositModal ctx={paycheckDepCtx} onClose={()=>setPaycheckDepCtx(null)} accounts={accounts} income={income} settings={settings} setAccounts={setAccounts} setIncome={setIncome} setSettings={setSettings} showToast={showToast}/>}
       {confirm&&<ConfirmDialog title={confirm.title} message={confirm.message} onConfirm={confirm.onConfirm} onCancel={()=>setConfirm(null)} danger={confirm.danger}/>}
       {editItem&&editItem.type==="expense"&&<EditModal item={editItem} categories={categories} household={household} debts={debts} accounts={accounts} settings={settings} onSave={u=>{const oldA=parseFloat(editItem.data.amount)||0;const newA=parseFloat(u.amount)||0;const oldP=normalizePaidFrom(editItem.data.paidFrom);const newP=normalizePaidFrom(u.paidFrom);const oldC=editItem.data.creditDebtId?String(editItem.data.creditDebtId):"";const newC=newP==="credit"?(String(u.creditDebtId||"").trim()||pickDefaultCreditDebtId(settings,debts)):"";const oldB=resolveBankAccountIdForExpense(oldP,editItem.data.bankAccountId,accounts,settings);const newB=resolveBankAccountIdForExpense(newP,u.bankAccountId,accounts,settings);if(newP==="credit"&&cardDebtsList(debts).length&&!newC){showToast("Select which credit card, or set a default in Settings \u2192 Defaults","error");return false;}if(newP==="credit"&&!cardDebtsList(debts).length){showToast("Add a credit card debt first","error");return false;}if(oldA>0&&oldP!=="none"&&!canReverseExpenseBalance(oldP,oldC,editItem.data.bankAccountId,accounts,debts,settings)){showToast("Can\u2019t save: this expense no longer has valid pay-from targets for balance moves. Delete it or fix Accounts/Debt first.","error");return false;}applyRefund(oldP,oldA,oldC||undefined,oldB||undefined);applySpend(newP,newA,newC||undefined,newB||undefined);setExpenses(p=>p.map(x=>x.id===editItem.data.id?{...x,...u,paidFrom:newP,creditDebtId:newP==="credit"?newC:undefined,bankAccountId:newB||undefined}:x));showToast("✓ Expense updated");setEditItem(null);return true;}} onDelete={()=>setConfirm({title:"Delete Expense",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{const ob=resolveBankAccountIdForExpense(normalizePaidFrom(editItem.data.paidFrom),editItem.data.bankAccountId,accounts,settings);const oa=parseFloat(editItem.data.amount)||0;const opf=normalizePaidFrom(editItem.data.paidFrom);const ocbd=canReverseExpenseBalance(opf,editItem.data.creditDebtId,editItem.data.bankAccountId,accounts,debts,settings);if(applyRefund&&oa>0&&ocbd)applyRefund(opf,oa,editItem.data.creditDebtId||undefined,ob||undefined);else if(oa>0&&!ocbd)showToast("Deleted — balances unchanged (expense had invalid pay-from).","error");setExpenses(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
-      {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} debts={debts} accounts={accounts} settings={settings} onSave={u=>{const ld=u.linkedDebtId&&String(u.linkedDebtId).trim()!==""?String(u.linkedDebtId):undefined;setBills(p=>p.map(x=>x.id===editItem.data.id?{...x,...u,linkedDebtId:ld}:x));showToast("✓ Bill updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{setBills(p=>p.filter(x=>x.id!==editItem.data.id));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
+      {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} debts={debts} accounts={accounts} settings={settings} onSave={u=>{const ld=u.linkedDebtId&&String(u.linkedDebtId).trim()!==""?String(u.linkedDebtId):undefined;setBills(p=>p.map(x=>x.id===editItem.data.id?{...x,...u,linkedDebtId:ld}:x));showToast("✓ Bill updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{const rev=reversePaidBillForDelete(editItem.data);setBills(p=>p.filter(x=>x.id!==editItem.data.id));if(editItem.data.paid)showToast(rev.reversed?"Bill removed — payment reversed":"Bill removed — balances unchanged (pay-from no longer resolves)","error");setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="debt"&&<EditModal key={editItem.data.id} item={editItem} categories={categories} household={household} debts={debts} bills={bills} accounts={accounts} settings={settings} onSave={u=>{const {addLoanBill,loanBillDueDate,billPaidFrom,billBankAccountId,...debtRest}=u;const did=editItem.data.id;const dk=u.debtKind==="credit_card"?"credit_card":"loan";const resetIntAcc=dk!=="credit_card"&&(parseFloat(debtRest.balance||0)!==parseFloat(editItem.data.balance||0)||String(debtRest.rate??"")!==String(editItem.data.rate??""));const becameLoan=dk!=="credit_card"&&editItem.data.debtKind==="credit_card";setDebts(p=>p.map(x=>String(x.id)!==String(did)?x:(()=>{const row={...x,...debtRest};if(resetIntAcc||becameLoan){row.loanInterestAsOfDate=todayStr();delete row.loanAccruedInterest;}return row;})()));setBills(p=>{if(dk==="credit_card")return p.filter(b=>String(b.linkedDebtId)!==String(did));const mp=parseFloat(u.minPayment||0);const want=addLoanBill!==false&&mp>0;if(want){let bpf=normalizePaidFrom(billPaidFrom||settings.defaultBillPaidFrom||"checking");if(bpf==="credit")bpf="checking";const bch=cashAccountsByKind(accounts,"checking");const bsv=cashAccountsByKind(accounts,"savings");let bbid="";if(bpf==="checking"){if(bch.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");else if(bch.length===1)bbid=String(bch[0].id);}else if(bpf==="savings"){if(bsv.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");else if(bsv.length===1)bbid=String(bsv[0].id);}const due=loanBillDueDate||todayStr();const payName=(u.name||"Loan")+" payment";const linked=p.filter(b=>String(b.linkedDebtId)===String(did));if(linked.length)return p.map(b=>String(b.linkedDebtId)!==String(did)?b:{...b,name:payName,amount:String(mp),dueDate:due,paidFrom:bpf,...(bbid?{bankAccountId:bbid}:{})});return[...p,{id:Date.now(),name:payName,amount:String(mp),dueDate:due,recurring:"Monthly",paid:false,autoPay:false,paidBy:"me",paidFrom:bpf,linkedDebtId:String(did),...(bbid?{bankAccountId:bbid}:{})}];}return p.filter(b=>String(b.linkedDebtId)!==String(did));});showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{const did=editItem.data.id;setDebts(p=>p.filter(x=>x.id!==did));setBills(p=>p.filter(x=>String(x.linkedDebtId)!==String(did)));setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {modal==="quickactions"&&(()=>{
         const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Add from Photo",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Envelopes",ic:"📦"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📈"},{id:"insights",l:"Insights",ic:"📊"},{id:"paycheck",l:"Paycheck",ic:"💰"},{id:"health",l:"Health Score",ic:"❤️"},{id:"bills_nav",l:"View Bills",ic:"📅"},{id:"calendar_nav",l:"Calendar",ic:"📅"},{id:"recurring_nav",l:"Recurring",ic:"🔄"}];

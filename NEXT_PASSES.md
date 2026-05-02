@@ -26,7 +26,8 @@
 - Done: Add e2e coverage for linked loan bill creation and payment.
 - Done: Add e2e coverage for editing and deleting an expense.
 - Done: Add e2e coverage for reset data cancel/confirm.
-- Next: Add bill edit/delete coverage with paid-bill balance reversal assertions.
+- Done: Add paid bill delete coverage with balance reversal assertion.
+- Next: Add bill edit coverage with paid-bill balance adjustment assertions.
 
 ## Pass 5: PWA and Update UX
 - Add "new version available, reload" UX when the service worker updates.
