@@ -180,6 +180,14 @@ export function getUserId() {
 /** Kept for minimal churn in callers that used the old name */
 export const _getUserId = getUserId;
 
+function quarantineCorruptLocalValue(key, raw) {
+  try {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    localStorage.setItem(`${key}.corrupt.${stamp}`, raw);
+    localStorage.removeItem(key);
+  } catch {}
+}
+
 /** Sample-data mode: cloud sync must not read or write so demo never overwrites a real account. */
 export function isTrackfiDemoMode() {
   try {
@@ -377,10 +385,24 @@ export async function sg(k) {
     } catch {}
   }
   try {
-    const scoped = localStorage.getItem(getScope() + bare);
-    if (scoped !== null) return JSON.parse(scoped);
+    const scopedKey = getScope() + bare;
+    const scoped = localStorage.getItem(scopedKey);
+    if (scoped !== null) {
+      try {
+        return JSON.parse(scoped);
+      } catch {
+        quarantineCorruptLocalValue(scopedKey, scoped);
+        return null;
+      }
+    }
     const legacy = localStorage.getItem(k);
-    return legacy ? JSON.parse(legacy) : null;
+    if (!legacy) return null;
+    try {
+      return JSON.parse(legacy);
+    } catch {
+      quarantineCorruptLocalValue(k, legacy);
+      return null;
+    }
   } catch {
     return null;
   }

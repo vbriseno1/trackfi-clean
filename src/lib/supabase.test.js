@@ -193,6 +193,19 @@ describe('supabase helpers', () => {
     expect(url).toContain(encodeURIComponent('expenses+special'))
   })
 
+  it('sg quarantines corrupt local JSON instead of repeatedly reading it', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', '')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', '')
+    vi.stubGlobal('localStorage', freshStorage())
+    vi.resetModules()
+    const { getScope, sg } = await import('./supabase.js')
+    const key = getScope() + 'expenses'
+    localStorage.setItem(key, '{bad json')
+    const out = await sg('fv6:expenses')
+    expect(out).toBeNull()
+    expect(localStorage.getItem(key)).toBeNull()
+  })
+
   it('ss does not schedule cloud upload while demo flag is set', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')

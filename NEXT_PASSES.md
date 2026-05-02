@@ -33,10 +33,12 @@
 - Done: Guard debt deletion when expenses/bills still depend on that debt or card.
 - Done: Optimize household settle-up into real payment pairs instead of cross-product suggestions.
 - Done: Add PWA "new version available" reload UX.
-- Next: Audit import/export/reset edge cases around corrupted local data and backup restore.
+- Done: Audit import/export/reset edge cases around corrupted local data and backup restore.
+- Done: Validate backup restore before writing app state.
+- Done: Quarantine corrupt local JSON so startup can fall back cleanly.
 
 ## Pass 5: PWA and Update UX
-- Add "new version available, reload" UX when the service worker updates.
+- Done: Add "new version available, reload" UX when the service worker updates.
 - Add an e2e or manual checklist for offline shell load.
 - Confirm service worker cache behavior after deploy.
 

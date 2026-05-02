@@ -36,6 +36,7 @@ import {
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import { shiftRecurringBillDueDate } from "./lib/billDueDates.js";
 import { optimizedSettlementPairs } from "./lib/household.js";
+import { parseTrackfiBackupJson } from "./lib/dataBackup.js";
 import BankImportModal from "./modals/BankImportModal.jsx";
 import ExportModal from "./modals/ExportModal.jsx";
 
@@ -4542,9 +4543,9 @@ function SettingsView({settings,setSettings,appName,setAppName,greetName,setGree
       {onLoadDemo&&<button type="button" className="ba" onClick={onLoadDemo} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:10,padding:"11px 0",color:C.amber,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}>🧪 Load sample (demo) data</button>}
       {pendingImport&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
         <div style={{fontSize:13,fontWeight:700,color:C.amber,marginBottom:4}}>⚠️ Replace all current data with "{pendingImport.name}"?</div>
-        <div style={{fontSize:12,color:C.textMid,marginBottom:10}}>Replaces expenses, bills, debts, goals, household, recurring, notifications, charts, and settings. Export a backup first if needed.</div>
+        <div style={{fontSize:12,color:C.textMid,marginBottom:10}}>Trackfi validates the whole file before changing anything. If it is malformed, your current data stays untouched. Export a backup first if needed.</div>
         <div style={{display:"flex",gap:8}}>
-          <button className="ba" onClick={async()=>{await backupImport(pendingImport);setPendingImport(null);}} style={{flex:1,background:C.amber,border:"none",borderRadius:8,padding:"9px 0",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Yes, Import</button>
+          <button className="ba" onClick={async()=>{const ok=await backupImport(pendingImport);if(ok)setPendingImport(null);}} style={{flex:1,background:C.amber,border:"none",borderRadius:8,padding:"9px 0",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Validate & Import</button>
           <button className="ba" onClick={()=>setPendingImport(null)} style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 0",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancel</button>
         </div>
       </div>}
@@ -7342,6 +7343,7 @@ function AppInner(){
   function backupExport(){
     try{
       const d={
+        app:"trackfi",
         exportedAt:new Date().toISOString(),
         version:"3.2",
         ...(typeof window!=="undefined"&&window.__trackfiDemoInfo?.modelVersion?{demoModelVersion:window.__trackfiDemoInfo.modelVersion}:{}),
@@ -7369,8 +7371,12 @@ function AppInner(){
   async function backupImport(file){
     try{
       const t=await file.text();
-      const d=JSON.parse(t);
-      if(!d||typeof d!=="object"||(!d.expenses&&!d.bills&&!d.accounts&&!d.household&&!d.recurrings)){showToast&&showToast("❌ Invalid backup file","error");return;}
+      const parsed=parseTrackfiBackupJson(t);
+      if(!parsed.ok){
+        showToast&&showToast("Import blocked — "+(parsed.errors?.[0]||"invalid backup file"),"error");
+        return false;
+      }
+      const d=parsed.data;
       if(d.accounts)setAccounts(p=>({...p,...d.accounts}));
       if(d.income)setIncome(p=>({...p,...d.income}));
       if(Array.isArray(d.expenses))setExpenses(d.expenses);
@@ -7401,8 +7407,10 @@ function AppInner(){
       if(d.onboarded===true){try{localStorage.setItem("fv_onboarded","1");}catch{}setOnboarded(true);ss("fv6:onboarded",true);}
       else if(d.onboarded===false){try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);ss("fv6:onboarded",false);}
       if(d.merchantCats)try{window._merchantCats=d.merchantCats;ss("fv6:merchantCats",d.merchantCats);}catch{}
-      showToast&&showToast(isTrackfiDemoMode()?"✅ Backup imported (on this device — sample mode doesn\u2019t sync to the cloud).":"✅ Backup imported — saving to your account\u2026");
-    }catch(e){showToast&&showToast("❌ "+e.message,"error");}
+      showToast&&showToast(isTrackfiDemoMode()?"✅ Backup imported (on this device — sample mode doesn\u2019t sync to the cloud).":"✅ Backup validated and imported — saving to your account\u2026");
+      if(parsed.warnings?.length)console.warn("[Trackfi] Backup import warnings:",parsed.warnings);
+      return true;
+    }catch(e){showToast&&showToast("Import failed — "+(e?.message||"try another backup file"),"error");return false;}
   }
 
   if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
