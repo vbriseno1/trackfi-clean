@@ -37,6 +37,15 @@ export async function runReleaseChecks(page) {
   await page.getByRole('button', { name: 'Settings' }).click()
   await page.getByText('Profile').first().waitFor({ state: 'visible' })
   await page.getByText('Dark Mode').first().waitFor({ state: 'visible' })
+  await page.getByText('Cloud & device').waitFor({ state: 'visible' })
+  await page.getByText(/Offline/i).first().waitFor({ state: 'visible' })
+
+  await home()
+  await page.getByRole('button', { name: 'More' }).click()
+  await page.getByRole('button', { name: 'Household / Shared' }).click()
+  await page.getByText('My Finances').first().waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: 'Settle Up' }).click()
+  await page.getByText('Current Balances').waitFor({ state: 'visible' })
 
   await home()
   await page.getByRole('button', { name: 'More' }).click()

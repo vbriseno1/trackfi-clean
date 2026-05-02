@@ -24,6 +24,25 @@ export function isSupabaseConfigured() {
   return !!(SUPA_URL && SUPA_KEY);
 }
 
+async function fetchWithTimeout(url, opts = {}, timeoutMs = 28000) {
+  const canAbort = typeof AbortController !== "undefined";
+  const ctrl = canAbort ? new AbortController() : null;
+  const tid = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    return await fetch(url, {
+      ...opts,
+      ...(ctrl ? { signal: ctrl.signal } : {}),
+    });
+  } catch (e) {
+    if (e?.name === "AbortError" || ctrl?.signal?.aborted) {
+      throw new Error("Request timed out — check your connection");
+    }
+    throw e;
+  } finally {
+    if (tid) clearTimeout(tid);
+  }
+}
+
 export async function supaFetch(path, opts = {}) {
   if (!SUPA_URL || !SUPA_KEY)
     return { data: null, error: { message: "Supabase is not configured (set VITE_SUPABASE_* in .env)" } };
@@ -43,32 +62,33 @@ export async function supaFetch(path, opts = {}) {
     ...(token ? { Authorization: "Bearer " + token } : {}),
     ...(restOpts.headers || {}),
   };
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), timeoutMs);
-  const onUserAbort = () => ctrl.abort();
+  const canAbort = typeof AbortController !== "undefined";
+  const ctrl = canAbort ? new AbortController() : null;
+  const tid = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  const onUserAbort = () => ctrl?.abort();
   if (userSignal) {
     if (userSignal.aborted) {
-      clearTimeout(tid);
+      if (tid) clearTimeout(tid);
       return { data: null, error: { message: "Cancelled" } };
     }
-    userSignal.addEventListener("abort", onUserAbort, { once: true });
+    if (ctrl) userSignal.addEventListener("abort", onUserAbort, { once: true });
   }
   try {
     const res = await fetch(SUPA_URL + path, {
       ...restOpts,
       cache: restOpts.cache ?? "no-store",
       headers,
-      signal: ctrl.signal,
+      ...(ctrl ? { signal: ctrl.signal } : {}),
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({ message: "Request failed" }));
       if (res.status === 401) _onSessionExpired?.();
-      return { data: null, error: e };
+      return { data: null, error: { ...e, status: res.status } };
     }
     const data = await res.json().catch(() => ({}));
     return { data, error: null };
   } catch (e) {
-    const aborted = e?.name === "AbortError" || ctrl.signal.aborted;
+    const aborted = e?.name === "AbortError" || ctrl?.signal?.aborted;
     if (aborted) {
       const cancelled = userSignal?.aborted === true;
       return {
@@ -78,8 +98,8 @@ export async function supaFetch(path, opts = {}) {
     }
     return { data: null, error: { message: e?.message || "Network error" } };
   } finally {
-    clearTimeout(tid);
-    if (userSignal) userSignal.removeEventListener("abort", onUserAbort);
+    if (tid) clearTimeout(tid);
+    if (userSignal && ctrl) userSignal.removeEventListener("abort", onUserAbort);
   }
 }
 
@@ -87,11 +107,11 @@ export async function signUp(email, password) {
   if (!SUPA_URL || !SUPA_KEY) return { error: { message: "Supabase is not configured (set VITE_SUPABASE_* in .env)" } };
   try {
     const redirectTo = window.location.origin + window.location.pathname;
-    const res = await fetch(SUPA_URL + "/auth/v1/signup", {
+    const res = await fetchWithTimeout(SUPA_URL + "/auth/v1/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: SUPA_KEY },
       body: JSON.stringify({ email, password, options: { emailRedirectTo: redirectTo } }),
-    });
+    }, 20000);
     if (!res.ok) {
       const e = await res.json().catch(() => ({ message: "Request failed" }));
       return { error: e };
@@ -110,11 +130,11 @@ export async function signUp(email, password) {
 export async function signIn(email, password) {
   if (!SUPA_URL || !SUPA_KEY) return { error: { message: "Supabase is not configured (set VITE_SUPABASE_* in .env)" } };
   try {
-    const res = await fetch(SUPA_URL + "/auth/v1/token?grant_type=password", {
+    const res = await fetchWithTimeout(SUPA_URL + "/auth/v1/token?grant_type=password", {
       method: "POST",
       headers: { "Content-Type": "application/json", apikey: SUPA_KEY },
       body: JSON.stringify({ email, password }),
-    });
+    }, 20000);
     if (!res.ok) {
       const e = await res.json().catch(() => ({ message: "Request failed" }));
       return { error: e };

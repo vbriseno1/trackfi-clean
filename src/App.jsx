@@ -51,19 +51,20 @@ async function supaFetchUserDataRows(uid) {
 /** Bounded wait so a stuck auth refresh cannot hang the app indefinitely */
 async function trackfiAuthRefreshFetch(refreshToken){
   if(!SUPA_URL||!SUPA_KEY||!refreshToken)return null;
-  const ac=new AbortController();
-  const tid=setTimeout(()=>ac.abort(),12000);
+  const canAbort=typeof AbortController!=="undefined";
+  const ac=canAbort?new AbortController():null;
+  const tid=ac?setTimeout(()=>ac.abort(),12000):null;
   try{
     return await fetch(SUPA_URL+"/auth/v1/token?grant_type=refresh_token",{
       method:"POST",
       headers:{"Content-Type":"application/json",apikey:SUPA_KEY},
       body:JSON.stringify({refresh_token:refreshToken}),
-      signal:ac.signal,
+      ...(ac?{signal:ac.signal}:{}),
     });
   }catch{
     return null;
   }finally{
-    clearTimeout(tid);
+    if(tid)clearTimeout(tid);
   }
 }
 
@@ -6032,37 +6033,62 @@ function AppInner(){
     }
     tryRefresh(s).then(sess=>{
       return supaFetch("/auth/v1/user",{headers:{"Authorization":"Bearer "+sess.access_token}}).then(u=>{
-        if(u?.data?.id||u?.id){setAuthSession(sess);}else{localStorage.removeItem("fv_session");}
+        if(u?.data?.id||u?.id){
+          setAuthSession(sess);
+        }else if(u?.error&&u.error.status!==401){
+          // Offline / transient auth check failure: keep the local session so the app remains usable.
+          setAuthSession(sess);
+        }else{
+          localStorage.removeItem("fv_session");
+        }
         setAuthLoading(false);
       });
     }).catch(()=>setAuthLoading(false));
     return()=>clearTimeout(authTimeout);
   },[]);
   function handleAuth(sess){
+    const priorSession=(()=>{try{return JSON.parse(localStorage.getItem("fv_session")||"null");}catch{return null;}})();
+    const priorScope=(()=>{try{return getScope();}catch{return "";}})();
     setAuthSession(sess);
     try{localStorage.setItem("fv_session",JSON.stringify(sess));}catch{}
-    // Only migrate legacy local data if this looks like a returning user
-    // (don't pollute a brand-new account with data from a previous offline session)
+    let migratedLocal=false;
+    // Migrate device-scoped "Try without account" data into the signed-in scope.
     try{
       const uid=sess?.user?.id?.slice(0,8);
       if(uid){
         const scope="fv6_"+uid+":";
-        const prevSession=localStorage.getItem("fv_session");
-        const hasLocalExpenses=localStorage.getItem("fv6:expenses");
-        const hasScoped=localStorage.getItem(scope+"expenses");
-        // Only migrate if: had a previous session OR has scoped data already
-        // Don't migrate raw device data into a fresh account
-        if((prevSession||hasScoped)&&hasLocalExpenses&&!hasScoped){
-          ["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","recurrings","household","accountRates","prof","profSub","dashConfig","appName","greetName","settlements","hhBudgets","nwGoal","subDismissed"].forEach(k=>{
-            const legacy=localStorage.getItem("fv6:"+k);
-            const scoped=localStorage.getItem(scope+k);
-            if(legacy&&!scoped)localStorage.setItem(scope+k,legacy);
+        const priorWasDevice=!priorSession?.user?.id&&priorScope&&priorScope!==scope;
+        const copyKeys=SCOPED_USER_DATA_KEYS;
+        if(priorWasDevice){
+          copyKeys.forEach(k=>{
+            const src=localStorage.getItem(priorScope+k);
+            const dst=localStorage.getItem(scope+k);
+            if(src!=null&&dst==null){
+              localStorage.setItem(scope+k,src);
+              migratedLocal=true;
+            }
+          });
+        }
+        copyKeys.forEach(k=>{
+          const legacy=localStorage.getItem("fv6:"+k);
+          const scoped=localStorage.getItem(scope+k);
+          if(legacy!=null&&scoped==null){
+            localStorage.setItem(scope+k,legacy);
+            migratedLocal=true;
+          }
+        });
+        if(migratedLocal){
+          copyKeys.forEach(k=>{
+            try{
+              const raw=localStorage.getItem(scope+k);
+              if(raw!=null)ss("fv6:"+k,JSON.parse(raw));
+            }catch{}
           });
         }
       }
     }catch{}
     // Authoritative pull after migration: boot may have run with a different scope before session was set.
-    setTimeout(()=>loadFromSupabase(sess,{background:true}),150);
+    setTimeout(()=>loadFromSupabase(sess,{background:true,preserveLocalOnEmpty:migratedLocal}),150);
   }
   async function loadFromSupabase(sess,opts={}){
     const background=opts.background===true;
@@ -6088,7 +6114,11 @@ function AppInner(){
         cancelPendingDebouncedSync();
         if(res.data.length===0){
           applyPulledUserDataRows([]);
-          resetUserState({clearOnboarding:true,cloudLoadedRefTarget:true});
+          if(opts.preserveLocalOnEmpty===true){
+            cloudLoadedRef.current=true;
+          }else{
+            resetUserState({clearOnboarding:true,cloudLoadedRefTarget:true});
+          }
           setSyncRecoverableError(false);
           try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
           setCloudSyncMetaBump(b=>b+1);
