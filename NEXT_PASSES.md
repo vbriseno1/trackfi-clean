@@ -16,8 +16,8 @@
 - Done: Make auth resend/recover requests use the same bounded timeout behavior as sign in/sign up.
 
 ## Pass 3: Sync and Save Confidence
-- Add visible saved/syncing/synced/offline states near Settings or account status.
-- Add tests for device-only mode copy and missing Supabase copy.
+- Done: Add visible saved/syncing/synced/offline states near Settings or account status.
+- Done: Add tests for device-only mode copy and missing Supabase copy.
 - Add a test or unit harness for device data migration on sign-in.
 - Review pagehide/beforeunload sync behavior after `keepalive` changes.
 

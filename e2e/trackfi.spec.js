@@ -142,7 +142,22 @@ test.describe('Trackfi release pass', () => {
     await page.getByRole('button', { name: 'More' }).click()
     await page.getByRole('button', { name: 'Settings' }).click()
     await expect(page.getByText('Cloud & device')).toBeVisible()
+    await expect(page.getByRole('status', { name: 'Save and sync status' })).toBeVisible()
+    const browserOnly = page.getByText('Browser-only mode')
+    const deviceOnly = page.getByText('Device-only mode')
+    await expect(browserOnly.or(deviceOnly).first()).toBeVisible()
     await expect(page.getByText(/Offline/i).first()).toBeVisible()
+  })
+
+  test('Settings explains missing Supabase or local-only sync', async ({ page }) => {
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('button', { name: 'Settings' }).click()
+    const missingConfig = page.getByText(/Cloud sign-in and sync aren’t configured/i)
+    const localOnly = page.getByText(/everything is stored in this browser only/i)
+    await expect(missingConfig.or(localOnly).first()).toBeVisible()
   })
 
   test('More → Household / Shared and Settle Up tab', async ({ page }) => {

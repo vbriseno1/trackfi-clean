@@ -99,6 +99,13 @@ export async function runReleaseChecks(page) {
   await page.getByText('Profile').first().waitFor({ state: 'visible' })
   await page.getByText('Dark Mode').first().waitFor({ state: 'visible' })
   await page.getByText('Cloud & device').waitFor({ state: 'visible' })
+  await page.getByRole('status', { name: 'Save and sync status' }).waitFor({ state: 'visible' })
+  const browserOnly = await page.getByText('Browser-only mode').count()
+  const deviceOnly = await page.getByText('Device-only mode').count()
+  if (!browserOnly && !deviceOnly) throw new Error('Missing local save/sync status copy')
+  const missingConfig = await page.getByText(/Cloud sign-in and sync aren’t configured/i).count()
+  const localOnly = await page.getByText(/everything is stored in this browser only/i).count()
+  if (!missingConfig && !localOnly) throw new Error('Missing cloud configuration or local-only sync copy')
   await page.getByText(/Offline/i).first().waitFor({ state: 'visible' })
 
   await home()
