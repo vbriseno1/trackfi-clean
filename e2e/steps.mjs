@@ -6,6 +6,11 @@ export async function runReleaseChecks(page) {
     await page.goto('/')
     await page.getByText(/Good (morning|afternoon|evening)/).waitFor({ state: 'visible', timeout: 45_000 })
   }
+  const futureDate = (days = 3) => {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    return d.toISOString().slice(0, 10)
+  }
 
   const untilDarkMode = async (expected, timeout = 15_000) => {
     const start = Date.now()
@@ -25,6 +30,32 @@ export async function runReleaseChecks(page) {
   await page.getByText('Total:', { exact: false }).first().waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Bills' }).click()
   await page.getByText(/unpaid/i).first().waitFor({ state: 'visible' })
+
+  await home()
+  await page.getByRole('button', { name: 'Log expense' }).click()
+  await page.getByText('Log Expense').waitFor({ state: 'visible' })
+  await page.getByLabel('Name').fill('E2E Coffee')
+  await page.getByLabel('Amount ($)').fill('4.75')
+  await page.getByLabel('Category').selectOption('Coffee')
+  await page.getByRole('button', { name: 'Add Expense' }).click()
+  await page.getByRole('button', { name: 'Spending' }).click()
+  await page.getByText('E2E Coffee').waitFor({ state: 'visible' })
+
+  await home()
+  await page.getByRole('button', { name: 'Bills' }).click()
+  await page.getByRole('button', { name: /Add bill/i }).first().click()
+  await page.getByText('Add Bill').waitFor({ state: 'visible' })
+  await page.getByLabel('Bill Name').fill('E2E Internet')
+  await page.getByLabel('Amount ($)').fill('79.99')
+  await page.getByLabel('Due Date').fill(futureDate())
+  await page.getByLabel('Recurring').selectOption('One-time')
+  await page.getByLabel('Pay from (when you mark paid)').selectOption('none')
+  await page.getByRole('button', { name: 'Add Bill' }).last().click()
+  await page.getByText('E2E Internet').waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: 'Mark E2E Internet paid' }).click()
+  await page.getByText(/Paid — E2E Internet/i).first().waitFor({ state: 'visible', timeout: 10_000 })
+  await page.getByRole('button', { name: /Paid History/ }).click()
+  await page.getByText('E2E Internet').waitFor({ state: 'visible' })
 
   await home()
   await page.getByRole('button', { name: 'Log', exact: true }).click()

@@ -921,20 +921,22 @@ const iS = (focused,err) => ({width:"100%",maxWidth:"100%",minWidth:0,background
 
 function FI({label,half,error,...p}){
   const[f,sf]=useState(false);
+  const inputProps=label&&p["aria-label"]==null?{...p,"aria-label":label}:p;
   return(
     <div style={{marginBottom:14,flex:half?"1 1 45%":"1 1 100%",minWidth:0,maxWidth:"100%"}}>
       {label&&<div style={{fontSize:11,fontWeight:600,color:error?C.red:C.slate,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,overflowWrap:"anywhere"}}>{label}{error&&<span style={{marginLeft:6,fontWeight:500,textTransform:"none"}}>— {error}</span>}</div>}
-      <input {...p} style={iS(f,error)} onFocus={()=>sf(true)} onBlur={()=>sf(false)}/>
+      <input {...inputProps} style={iS(f,error)} onFocus={()=>sf(true)} onBlur={()=>sf(false)}/>
     </div>
   );
 }
 function FS({label,options,...p}){
   const[f,sf]=useState(false);
   const safeOpts=(options||[]).filter(o=>o!=null);
+  const selectProps=label&&p["aria-label"]==null?{...p,"aria-label":label}:p;
   return(
     <div style={{marginBottom:14,minWidth:0,maxWidth:"100%"}}>
       {label&&<div style={{fontSize:11,fontWeight:600,color:C.slate,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{label}</div>}
-      <select {...p} style={{...iS(f),cursor:"pointer",appearance:"none",width:"100%",maxWidth:"100%"}} onFocus={()=>sf(true)} onBlur={()=>sf(false)}>
+      <select {...selectProps} style={{...iS(f),cursor:"pointer",appearance:"none",width:"100%",maxWidth:"100%"}} onFocus={()=>sf(true)} onBlur={()=>sf(false)}>
         <option value="">Select...</option>
         {safeOpts.map((o,i)=>{
           const isObj=typeof o==="object"&&o!==null&&!Array.isArray(o);
@@ -3020,7 +3022,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
         return(
           <div key={b.id} style={{marginBottom:8}}>
             <div className="rw" style={{display:"flex",alignItems:"center",gap:12,padding:"14px 14px",background:C.surface,border:`1.5px solid ${b.paid?C.border:d<0?C.redMid:d<=7?C.amberMid:C.border}`,borderRadius:14}}>
-              <button type="button" onClick={()=>handleBillPaidChange(b,!b.paid)} style={{background:"none",border:"none",cursor:"pointer",color:b.paid?C.green:C.border,padding:0,display:"flex",flexShrink:0}}>{b.paid?<CheckCircle2 size={22}/>:<Circle size={22}/>}</button>
+              <button type="button" aria-label={b.paid?`Mark ${b.name} unpaid`:`Mark ${b.name} paid`} onClick={()=>handleBillPaidChange(b,!b.paid)} style={{background:"none",border:"none",cursor:"pointer",color:b.paid?C.green:C.border,padding:0,display:"flex",flexShrink:0}}>{b.paid?<CheckCircle2 size={22}/>:<Circle size={22}/>}</button>
               <div style={{flex:1}}>
                 <div style={{fontSize:14,fontWeight:600,color:b.paid?C.textLight:C.text,textDecoration:b.paid?"line-through":"none"}}>{b.name}</div>
                 <div style={{fontSize:12,marginTop:2,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -7308,7 +7310,7 @@ function AppInner(){
         {!isOnline&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:"#1e293b",color:"#f1f5f9",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35}}>{authSession?.user?.id&&isSupabaseConfigured()?"📡 No internet — edits stay on this device and sync when you’re back online.":skipAuth?"📡 No internet — you can keep editing; everything stays in this browser.":"📡 No internet — you can keep editing on this device."}</div>}
         {storageQuotaBlocked&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.amber,border:`1px solid ${C.amberMid}`,color:"#78350f",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Storage full — this browser can’t save more data. Export a backup, then free space or clear old data.</span><button type="button" className="ba" onClick={()=>navTo("export")} style={{background:"rgba(255,255,255,.35)",border:"1px solid rgba(120,53,15,.25)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Export</button><button type="button" className="ba" onClick={()=>{setStorageQuotaBlocked(false);resetLocalStorageQuotaWarned();}} style={{background:"transparent",border:"1px solid rgba(120,53,15,.35)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Dismiss</button></div>}
         {syncRecoverableError&&isOnline&&authSession?.user?.id&&isSupabaseConfigured()&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.red,border:`1px solid ${C.redMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Couldn’t refresh data from the cloud. You’re still using what’s on this device.</span><button type="button" className="ba" onClick={()=>{void loadFromSupabase(authSession);}} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Try again</button></div>}
-        {["spend","home","bills"].includes(tab)&&<button className="ba" onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
+        {["spend","home","bills"].includes(tab)&&<button className="ba" type="button" aria-label={tab==="bills"?"Add bill":"Log expense"} onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:16,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
         {tab==="home"&&(

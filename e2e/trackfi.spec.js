@@ -19,6 +19,12 @@ async function expectHomeLoaded(page) {
   await expect(page.getByText(/Good (morning|afternoon|evening)/)).toBeVisible({ timeout: 45_000 })
 }
 
+function futureDate(days = 3) {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 test.describe('Trackfi release pass', () => {
   test('home loads after boot', async ({ page }) => {
     await page.goto('/')
@@ -35,6 +41,43 @@ test.describe('Trackfi release pass', () => {
 
     await page.getByRole('button', { name: 'Bills' }).click()
     await expect(page.getByText(/unpaid/i).first()).toBeVisible()
+  })
+
+  test('core flow: log an expense from home', async ({ page }) => {
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'Log expense' }).click()
+    await expect(page.getByText('Log Expense')).toBeVisible()
+    await page.getByLabel('Name').fill('E2E Coffee')
+    await page.getByLabel('Amount ($)').fill('4.75')
+    await page.getByLabel('Category').selectOption('Coffee')
+    await page.getByRole('button', { name: 'Add Expense' }).click()
+
+    await page.getByRole('button', { name: 'Spending' }).click()
+    await expect(page.getByText('E2E Coffee')).toBeVisible()
+    await expect(page.getByText('$4.75').first()).toBeVisible()
+  })
+
+  test('core flow: add a bill and mark it paid', async ({ page }) => {
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'Bills' }).click()
+    await page.getByRole('button', { name: /Add bill/i }).first().click()
+    await expect(page.getByText('Add Bill')).toBeVisible()
+    await page.getByLabel('Bill Name').fill('E2E Internet')
+    await page.getByLabel('Amount ($)').fill('79.99')
+    await page.getByLabel('Due Date').fill(futureDate())
+    await page.getByLabel('Recurring').selectOption('One-time')
+    await page.getByLabel('Pay from (when you mark paid)').selectOption('none')
+    await page.getByRole('button', { name: 'Add Bill' }).last().click()
+
+    await expect(page.getByText('E2E Internet')).toBeVisible()
+    await page.getByRole('button', { name: 'Mark E2E Internet paid' }).click()
+    await expect(page.getByText(/Paid — E2E Internet/i).first()).toBeVisible({ timeout: 10_000 })
+    await page.getByRole('button', { name: /Paid History/ }).click()
+    await expect(page.getByText('E2E Internet')).toBeVisible()
   })
 
   test('AI Logger tab', async ({ page }) => {
@@ -137,6 +180,18 @@ test.describe('Trackfi release pass', () => {
     await page.getByRole('button', { name: 'Open Export Center' }).click()
     await expect(page.getByText('Export Center')).toBeVisible()
     await expect(page.getByText('Monthly Statement').first()).toBeVisible()
+  })
+
+  test('Settings → Export JSON starts a backup download', async ({ page }) => {
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'More' }).click()
+    await page.getByRole('button', { name: 'Settings' }).click()
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export JSON' }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(/backup\.json$/)
   })
 
   test('Bank Import path from More', async ({ page }) => {
