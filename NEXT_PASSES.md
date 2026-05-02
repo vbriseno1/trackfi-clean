@@ -28,7 +28,9 @@
 - Done: Add e2e coverage for reset data cancel/confirm.
 - Done: Add paid bill delete coverage with balance reversal assertion.
 - Done: Add paid bill edit coverage with balance adjustment assertion.
-- Next: Audit recurring bills and duplicate payment edge cases.
+- Done: Guard duplicate bill payment actions and reshow recurring bills for the next cycle.
+- Done: Add e2e coverage for duplicate paid clicks and recurring bill reshow.
+- Next: Audit import/export/reset edge cases around corrupted local data and backup restore.
 
 ## Pass 5: PWA and Update UX
 - Add "new version available, reload" UX when the service worker updates.

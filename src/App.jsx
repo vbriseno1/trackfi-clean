@@ -2910,6 +2910,21 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
 }function BillsView({bills,setBills,setDebts,setEditItem,onAdd,showToast,showUndoToast,household,requestNotifPermission,applySpend,applyRefund,accounts,debts,settings}){
   const[billTab,setBillTab]=useState("upcoming");
   const[notifPerm,setNotifPerm]=useState(()=>notifPermission());
+  const payingBillIdsRef=useRef(new Set());
+  const bulkPayingRef=useRef(false);
+  useEffect(()=>{
+    const paying=payingBillIdsRef.current;
+    paying.forEach(id=>{
+      const row=bills.find(b=>String(b.id)===String(id));
+      if(row?.paid)paying.delete(id);
+    });
+  },[bills]);
+  useEffect(()=>{
+    const dueRecurring=bills.filter(b=>b.paid&&b.recurring&&b.recurring!=="One-time"&&dueIn(b.dueDate)<=recurringReshowUpcomingWithinDays(b.recurring,settings));
+    if(!dueRecurring.length)return;
+    const ids=new Set(dueRecurring.map(b=>String(b.id)));
+    setBills(p=>p.map(b=>ids.has(String(b.id))?{...b,paid:false,paidDate:undefined,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined}:b));
+  },[bills,setBills,settings]);
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
   const unpaid=bills.filter(b=>!b.paid);
   const paid=bills.filter(b=>b.paid);
@@ -2924,8 +2939,11 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
     const bamt=parseFloat(x.amount)||0;
     const bpf=normalizePaidFrom(x.paidFrom);
     if(nowPaid&&!wasPaid){
+      const id=String(x.id);
+      if(payingBillIdsRef.current.has(id))return;
+      payingBillIdsRef.current.add(id);
       const res=commitMarkBillPaid(x,{debts,setDebts,setBills,accounts,settings,applySpend,onToast:msg=>setTimeout(()=>showToast&&showToast(msg),0),skipToast:!showToast,skipVibrate:false});
-      if(!res.ok){showToast&&showToast(res.msg,"error");return;}
+      if(!res.ok){payingBillIdsRef.current.delete(id);showToast&&showToast(res.msg,"error");return;}
       return;
     }
     if(!nowPaid&&wasPaid){
@@ -3026,7 +3044,7 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Bills</div><div style={{fontSize:13,color:C.textLight}}>{unpaid.length} unpaid · {overdue.length} overdue</div></div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>{const bad=overdue.filter(b=>!resolveBillSpendIds(b,accounts,debts,settings).ok);if(bad.length){showToast&&showToast("Can't pay "+bad.length+" overdue — edit each bill to choose which card or bank account.","error");return;}const res=commitMarkBillsPaidList(overdue,{debts,setDebts,setBills,accounts,settings,applySpend,onToast:msg=>setTimeout(()=>showToast&&showToast(msg),0),skipToast:!showToast,skipVibrate:false});if(!res.ok)showToast&&showToast(res.msg,"error");}} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>{overdue.length>0&&<button className="ba" onClick={()=>{if(bulkPayingRef.current)return;bulkPayingRef.current=true;const bad=overdue.filter(b=>!resolveBillSpendIds(b,accounts,debts,settings).ok);if(bad.length){bulkPayingRef.current=false;showToast&&showToast("Can't pay "+bad.length+" overdue — edit each bill to choose which card or bank account.","error");return;}const res=commitMarkBillsPaidList(overdue,{debts,setDebts,setBills,accounts,settings,applySpend,onToast:msg=>setTimeout(()=>showToast&&showToast(msg),0),skipToast:!showToast,skipVibrate:false});if(!res.ok){bulkPayingRef.current=false;showToast&&showToast(res.msg,"error");return;}setTimeout(()=>{bulkPayingRef.current=false;},750);}} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:10,padding:"7px 12px",color:C.green,fontWeight:700,fontSize:12,cursor:"pointer"}}>✓ Pay Overdue</button>}<button onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Bill</button></div>
       </div>
       {bills.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>

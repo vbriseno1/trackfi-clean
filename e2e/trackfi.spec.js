@@ -238,6 +238,65 @@ test.describe('Trackfi release pass', () => {
       .toBe('425')
   })
 
+  test('bill payment guards duplicate clicks and recurring reshow', async ({ page, context }) => {
+    await context.addInitScript(() => {
+      localStorage.setItem('fv_device_id', 'd_billguards')
+      localStorage.setItem(
+        'fv6_d_billguards:accounts',
+        JSON.stringify({
+          checking: '500',
+          savings: '',
+          cushion: '',
+          credit_card: '',
+          investments: '',
+          k401: '',
+          roth_ira: '',
+          brokerage: '',
+          crypto: '',
+          hsa: '',
+          property: '',
+          vehicles: '',
+          cashAccounts: [],
+        }),
+      )
+    })
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'Bills' }).click()
+    await page.getByRole('button', { name: /Add bill/i }).first().click()
+    await page.getByLabel('Bill Name').fill('E2E Double Click Bill')
+    await page.getByLabel('Amount ($)').fill('50')
+    await page.getByLabel('Due Date').fill(futureDate())
+    await page.getByLabel('Recurring').selectOption('One-time')
+    await page.getByLabel('Pay from (when you mark paid)').selectOption('checking')
+    await page.getByRole('button', { name: 'Add Bill' }).last().click()
+    await page.getByRole('button', { name: 'Mark E2E Double Click Bill paid' }).dblclick()
+    await expect
+      .poll(async () =>
+        page.evaluate(() => JSON.parse(localStorage.getItem('fv6_d_billguards:accounts') || '{}').checking),
+      )
+      .toBe('450')
+
+    await page.getByRole('button', { name: /Add bill/i }).first().click()
+    await page.getByLabel('Bill Name').fill('E2E Weekly Renew')
+    await page.getByLabel('Amount ($)').fill('10')
+    await page.getByLabel('Due Date').fill(futureDate(-3))
+    await page.getByLabel('Recurring').selectOption('Weekly')
+    await page.getByLabel('Pay from (when you mark paid)').selectOption('none')
+    await page.getByRole('button', { name: 'Add Bill' }).last().click()
+    await page.getByRole('button', { name: 'Mark E2E Weekly Renew paid' }).click()
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const rows = JSON.parse(localStorage.getItem('fv6_d_billguards:bills') || '[]')
+          const row = rows.find((b) => b.name === 'E2E Weekly Renew')
+          return row ? { paid: row.paid, dueDate: row.dueDate } : null
+        }),
+      )
+      .toEqual({ paid: false, dueDate: futureDate(4) })
+  })
+
   test('core flow: add debt with linked bill and mark payment paid', async ({ page }) => {
     await page.goto('/')
     await expectHomeLoaded(page)
