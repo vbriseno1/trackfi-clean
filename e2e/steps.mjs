@@ -148,6 +148,53 @@ export async function runReleaseChecks(page) {
     return JSON.parse(localStorage.getItem(`fv6_${deviceId}:accounts`) || '{}').checking === '500'
   })
 
+  await page.evaluate(() => {
+    const deviceId = localStorage.getItem('fv_device_id') || 'local'
+    localStorage.setItem(
+      `fv6_${deviceId}:accounts`,
+      JSON.stringify({
+        checking: '500',
+        savings: '',
+        cushion: '',
+        credit_card: '',
+        investments: '',
+        k401: '',
+        roth_ira: '',
+        brokerage: '',
+        crypto: '',
+        hsa: '',
+        property: '',
+        vehicles: '',
+        cashAccounts: [],
+      }),
+    )
+  })
+  await page.reload()
+  await page.getByText(/Good (morning|afternoon|evening)/).waitFor({ state: 'visible', timeout: 45_000 })
+  await page.getByRole('button', { name: 'Bills' }).click()
+  await page.getByRole('button', { name: /Add bill/i }).first().click()
+  await page.getByLabel('Bill Name').fill('E2E Edit Paid Bill')
+  await page.getByLabel('Amount ($)').fill('50')
+  await page.getByLabel('Due Date').fill(futureDate())
+  await page.getByLabel('Recurring').selectOption('One-time')
+  await page.getByLabel('Pay from (when you mark paid)').selectOption('checking')
+  await page.getByRole('button', { name: 'Add Bill' }).last().click()
+  await page.getByRole('button', { name: 'Mark E2E Edit Paid Bill paid' }).click()
+  await page.waitForFunction(() => {
+    const deviceId = localStorage.getItem('fv_device_id') || 'local'
+    return JSON.parse(localStorage.getItem(`fv6_${deviceId}:accounts`) || '{}').checking === '450'
+  })
+  await page.getByRole('button', { name: /Paid History/ }).click()
+  await page.getByRole('button', { name: 'Edit' }).first().click()
+  await page.getByText('Edit Bill').waitFor({ state: 'visible' })
+  await page.getByLabel('Amount ($)').fill('75')
+  await page.getByRole('button', { name: 'Save Changes' }).click()
+  await page.getByText(/balances adjusted/i).first().waitFor({ state: 'visible' })
+  await page.waitForFunction(() => {
+    const deviceId = localStorage.getItem('fv_device_id') || 'local'
+    return JSON.parse(localStorage.getItem(`fv6_${deviceId}:accounts`) || '{}').checking === '425'
+  })
+
   await home()
   await page.getByRole('button', { name: 'More' }).click()
   await page.getByRole('button', { name: 'Debt Tracker' }).click()

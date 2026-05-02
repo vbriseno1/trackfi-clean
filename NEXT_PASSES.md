@@ -27,7 +27,8 @@
 - Done: Add e2e coverage for editing and deleting an expense.
 - Done: Add e2e coverage for reset data cancel/confirm.
 - Done: Add paid bill delete coverage with balance reversal assertion.
-- Next: Add bill edit coverage with paid-bill balance adjustment assertions.
+- Done: Add paid bill edit coverage with balance adjustment assertion.
+- Next: Audit recurring bills and duplicate payment edge cases.
 
 ## Pass 5: PWA and Update UX
 - Add "new version available, reload" UX when the service worker updates.

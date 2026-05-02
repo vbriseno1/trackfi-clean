@@ -185,6 +185,59 @@ test.describe('Trackfi release pass', () => {
       .toBe('500')
   })
 
+  test('paid bill edit adjusts checking balance', async ({ page, context }) => {
+    await context.addInitScript(() => {
+      localStorage.setItem('fv_device_id', 'd_billedit')
+      localStorage.setItem(
+        'fv6_d_billedit:accounts',
+        JSON.stringify({
+          checking: '500',
+          savings: '',
+          cushion: '',
+          credit_card: '',
+          investments: '',
+          k401: '',
+          roth_ira: '',
+          brokerage: '',
+          crypto: '',
+          hsa: '',
+          property: '',
+          vehicles: '',
+          cashAccounts: [],
+        }),
+      )
+    })
+    await page.goto('/')
+    await expectHomeLoaded(page)
+
+    await page.getByRole('button', { name: 'Bills' }).click()
+    await page.getByRole('button', { name: /Add bill/i }).first().click()
+    await page.getByLabel('Bill Name').fill('E2E Edit Paid Bill')
+    await page.getByLabel('Amount ($)').fill('50')
+    await page.getByLabel('Due Date').fill(futureDate())
+    await page.getByLabel('Recurring').selectOption('One-time')
+    await page.getByLabel('Pay from (when you mark paid)').selectOption('checking')
+    await page.getByRole('button', { name: 'Add Bill' }).last().click()
+    await page.getByRole('button', { name: 'Mark E2E Edit Paid Bill paid' }).click()
+    await expect
+      .poll(async () =>
+        page.evaluate(() => JSON.parse(localStorage.getItem('fv6_d_billedit:accounts') || '{}').checking),
+      )
+      .toBe('450')
+
+    await page.getByRole('button', { name: /Paid History/ }).click()
+    await page.getByRole('button', { name: 'Edit' }).first().click()
+    await expect(page.getByText('Edit Bill')).toBeVisible()
+    await page.getByLabel('Amount ($)').fill('75')
+    await page.getByRole('button', { name: 'Save Changes' }).click()
+    await expect(page.getByText(/balances adjusted/i).first()).toBeVisible()
+    await expect
+      .poll(async () =>
+        page.evaluate(() => JSON.parse(localStorage.getItem('fv6_d_billedit:accounts') || '{}').checking),
+      )
+      .toBe('425')
+  })
+
   test('core flow: add debt with linked bill and mark payment paid', async ({ page }) => {
     await page.goto('/')
     await expectHomeLoaded(page)
