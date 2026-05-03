@@ -35,6 +35,7 @@ import {
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
 import { shiftRecurringBillDueDate } from "./lib/billDueDates.js";
+import { isCreditCardDebt, cardDebtsList, legacyCreditCardOwed } from "./lib/creditCardTotals.js";
 import { optimizedSettlementPairs } from "./lib/household.js";
 import { parseTrackfiBackupJson } from "./lib/dataBackup.js";
 import BankImportModal from "./modals/BankImportModal.jsx";
@@ -301,10 +302,7 @@ function sumMtdByPaidFrom(expenses,ms){
 function dayCheckingSpend(expenses,dateStr){
   return expenses.filter(e=>e.date===dateStr&&normalizePaidFrom(e.paidFrom)==="checking").reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
 }
-/** Debts tagged as revolving credit — charges post to this balance */
-function isCreditCardDebt(d){return d&&d.debtKind==="credit_card";}
 function isLoanDebt(d){return d&&!isCreditCardDebt(d);}
-function cardDebtsList(debts){return(debts||[]).filter(isCreditCardDebt);}
 function loanDebtsList(debts){return(debts||[]).filter(isLoanDebt);}
 /** Principal + accrued-interest carry for loans (matches paydown math). Credit cards: balance only. */
 function debtOwedForBreakdown(d){
@@ -312,7 +310,6 @@ function debtOwedForBreakdown(d){
   return b+(isLoanDebt(d)?parseFloat(d?.loanAccruedInterest)||0:0);
 }
 function sumDebtsPrincipalAndAccrued(debts){return(debts||[]).reduce((s,d)=>s+debtOwedForBreakdown(d),0);}
-function legacyCreditCardOwed(accounts,debts){return cardDebtsList(debts).length?0:parseFloat(accounts?.credit_card||0);}
 /** ~APR/12 × owed principal+accrual; not actual/365 — labeled as approximate in UI/copy. */
 function approxMonthlyInterestOnDebts(debts){
   return(debts||[]).reduce((s,d)=>s+debtOwedForBreakdown(d)*(parseFloat(d.rate||0)/100/12),0);

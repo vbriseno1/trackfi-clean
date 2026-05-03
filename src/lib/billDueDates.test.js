@@ -30,6 +30,11 @@ describe("billDueDates", () => {
     expect(back).toBe(start);
   });
 
+  it("shiftRecurringBillDueDate monthly from Jan 31 clamps to February last day (recurring expense cadence)", () => {
+    expect(shiftRecurringBillDueDate("2026-01-31", "Monthly", "2026-02-01", true)).toBe("2026-02-28");
+    expect(shiftRecurringBillDueDate("2026-01-31", "Bi-weekly", "2026-01-01", true)).toBe("2026-02-14");
+  });
+
   it("parseBillYmdParts rejects garbage", () => {
     expect(parseBillYmdParts("")).toBeNull();
     expect(parseBillYmdParts("2026-13-01")).toBeNull();
