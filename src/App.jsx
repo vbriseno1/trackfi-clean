@@ -872,6 +872,25 @@ button{-webkit-tap-highlight-color:transparent}
   .hl:hover{transform:none!important}
   .fv-rechart-skel{animation:none!important}
 }
+/* Mobile-first: modals, onboarding, charts */
+.modal-field-row{display:flex;flex-wrap:wrap;gap:12;align-items:flex-start;width:100%;min-width:0;box-sizing:border-box}
+@media (max-width:440px){
+  .modal-field-row .modal-fi-half{flex:1 1 100%!important;max-width:100%!important}
+}
+.onb-feature-grid{display:grid;grid-template-columns:1fr;gap:10px;width:100%}
+@media (min-width:400px){
+  .onb-feature-grid{grid-template-columns:1fr 1fr}
+}
+.onb-prof-pick{display:flex;flex-wrap:wrap;gap:8;margin-bottom:12;max-height:min(42vh,260px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.insights-hero-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8}
+@media (max-width:400px){
+  .insights-hero-grid{grid-template-columns:1fr!important}
+}
+.debt-pie-row{display:flex;flex-wrap:wrap;align-items:flex-start;gap:12;width:100%;min-width:0;box-sizing:border-box}
+@media (max-width:480px){
+  .debt-pie-row{flex-direction:column;align-items:stretch}
+}
+.fv-chart-wrap{width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:auto;-webkit-overflow-scrolling:touch}
 `;
 
 const RechartsContext=React.createContext(null);
@@ -923,7 +942,7 @@ function FI({label,half,error,...p}){
   const[f,sf]=useState(false);
   const inputProps=label&&p["aria-label"]==null?{...p,"aria-label":label}:p;
   return(
-    <div style={{marginBottom:14,flex:half?"1 1 45%":"1 1 100%",minWidth:0,maxWidth:"100%"}}>
+    <div className={half?"modal-fi-half":undefined} style={{marginBottom:14,flex:half?"1 1 140px":"1 1 100%",minWidth:0,maxWidth:"100%"}}>
       {label&&<div style={{fontSize:11,fontWeight:600,color:error?C.red:C.slate,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,overflowWrap:"anywhere"}}>{label}{error&&<span style={{marginLeft:6,fontWeight:500,textTransform:"none"}}>— {error}</span>}</div>}
       <input {...inputProps} style={iS(f,error)} onFocus={()=>sf(true)} onBlur={()=>sf(false)}/>
     </div>
@@ -985,7 +1004,7 @@ function Modal({title,icon:Icon,onClose,onSubmit,submitLabel="Save",accent=C.acc
   return(
     <div style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(10,22,40,.5)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",animation:"fadeIn .2s ease"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:wide?640:480,minWidth:0,boxSizing:"border-box",maxHeight:"94vh",overflowY:"auto",overflowX:"hidden",padding:"0 0 max(40px, env(safe-area-inset-bottom))",animation:"slideUp .26s cubic-bezier(.22,1,.36,1)",boxShadow:"0 -4px 60px rgba(10,22,40,.22)"}}
+      <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:wide?"min(640px, calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right)))":"min(480px, calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right)))",minWidth:0,boxSizing:"border-box",maxHeight:"min(92dvh, calc(100vh - env(safe-area-inset-top) - 8px))",overflowY:"auto",overflowX:"hidden",padding:"0 0 max(40px, env(safe-area-inset-bottom))",animation:"slideUp .26s cubic-bezier(.22,1,.36,1)",boxShadow:"0 -4px 60px rgba(10,22,40,.22)"}}
         onKeyDown={e=>{if(e.key==="Enter"&&e.target.tagName==="INPUT"&&!e.shiftKey&&onSubmit){e.preventDefault();onSubmit();}}}>
         <div style={{width:40,height:4,background:C.border,borderRadius:99,margin:"14px auto 4px"}}/>
         <div style={{padding:"16px clamp(16px, 5vw, 24px) 20px",borderBottom:`1px solid ${C.borderLight}`,marginBottom:20,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,minWidth:0}}>
@@ -1023,7 +1042,7 @@ function SH({title,sub,onAdd,addLabel="Add",right}){
           {sub&&<div style={{fontSize:12,color:C.textLight,marginTop:3,fontWeight:500,overflowWrap:"anywhere"}}>{sub}</div>}
         </div>
       </div>
-      <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,marginTop:2}}>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",flexShrink:0,marginTop:2}}>
         {right}
         {onAdd&&<button className="ba" onClick={onAdd} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:`0 2px 8px ${C.accent}40`,letterSpacing:.2}}><Plus size={12}/>{addLabel}</button>}
       </div>
@@ -1112,9 +1131,9 @@ function OnboardingWizard({onComplete}){
     // ── STEP 1: Welcome ─────────────────────────────────────
     {title:null,body:(
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",padding:"8px 0 16px"}}>
-        <div style={{fontFamily:MF,fontSize:42,fontWeight:900,color:C.navy,letterSpacing:-2,marginBottom:8}}>💰 Trackfi</div>
-        <div style={{fontSize:17,color:C.textMid,lineHeight:1.7,marginBottom:24,maxWidth:340}}>The finance app that actually works for your life — not just for spreadsheet people.</div>
-        <div style={{width:"100%",display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+        <div style={{fontFamily:MF,fontSize:"clamp(26px, 9vw, 42px)",fontWeight:900,color:C.navy,letterSpacing:-2,marginBottom:8}}>💰 Trackfi</div>
+        <div style={{fontSize:16,color:C.textMid,lineHeight:1.65,marginBottom:20,maxWidth:400,padding:"0 4px"}}>The finance app that actually works for your life — not just for spreadsheet people.</div>
+        <div className="onb-feature-grid" style={{marginBottom:20}}>
           {[["💸","Track every dollar","Know where it all goes"],["📅","Never miss a bill","Due dates + auto-pay tracking"],["💳","Crush debt faster","Avalanche & snowball plans"],["🎯","Build real savings","Goals with projected dates"],["📈","Log your trades","P&L, win rate, equity curve"],["🏆","Your health score","A–F grade on 5 pillars"]].map(([ic,t,s])=>(
             <div key={t} style={{background:C.surfaceAlt,borderRadius:14,padding:"12px 10px",textAlign:"left"}}>
               <div style={{fontSize:20,marginBottom:6}}>{ic}</div>
@@ -1138,7 +1157,7 @@ function OnboardingWizard({onComplete}){
         </div>
         <div>
           <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>What do you do?</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
+          <div className="onb-prof-pick">
             {PROFESSIONS.map(p=>(
               <button key={p.id} onClick={()=>setD(x=>({...x,profCategory:p.id,profSub:p.subs[0].id}))}
                 style={{display:"flex",alignItems:"center",gap:7,padding:"8px 14px",borderRadius:99,border:`1.5px solid ${d.profCategory===p.id?C.accent:C.border}`,background:d.profCategory===p.id?C.accentBg:"#fff",cursor:"pointer",transition:"all .15s"}}>
@@ -1272,10 +1291,10 @@ function OnboardingWizard({onComplete}){
   const isLast=step===STEPS.length-1;
 
   return(
-    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:C.surface,borderRadius:24,width:"100%",maxWidth:500,boxShadow:"0 20px 60px rgba(0,0,0,.25)",overflow:"hidden"}}>
-        {step>0&&<div style={{height:4,background:C.borderLight}}><div style={{height:"100%",width:`${(step/(STEPS.length-1))*100}%`,background:`linear-gradient(90deg,${C.accent},${C.teal})`,transition:"width .4s",borderRadius:99}}/></div>}
-        <div style={{padding:"28px 24px 32px",maxHeight:"90vh",overflowY:"auto"}}>
+    <div style={{minHeight:"100dvh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:"max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left))",boxSizing:"border-box"}}>
+      <div style={{background:C.surface,borderRadius:24,width:"100%",maxWidth:500,boxShadow:"0 20px 60px rgba(0,0,0,.25)",overflow:"hidden",maxHeight:"min(90dvh, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px))",display:"flex",flexDirection:"column"}}>
+        {step>0&&<div style={{height:4,background:C.borderLight,flexShrink:0}}><div style={{height:"100%",width:`${(step/(STEPS.length-1))*100}%`,background:`linear-gradient(90deg,${C.accent},${C.teal})`,transition:"width .4s",borderRadius:99}}/></div>}
+        <div style={{padding:"22px clamp(14px, 4vw, 24px) 28px",overflowY:"auto",WebkitOverflowScrolling:"touch",flex:1,minHeight:0}}>
           {step>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
             <button onClick={()=>setStep(s=>s-1)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,color:C.textMid,cursor:"pointer"}}>← Back</button>
             <span style={{fontSize:12,color:C.textLight,fontWeight:600}}>Step {step} of {STEPS.length-1}</span>
@@ -1997,7 +2016,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
           <div><div style={{fontFamily:MF,fontSize:32,fontWeight:800,color:"#fff"}}>{fmt(thisTotal)}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>{FULL_MOS[now.getMonth()]} spending</div></div>
           <div style={{textAlign:"right"}}><div style={{fontFamily:MF,fontSize:18,fontWeight:700,color:diff>0?C.redMid:C.greenMid}}>{diff>0?"+":""}{diff.toFixed(1)}%</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>vs {FULL_MOS[new Date(now.getFullYear(),now.getMonth()-1,1).getMonth()]}</div></div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>{[["Daily avg",fmt(dailyAvg),C.accentMid],["Projected",fmt(projectedMonth),C.amberMid],["Last month",fmt(lastTotal),C.textFaint]].map(([l,v,c])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div><div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:c}}>{v}</div></div>)}</div>
+        <div className="insights-hero-grid" style={{marginBottom:16}}>{[["Daily avg",fmt(dailyAvg),C.accentMid],["Projected",fmt(projectedMonth),C.amberMid],["Last month",fmt(lastTotal),C.textFaint]].map(([l,v,c])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px",minWidth:0}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div><div style={{fontFamily:MF,fontSize:13,fontWeight:700,color:c,overflowWrap:"anywhere"}}>{v}</div></div>)}</div>
       </div>
       {catSorted.length>0&&<div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>By Category</div><div style={{fontSize:11,color:C.textLight}}>tap to drill down 📊</div></div>
@@ -2061,7 +2080,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
           </div>);
         })}
       </div>}
-      {catSorted.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><RechartsReady minHeight={Math.min(catSorted.length*38+20,220)} render={R=>(<R.ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><R.BarChart data={catSorted.slice(0,5).map(([name,amt])=>({name,amt}))} layout="vertical" barSize={16} margin={{left:4,right:50}}><R.XAxis type="number" hide/><R.YAxis type="category" dataKey="name" tick={{fontSize:11,fill:C.textMid}} width={80} axisLine={false} tickLine={false}/><R.Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><R.Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><R.Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</R.Bar></R.BarChart></R.ResponsiveContainer>)}/></div>}
+      {catSorted.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><div className="fv-chart-wrap"><RechartsReady minHeight={Math.min(catSorted.length*38+20,220)} render={R=>(<R.ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><R.BarChart data={catSorted.slice(0,5).map(([name,amt])=>({name,amt}))} layout="vertical" barSize={14} margin={{left:0,right:12,top:4,bottom:4}}><R.XAxis type="number" hide/><R.YAxis type="category" dataKey="name" tick={{fontSize:10,fill:C.textMid}} width={68} tickFormatter={v=>(v&&String(v).length>12?String(v).slice(0,11)+"…":v)} axisLine={false} tickLine={false}/><R.Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><R.Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><R.Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</R.Bar></R.BarChart></R.ResponsiveContainer>)}/></div></div>}
 
       {/* 6-month spending trend */}
       {(()=>{
@@ -2089,16 +2108,18 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
               </div>
             </div>
             <RechartsReady minHeight={160} render={R=>(
+            <div className="fv-chart-wrap">
             <R.ResponsiveContainer width="100%" height={160}>
-              <R.BarChart data={months} margin={{left:-10,right:4,top:4,bottom:0}} barSize={28}>
+              <R.BarChart data={months} margin={{left:0,right:4,top:4,bottom:4}} barSize={22}>
                 <R.XAxis dataKey="month" tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/>
                 <R.YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
                 <R.Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/>
                 <R.Bar dataKey="total" radius={[5,5,0,0]}>{months.map((m,i)=><R.Cell key={i} fill={m.isCurrent?C.accent:m.total>avgSpend?C.red+"88":C.accent+"55"}/>)}</R.Bar>
               </R.BarChart>
             </R.ResponsiveContainer>
+            </div>
             )}/>
-            <div style={{display:"flex",gap:12,marginTop:8,fontSize:11,color:C.textLight,justifyContent:"center"}}>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8,fontSize:11,color:C.textLight,justifyContent:"center",rowGap:6}}>
               <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.accent}}/> Current</div>
               <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.red+"88"}}/> Above average</div>
               <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.accent+"55"}}/> Below average</div>
@@ -2157,7 +2178,7 @@ function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
         return(
           <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
             <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Spending Velocity</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10,marginBottom:16}}>
               {[
                 ["Daily Rate",fmt(dailyRate)+"/day",dailyRate>thisTotal/daysInMonth*1.2?C.red:C.green],
                 ["Projected",fmt(projected),projected>ti?C.red:projected>ti*.8?C.amber:C.green],
@@ -3241,12 +3262,12 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
   return(
     <div className="fu">
       <div style={{marginBottom:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap",minWidth:0}}>
-          <div style={{minWidth:0,flex:"1 1 140px"}}>
+        <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",gap:10,minWidth:0}}>
+          <div style={{minWidth:0,flex:"1 1 min(200px, 100%)"}}>
             <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Debt Tracker</div>
             <div style={{fontSize:13,color:C.textLight}}>{fmt(totalDebt)} total across {debts.length} debt{debts.length!==1?"s":""}</div>
           </div>
-          <div style={{display:"flex",gap:8,flexShrink:0,marginLeft:"auto",alignSelf:"flex-start"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end",flex:"1 1 auto",minWidth:0}}>
             {debts.length>0&&<button type="button" className="ba" onClick={()=>setModal("simulator")} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}><Calculator size={13}/>Sim</button>}
             <button type="button" className="ba" onClick={()=>(onAddDebt||(()=>setModal("debt")))()} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}><Plus size={13}/>Add Debt</button>
           </div>
@@ -3258,14 +3279,18 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
         <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:20,marginBottom:14}}>
           <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Debt Breakdown</div>
           <div style={{fontSize:12,color:C.textLight,marginBottom:12}}>Tap a slice to see details</div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <RechartsReady minHeight={180} render={R=>(
-            <R.PieChart width={180} height={180}>
-              <R.Pie data={pieData} cx={85} cy={85} innerRadius={48} outerRadius={82} dataKey="value" labelLine={false} label={renderLabel} onClick={(entry)=>setSelectedDebt(selectedDebt?.debt?.id===entry.debt?.id?null:entry)}>
+          <div className="debt-pie-row">
+            <div className="fv-chart-wrap" style={{width:"100%",maxWidth:300,margin:"0 auto"}}>
+            <RechartsReady minHeight={200} render={R=>(
+            <R.ResponsiveContainer width="100%" height={200}>
+              <R.PieChart>
+              <R.Pie data={pieData} cx="50%" cy="50%" innerRadius="28%" outerRadius="48%" dataKey="value" labelLine={false} label={renderLabel} onClick={(entry)=>setSelectedDebt(selectedDebt?.debt?.id===entry.debt?.id?null:entry)}>
                 {pieData.map((entry,i)=>(<R.Cell key={i} fill={entry.color} stroke={selectedDebt?.debt?.id===entry.debt?.id?"#fff":"transparent"} strokeWidth={selectedDebt?.debt?.id===entry.debt?.id?3:0} style={{cursor:"pointer",opacity:selectedDebt&&selectedDebt.debt?.id!==entry.debt?.id?0.5:1}}/>))}
               </R.Pie>
             </R.PieChart>
+            </R.ResponsiveContainer>
             )}/>
+            </div>
             <div style={{flex:1,minWidth:0}}>
               {pieData.map((d,i)=>(
                 <div key={i} onClick={()=>setSelectedDebt(selectedDebt?.debt?.id===d.debt?.id?null:d)} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:10,marginBottom:3,cursor:"pointer",background:selectedDebt?.debt?.id===d.debt?.id?d.color+"18":"transparent",border:selectedDebt?.debt?.id===d.debt?.id?`1.5px solid ${d.color}33`:"1.5px solid transparent"}}>
@@ -3339,7 +3364,7 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
               <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>🎯 Debt-Free Projection</div>
               <div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:C.greenMid,marginBottom:2,letterSpacing:-.5}}>{base.months>=600?"Increase payments":dfDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
               <div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginBottom:16}}>{base.months>=600?"Min payments don't cover interest":timeStr+" from today · min payments only"}</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,marginBottom:16}}>
                 {[["Total Owed",fmt(totalBal),"#fca5a5"],["Min/mo",fmt(totalMin),"rgba(255,255,255,.8)"],["Total Interest",base.months<600?fmt(base.interest):"—","rgba(255,255,255,.6)"]].map(([l,v,c])=>(
                   <div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}>
                     <div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2,textTransform:"uppercase"}}>{l}</div>
@@ -3369,7 +3394,7 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
                     <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.6)",marginBottom:8}}>Payoff Timeline</div>
                     <RechartsReady minHeight={120} render={R=>(
                     <R.ResponsiveContainer width="100%" height={120}>
-                      <R.AreaChart data={chartData} margin={{left:-20,right:4,top:4,bottom:0}}>
+                      <R.AreaChart data={chartData} margin={{left:0,right:8,top:4,bottom:0}}>
                         <defs>
                           <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#fca5a5" stopOpacity={.3}/>
@@ -5019,7 +5044,7 @@ function IncomeSpendingView({expenses,income,trades,bills=[]}){
         if(!total)return null;
         return(<div style={{background:C.surface,border:`1px solid ${C.borderLight}`,borderRadius:18,padding:18,marginBottom:14}}>
           <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Income Breakdown</div>
-          <div style={{display:"flex",alignItems:"center",gap:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",minWidth:0}}>
             <RechartsReady minHeight={120} render={R=>(<R.PieChart width={120} height={120}><R.Pie data={sources.map(s=>({name:s.l,value:s.v}))} cx={55} cy={55} innerRadius={35} outerRadius={55} dataKey="value" paddingAngle={2}>{sources.map((s,i)=><R.Cell key={i} fill={s.c}/>)}</R.Pie></R.PieChart>)}/>
             <div style={{flex:1}}>{sources.map(s=>(<div key={s.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:8,height:8,borderRadius:"50%",background:s.c}}/><span style={{fontSize:12,color:C.textMid}}>{s.l}</span></div><div style={{textAlign:"right"}}><span style={{fontFamily:MF,fontWeight:700,fontSize:12,color:C.text}}>{fmt(s.v)}</span><span style={{fontSize:11,color:C.textFaint,marginLeft:4}}>{(s.v/total*100).toFixed(0)}%</span></div></div>))}</div>
           </div>
@@ -5035,11 +5060,12 @@ function IncomeSpendingView({expenses,income,trades,bills=[]}){
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"20px 4px 12px",marginBottom:14}}>
         <div style={{display:"flex",gap:16,paddingLeft:16,marginBottom:12,flexWrap:"wrap"}}>{[[C.green,"Income"],[C.red,"Spending"],[C.accent,"Saved"],[C.teal,"Savings %"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:3,background:c}}/><span style={{fontSize:12,color:C.textLight}}>{l}</span></div>)}</div>
         <RechartsReady minHeight={220} render={R=>(
+        <div className="fv-chart-wrap">
         <R.ResponsiveContainer width="100%" height={220}>
-          <R.ComposedChart data={data.map(m=>({...m,savingsRate:m.income>0?Math.max(0,((m.income-m.spending)/m.income)*100):0}))} margin={{left:4,right:4,top:4,bottom:0}} barGap={3}>
+          <R.ComposedChart data={data.map(m=>({...m,savingsRate:m.income>0?Math.max(0,((m.income-m.spending)/m.income)*100):0}))} margin={{left:0,right:0,top:4,bottom:4}} barGap={3}>
             <R.XAxis dataKey="month" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/>
-            <R.YAxis yAxisId="left" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
-            <R.YAxis yAxisId="right" orientation="right" tick={{fill:C.teal,fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v.toFixed(0)+"%"} width={32}/>
+            <R.YAxis yAxisId="left" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={36}/>
+            <R.YAxis yAxisId="right" orientation="right" tick={{fill:C.teal,fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v.toFixed(0)+"%"} width={28}/>
             <R.Tooltip content={<TT/>}/>
             <R.Bar yAxisId="left" dataKey="income" name="Income" fill={C.green} radius={[4,4,0,0]}/>
             <R.Bar yAxisId="left" dataKey="spending" name="Spending" fill={C.red} radius={[4,4,0,0]}/>
@@ -5047,6 +5073,7 @@ function IncomeSpendingView({expenses,income,trades,bills=[]}){
             <R.Line yAxisId="right" type="monotone" dataKey="savingsRate" name="Savings %" stroke={C.teal} strokeWidth={2.5} dot={{r:3,fill:C.teal}} activeDot={{r:5}}/>
           </R.ComposedChart>
         </R.ResponsiveContainer>
+        </div>
         )}/>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -8285,8 +8312,8 @@ function AppInner(){
             ))}
           </div>
         </div>}<div style={{padding:"9px 12px",borderRadius:10,background:C.accentBg,border:`1px solid ${C.accentMid}`,marginTop:10,fontSize:12,color:C.accent,lineHeight:1.5}}>🔄 For auto-logged recurring expenses (Netflix, rent, etc.), use <strong>More → Recurring</strong>.</div></Modal>}
-      {modal==="bill"&&<Modal title="Add Bill" icon={CalendarClock} onClose={cl} onSubmit={submit} submitLabel="Add Bill" accent={C.amber} error={formError}><FI label="Bill Name" placeholder="Rent, Electric, Netflix..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Weekly","Bi-weekly","Monthly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/><FS label="Pay from (when you mark paid)" options={PAID_FROM_OPTIONS.map(k=>({value:k,label:PAID_FROM_FS_LABELS[k]}))} value={normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)} onChange={e=>{ff("paidFrom",e.target.value);const v=normalizePaidFrom(e.target.value);if(v==="credit")ff("creditDebtId",pickDefaultCreditDebtId(settings,debts)||"");else ff("creditDebtId","");ff("bankAccountId",pickDefaultBankAccountId(v,accounts,settings)||"");}}/>{normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)==="credit"&&cardDebtsList(debts).length>1&&<FS label="Which card pays this bill" options={cardDebtsList(debts).map(d=>({value:String(d.id),label:d.name+" — "+fmt(parseFloat(d.balance||0))+" principal"}))} value={String(form.creditDebtId||"")} onChange={e=>ff("creditDebtId",e.target.value)}/>}{normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)==="credit"&&cardDebtsList(debts).length===0&&<div style={{fontSize:12,color:C.red,marginBottom:12,lineHeight:1.45}}>Add each card under <strong>More → Debt</strong> (type: <strong>Credit card</strong>) first.</div>}{normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)==="checking"&&cashAccountsByKind(accounts,"checking").length>1&&<FS label="Which checking account" options={cashAccountsByKind(accounts,"checking").map(a=>({value:String(a.id),label:(a.name||"Checking")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.bankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"")} onChange={e=>ff("bankAccountId",e.target.value)}/>}{normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)==="savings"&&cashAccountsByKind(accounts,"savings").length>1&&<FS label="Which savings account" options={cashAccountsByKind(accounts,"savings").map(a=>({value:String(a.id),label:(a.name||"Savings")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.bankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"")} onChange={e=>ff("bankAccountId",e.target.value)}/>}{household.enabled&&household.members.length>1&&<div style={{marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Paid by</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{[{id:"shared",name:"Shared",emoji:"🏠"},...household.members].map(m=>(<button key={m.id} onClick={()=>ff("paidBy",m.id)} style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:99,border:`1.5px solid ${(form.paidBy||"shared")===m.id?C.amber:C.border}`,background:(form.paidBy||"shared")===m.id?"#FFFBEB":"#fff",cursor:"pointer",fontSize:12,fontWeight:(form.paidBy||"shared")===m.id?700:400,color:(form.paidBy||"shared")===m.id?C.amber:C.textMid}}><span>{m.emoji}</span><span>{m.name}</span></button>))}</div></div>}<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Auto-Pay</div><div style={{fontSize:12,color:C.textLight,lineHeight:1.4}}>Badge only — does not mark paid or move money. You still tap paid when it clears.</div></div><button type="button" onClick={()=>ff("autoPay",!form.autoPay)} style={{background:"none",border:"none",cursor:"pointer",color:form.autoPay?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.autoPay?<ToggleRight size={30}/>:<ToggleLeft size={30}/>}</button></div></Modal>}
-      {modal==="debt"&&<Modal title="Add Debt" icon={CreditCard} onClose={cl} onSubmit={submit} submitLabel="Track Debt" accent={C.red} wide error={formError}><FI label="Name" placeholder="Car loan, Chase Sapphire, Amex..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><FS label="Debt type" options={[{value:"loan",label:"Loan / installment / other"},{value:"credit_card",label:"💳 Credit card (charges go here)"}]} value={form.debtKind==="credit_card"?"credit_card":"loan"} onChange={e=>ff("debtKind",e.target.value)}/><div style={{display:"flex",gap:12}}><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div style={{display:"flex",gap:12}}><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/>{form.debtKind!=="credit_card"&&<><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",marginTop:10,marginBottom:8,fontSize:12,color:C.textMid,lineHeight:1.45}}>Loans with a min. payment can add a matching <strong>monthly bill</strong> automatically. Marking that bill paid updates this loan’s balance (principal portion).</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Add monthly bill</div><div style={{fontSize:11,color:C.textLight}}>Same amount as min. payment · Bills tab</div></div><button type="button" className="ba" onClick={()=>ff("addLoanBill",!(form.addLoanBill!==false))} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:form.addLoanBill!==false?C.accent:C.borderLight}}>{form.addLoanBill!==false?<ToggleRight size={30}/>:<ToggleLeft size={30}/>}</button></div>{form.addLoanBill!==false&&parseFloat(form.minPayment||0)>0&&<><FI label="First bill due" type="date" value={form.loanBillDueDate||todayStr()} onChange={e=>ff("loanBillDueDate",e.target.value)}/><FS label="Bill pays from" options={PAID_FROM_OPTIONS.filter(k=>k!=="credit"&&k!=="none").map(k=>({value:k,label:PAID_FROM_FS_LABELS[k]}))} value={normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking")} onChange={e=>{ff("billPaidFrom",e.target.value);ff("billBankAccountId",pickDefaultBankAccountId(normalizePaidFrom(e.target.value),accounts,settings)||"");}}/>{normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking")==="checking"&&cashAccountsByKind(accounts,"checking").length>1&&<FS label="Which checking" options={cashAccountsByKind(accounts,"checking").map(a=>({value:String(a.id),label:(a.name||"Checking")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"")} onChange={e=>ff("billBankAccountId",e.target.value)}/>}{normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking")==="savings"&&cashAccountsByKind(accounts,"savings").length>1&&<FS label="Which savings" options={cashAccountsByKind(accounts,"savings").map(a=>({value:String(a.id),label:(a.name||"Savings")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"")} onChange={e=>ff("billBankAccountId",e.target.value)}/>}</>}</>}</div><div style={{marginTop:12}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Chart color</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>{DEBT_PALETTE.map(hex=>{const auto=DEBT_PALETTE[debts.length%DEBT_PALETTE.length];const sel=(form.color&&isValidHexColor(form.color)?form.color.trim():auto).toLowerCase();return(<button key={hex} type="button" className="ba" onClick={()=>ff("color",hex)} aria-label={hex} style={{width:28,height:28,borderRadius:8,background:hex,border:`2px solid ${sel===hex.toLowerCase()?C.accent:C.border}`,cursor:"pointer",padding:0}}/>);})}</div><FI label="Custom (#hex)" placeholder="Optional — overrides swatch" value={form.color||""} onChange={e=>ff("color",e.target.value)}/><div style={{fontSize:11,color:C.textLight,marginTop:6,lineHeight:1.4}}>Pie chart & debt list dots. Empty = next color in rotation ({DEBT_PALETTE[debts.length%DEBT_PALETTE.length]}).</div></div></Modal>}
+      {modal==="bill"&&<Modal title="Add Bill" icon={CalendarClock} onClose={cl} onSubmit={submit} submitLabel="Add Bill" accent={C.amber} error={formError}><FI label="Bill Name" placeholder="Rent, Electric, Netflix..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><div className="modal-field-row"><FI half label="Amount ($)" type="number" value={form.amount||""} onChange={e=>ff("amount",e.target.value)}/><FI half label="Due Date" type="date" value={form.dueDate||""} onChange={e=>ff("dueDate",e.target.value)}/></div><FS label="Recurring" options={["Weekly","Bi-weekly","Monthly","Quarterly","Annual","One-time"]} value={form.recurring||""} onChange={e=>ff("recurring",e.target.value)}/><FS label="Pay from (when you mark paid)" options={PAID_FROM_OPTIONS.map(k=>({value:k,label:PAID_FROM_FS_LABELS[k]}))} value={normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)} onChange={e=>{ff("paidFrom",e.target.value);const v=normalizePaidFrom(e.target.value);if(v==="credit")ff("creditDebtId",pickDefaultCreditDebtId(settings,debts)||"");else ff("creditDebtId","");ff("bankAccountId",pickDefaultBankAccountId(v,accounts,settings)||"");}}/>{normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)==="credit"&&cardDebtsList(debts).length>1&&<FS label="Which card pays this bill" options={cardDebtsList(debts).map(d=>({value:String(d.id),label:d.name+" — "+fmt(parseFloat(d.balance||0))+" principal"}))} value={String(form.creditDebtId||"")} onChange={e=>ff("creditDebtId",e.target.value)}/>}{normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)==="credit"&&cardDebtsList(debts).length===0&&<div style={{fontSize:12,color:C.red,marginBottom:12,lineHeight:1.45}}>Add each card under <strong>More → Debt</strong> (type: <strong>Credit card</strong>) first.</div>}{normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)==="checking"&&cashAccountsByKind(accounts,"checking").length>1&&<FS label="Which checking account" options={cashAccountsByKind(accounts,"checking").map(a=>({value:String(a.id),label:(a.name||"Checking")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.bankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"")} onChange={e=>ff("bankAccountId",e.target.value)}/>}{normalizePaidFrom(form.paidFrom||settings.defaultBillPaidFrom)==="savings"&&cashAccountsByKind(accounts,"savings").length>1&&<FS label="Which savings account" options={cashAccountsByKind(accounts,"savings").map(a=>({value:String(a.id),label:(a.name||"Savings")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.bankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"")} onChange={e=>ff("bankAccountId",e.target.value)}/>}{household.enabled&&household.members.length>1&&<div style={{marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Paid by</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{[{id:"shared",name:"Shared",emoji:"🏠"},...household.members].map(m=>(<button key={m.id} onClick={()=>ff("paidBy",m.id)} style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:99,border:`1.5px solid ${(form.paidBy||"shared")===m.id?C.amber:C.border}`,background:(form.paidBy||"shared")===m.id?"#FFFBEB":"#fff",cursor:"pointer",fontSize:12,fontWeight:(form.paidBy||"shared")===m.id?700:400,color:(form.paidBy||"shared")===m.id?C.amber:C.textMid}}><span>{m.emoji}</span><span>{m.name}</span></button>))}</div></div>}<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderTop:`1px solid ${C.border}`,marginTop:4}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Auto-Pay</div><div style={{fontSize:12,color:C.textLight,lineHeight:1.4}}>Badge only — does not mark paid or move money. You still tap paid when it clears.</div></div><button type="button" onClick={()=>ff("autoPay",!form.autoPay)} style={{background:"none",border:"none",cursor:"pointer",color:form.autoPay?C.accent:C.borderLight,padding:0,display:"flex"}}>{form.autoPay?<ToggleRight size={30}/>:<ToggleLeft size={30}/>}</button></div></Modal>}
+      {modal==="debt"&&<Modal title="Add Debt" icon={CreditCard} onClose={cl} onSubmit={submit} submitLabel="Track Debt" accent={C.red} wide error={formError}><FI label="Name" placeholder="Car loan, Chase Sapphire, Amex..." value={form.name||""} onChange={e=>ff("name",e.target.value)}/><FS label="Debt type" options={[{value:"loan",label:"Loan / installment / other"},{value:"credit_card",label:"💳 Credit card (charges go here)"}]} value={form.debtKind==="credit_card"?"credit_card":"loan"} onChange={e=>ff("debtKind",e.target.value)}/><div className="modal-field-row"><FI half label="Balance ($)" type="number" value={form.balance||""} onChange={e=>ff("balance",e.target.value)}/><FI half label="Original ($)" type="number" value={form.original||""} onChange={e=>ff("original",e.target.value)}/></div><div className="modal-field-row"><FI half label="Rate %" type="number" value={form.rate||""} onChange={e=>ff("rate",e.target.value)}/><FI half label="Min Payment ($)" type="number" value={form.minPayment||""} onChange={e=>ff("minPayment",e.target.value)}/></div>{form.debtKind!=="credit_card"&&<><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",marginTop:10,marginBottom:8,fontSize:12,color:C.textMid,lineHeight:1.45}}>Loans with a min. payment can add a matching <strong>monthly bill</strong> automatically. Marking that bill paid updates this loan’s balance (principal portion).</div><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0"}}><div><div style={{fontSize:13,fontWeight:600,color:C.text}}>Add monthly bill</div><div style={{fontSize:11,color:C.textLight}}>Same amount as min. payment · Bills tab</div></div><button type="button" className="ba" onClick={()=>ff("addLoanBill",!(form.addLoanBill!==false))} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:form.addLoanBill!==false?C.accent:C.borderLight}}>{form.addLoanBill!==false?<ToggleRight size={30}/>:<ToggleLeft size={30}/>}</button></div>{form.addLoanBill!==false&&parseFloat(form.minPayment||0)>0&&<><FI label="First bill due" type="date" value={form.loanBillDueDate||todayStr()} onChange={e=>ff("loanBillDueDate",e.target.value)}/><FS label="Bill pays from" options={PAID_FROM_OPTIONS.filter(k=>k!=="credit"&&k!=="none").map(k=>({value:k,label:PAID_FROM_FS_LABELS[k]}))} value={normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking")} onChange={e=>{ff("billPaidFrom",e.target.value);ff("billBankAccountId",pickDefaultBankAccountId(normalizePaidFrom(e.target.value),accounts,settings)||"");}}/>{normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking")==="checking"&&cashAccountsByKind(accounts,"checking").length>1&&<FS label="Which checking" options={cashAccountsByKind(accounts,"checking").map(a=>({value:String(a.id),label:(a.name||"Checking")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"")} onChange={e=>ff("billBankAccountId",e.target.value)}/>}{normalizePaidFrom(form.billPaidFrom||settings.defaultBillPaidFrom||"checking")==="savings"&&cashAccountsByKind(accounts,"savings").length>1&&<FS label="Which savings" options={cashAccountsByKind(accounts,"savings").map(a=>({value:String(a.id),label:(a.name||"Savings")+" — "+fmt(parseFloat(a.balance||0))}))} value={String(form.billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"")} onChange={e=>ff("billBankAccountId",e.target.value)}/>}</>}</>}<div style={{marginTop:12}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Chart color</div><div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>{DEBT_PALETTE.map(hex=>{const auto=DEBT_PALETTE[debts.length%DEBT_PALETTE.length];const sel=(form.color&&isValidHexColor(form.color)?form.color.trim():auto).toLowerCase();return(<button key={hex} type="button" className="ba" onClick={()=>ff("color",hex)} aria-label={hex} style={{width:28,height:28,borderRadius:8,background:hex,border:`2px solid ${sel===hex.toLowerCase()?C.accent:C.border}`,cursor:"pointer",padding:0}}/>);})}</div><FI label="Custom (#hex)" placeholder="Optional — overrides swatch" value={form.color||""} onChange={e=>ff("color",e.target.value)}/><div style={{fontSize:11,color:C.textLight,marginTop:6,lineHeight:1.4}}>Pie chart & debt list dots. Empty = next color in rotation ({DEBT_PALETTE[debts.length%DEBT_PALETTE.length]}).</div></div></Modal>}
       {modal==="bgoal_home"&&<Modal title="Spending Envelope" icon={Target} onClose={cl} onSubmit={()=>{if(!form.category||!form.limit)return;setBGoals(p=>[...p,{id:Date.now(),...form}]);cl();}} submitLabel="Add Envelope" accent={C.purple}><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:C.accent,lineHeight:1.5}}>
         💡 Variable expenses like gas, haircuts, groceries. These reserve money in your safe-to-spend before you log them.
       </div>
