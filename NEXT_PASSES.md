@@ -38,12 +38,16 @@
 - Done: Quarantine corrupt local JSON so startup can fall back cleanly.
 - Done: Remove unsafe one-time bill auto-unpay and consolidate recurring bill reshow.
 - Done: Pause sign-out/reset when pending sync or cloud delete cannot finish safely.
+- Done: Add basic dialog semantics to confirmation modals.
+- Done: Add accessible names to home icon-only controls.
+- Done: Guard legacy credit-card owed from double-counting when card debts exist.
 
 ## Pass 5: PWA and Update UX
 - Done: Add "new version available, reload" UX when the service worker updates.
 - Done: Send update reload message to the waiting service worker before reload.
 - Add an e2e or manual checklist for offline shell load.
 - Confirm service worker cache behavior after deploy.
+- Investigate why the Playwright test runner hangs during spec discovery in this environment before wiring it into release.
 
 ## Later
 - Extract and unit test bank CSV parsing.

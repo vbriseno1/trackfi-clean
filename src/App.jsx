@@ -312,6 +312,7 @@ function debtOwedForBreakdown(d){
   return b+(isLoanDebt(d)?parseFloat(d?.loanAccruedInterest)||0:0);
 }
 function sumDebtsPrincipalAndAccrued(debts){return(debts||[]).reduce((s,d)=>s+debtOwedForBreakdown(d),0);}
+function legacyCreditCardOwed(accounts,debts){return cardDebtsList(debts).length?0:parseFloat(accounts?.credit_card||0);}
 /** ~APR/12 × owed principal+accrual; not actual/365 — labeled as approximate in UI/copy. */
 function approxMonthlyInterestOnDebts(debts){
   return(debts||[]).reduce((s,d)=>s+debtOwedForBreakdown(d)*(parseFloat(d.rate||0)/100/12),0);
@@ -1486,7 +1487,7 @@ budget · trades · ytd · recent expenses · payday · help"}]);
   const chPick=cashAccountsByKind(accounts,"checking");
   const svPick=cashAccountsByKind(accounts,"savings");
   const ti=useMemo(()=>(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0)),[income]);
-  const ccOwed=parseFloat(accounts.credit_card||0);
+  const ccOwed=legacyCreditCardOwed(accounts,debts);
   const chatNow=new Date();
   // Memoize on financial inputs only — recomputes whenever expenses/accounts/etc. change (responsive). Unrelated UI state does not rerun this.
   const safeToSpendChat=useMemo(
@@ -2410,7 +2411,7 @@ function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwG
   const[goalInput,setGoalInput]=useState("");
   function saveGoal(){const v=parseFloat(goalInput);if(v>0){const g={target:v,created:Date.now()};setNwGoal(g);setShowGoalInput(false);}}
 
-  const ccOwedNw=parseFloat(accounts.credit_card||0);
+  const ccOwedNw=legacyCreditCardOwed(accounts,debts);
   const loanOwedNw=sumDebtsPrincipalAndAccrued(debts);
   const totalDebt=loanOwedNw+ccOwedNw;
   const totalOriginal=debts.reduce((s,d)=>s+debtOriginalBaseline(d),0);
@@ -4283,7 +4284,7 @@ function FinancialPhysicalView({income,expenses,debts,accounts,bills,savingsGoal
   const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const annualIncome=ti*12;
   const te=expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
-  const td=sumDebtsPrincipalAndAccrued(debts)+parseFloat(accounts.credit_card||0);
+  const td=sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts);
   const tm=debts.reduce((s,d)=>s+(parseFloat(d.minPayment)||0),0);
   const liq=(totalSavingsBalance(accounts))+(parseFloat(accounts.cushion||0));
   const ta=(totalCheckingBalance(accounts))+(totalSavingsBalance(accounts))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0));
@@ -4885,7 +4886,7 @@ function HealthScoreView({income,expenses,debts,accounts,bills,tradingAccount,on
   const ti=(parseFloat(income.primary||0)*(income.payFrequency==="Weekly"?(52/12):income.payFrequency==="Twice Monthly"?2:income.payFrequency==="Monthly"?1:(26/12)))+(parseFloat(income.other||0))+(parseFloat(income.trading||0))+(parseFloat(income.rental||0))+(parseFloat(income.dividends||0))+(parseFloat(income.freelance||0));
   const _hsAllMs=new Set(expenses.map(e=>e.date?.slice(0,7)).filter(Boolean));
   const te=_hsAllMs.size>0?expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)/Math.max(1,_hsAllMs.size):0;
-  const td=sumDebtsPrincipalAndAccrued(debts)+parseFloat(accounts.credit_card||0);
+  const td=sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts);
   const ta=(totalCheckingBalance(accounts))+(totalSavingsBalance(accounts))+(parseFloat(accounts.cushion||0))+(parseFloat(accounts.investments||0))+(parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.brokerage||0))+(parseFloat(accounts.crypto||0))+(parseFloat(accounts.hsa||0))+(parseFloat(accounts.property||0))+(parseFloat(accounts.vehicles||0))+(parseFloat(tradingAccount?.balance||0));
   const liquid=(totalSavingsBalance(accounts))+(parseFloat(accounts.cushion||0));
   const _hsNow=new Date();const _hsMs=_hsNow.getFullYear()+"-"+String(_hsNow.getMonth()+1).padStart(2,"0");
@@ -5110,14 +5111,20 @@ function SwipeRow({children,onDelete}){
 }
 
 function ConfirmDialog({title,message,onConfirm,onCancel,danger=false}){
+  const dialogRef=useRef(null);
+  useEffect(()=>{
+    const prev=typeof document!=="undefined"?document.activeElement:null;
+    dialogRef.current?.focus();
+    return()=>{try{prev?.focus?.();}catch{}};
+  },[]);
   return(
     <div style={{position:"fixed",inset:0,zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(10,22,40,.55)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",padding:20,animation:"fadeIn .15s ease"}} onClick={e=>e.target===e.currentTarget&&onCancel()}>
-      <div style={{background:C.surface,borderRadius:20,padding:24,width:"100%",maxWidth:340,boxShadow:"0 8px 40px rgba(0,0,0,.2)",animation:"slideUp .2s ease"}}>
-        <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>{title}</div>
-        <div style={{fontSize:14,color:C.textLight,lineHeight:1.5,marginBottom:20}}>{message}</div>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message" tabIndex={-1} onKeyDown={e=>{if(e.key==="Escape")onCancel();}} style={{background:C.surface,borderRadius:20,padding:24,width:"100%",maxWidth:340,boxShadow:"0 8px 40px rgba(0,0,0,.2)",animation:"slideUp .2s ease",outline:"none"}}>
+        <div id="confirm-dialog-title" style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:8}}>{title}</div>
+        <div id="confirm-dialog-message" style={{fontSize:14,color:C.textLight,lineHeight:1.5,marginBottom:20}}>{message}</div>
         <div style={{display:"flex",gap:10}}>
-          <button onClick={onCancel} style={{flex:1,background:C.bg,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer"}}>Cancel</button>
-          <button onClick={onConfirm} style={{flex:1,background:danger?C.red:C.accent,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>{danger?"Delete":"Confirm"}</button>
+          <button type="button" onClick={onCancel} style={{flex:1,background:C.bg,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer"}}>Cancel</button>
+          <button type="button" onClick={onConfirm} style={{flex:1,background:danger?C.red:C.accent,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>{danger?"Delete":"Confirm"}</button>
         </div>
       </div>
     </div>
@@ -6635,7 +6642,7 @@ function AppInner(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[ready]);
 
-  useEffect(()=>{if(!ready)return;if(!cloudLoadedRef.current&&!accountsHasPositiveBalance(accounts))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=sumDebtsPrincipalAndAccrued(debts)+parseFloat(accounts.credit_card||0);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
+  useEffect(()=>{if(!ready)return;if(!cloudLoadedRef.current&&!accountsHasPositiveBalance(accounts))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
   useEffect(()=>{if(!ready)return;if(!balHist.length&&!cloudLoadedRef.current)return;ss("fv6:balHist",balHist);},[balHist,ready]);
   useEffect(()=>{if(!ready)return;if(!expenses.length&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
@@ -6795,7 +6802,7 @@ function AppInner(){
   const totalIncome=monthlyIncome;
   const totalAssets=useMemo(()=>totalAppAssets(accounts,tradingAccount),[accounts,tradingAccount]);
   const totalExp=useMemo(()=>expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0),[expenses]);
-  const totalDebt=useMemo(()=>sumDebtsPrincipalAndAccrued(debts)+parseFloat(accounts.credit_card||0),[debts,accounts.credit_card]);
+  const totalDebt=useMemo(()=>sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts),[debts,accounts]);
   const thisMonthExp=useMemo(()=>{const n=new Date();const ms=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0");return expenses.filter(e=>e.date?.startsWith(ms)).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);},[expenses]);
   const cashflow=totalIncome-thisMonthExp;
   const netWorth=totalAssets-totalDebt;
@@ -7531,8 +7538,8 @@ function AppInner(){
                   </button>);
                 })()}
                 {syncing&&<div style={{width:7,height:7,borderRadius:"50%",background:C.accent,flexShrink:0,animation:"pulse 1.2s ease-in-out infinite"}} title="Syncing..."/>}
-                <button className="ba" onClick={()=>setDarkMode(d=>{const n=!d;setSettings(s=>({...s,darkMode:n}));return n;})} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 9px",cursor:"pointer",display:"flex",color:C.textMid}}>{darkMode?<Sun size={15}/>:<Moon size={15}/>}</button>
-                <button className="ba" onClick={()=>setHidden(h=>!h)} style={{background:hidden?C.accentBg:C.bg,border:`1px solid ${hidden?C.accentMid:C.border}`,borderRadius:10,padding:"7px 9px",cursor:"pointer",display:"flex",color:hidden?C.accent:C.textMid}}>{hidden?<EyeOff size={15}/>:<Eye size={15}/>}</button>
+                <button type="button" className="ba" aria-label={darkMode?"Switch to light mode":"Switch to dark mode"} aria-pressed={darkMode} onClick={()=>setDarkMode(d=>{const n=!d;setSettings(s=>({...s,darkMode:n}));return n;})} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 9px",cursor:"pointer",display:"flex",color:C.textMid}}>{darkMode?<Sun size={15}/>:<Moon size={15}/>}</button>
+                <button type="button" className="ba" aria-label={hidden?"Show balances":"Hide balances"} aria-pressed={hidden} onClick={()=>setHidden(h=>!h)} style={{background:hidden?C.accentBg:C.bg,border:`1px solid ${hidden?C.accentMid:C.border}`,borderRadius:10,padding:"7px 9px",cursor:"pointer",display:"flex",color:hidden?C.accent:C.textMid}}>{hidden?<EyeOff size={15}/>:<Eye size={15}/>}</button>
               </div>
             </div>
 
