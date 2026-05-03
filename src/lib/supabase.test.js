@@ -239,7 +239,7 @@ describe('supabase helpers', () => {
     vi.resetModules()
     const { flushPendingSync } = await import('./supabase.js')
     const r = await flushPendingSync()
-    expect(r).toEqual({ conflict: false })
+    expect(r).toEqual({ conflict: false, error: false, skipped: false })
   })
 
   it('cancelPendingDebouncedSync clears without throwing', async () => {

@@ -2921,12 +2921,6 @@ function SpendingView({expenses,setExpenses,budgetGoals,setBGoals,categories,set
       if(row?.paid)paying.delete(id);
     });
   },[bills]);
-  useEffect(()=>{
-    const dueRecurring=bills.filter(b=>b.paid&&b.recurring&&b.recurring!=="One-time"&&dueIn(b.dueDate)<=recurringReshowUpcomingWithinDays(b.recurring,settings));
-    if(!dueRecurring.length)return;
-    const ids=new Set(dueRecurring.map(b=>String(b.id)));
-    setBills(p=>p.map(b=>ids.has(String(b.id))?{...b,paid:false,paidDate:undefined,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined}:b));
-  },[bills,setBills,settings]);
   const overdue=bills.filter(b=>!b.paid&&dueIn(b.dueDate)<0);
   const unpaid=bills.filter(b=>!b.paid);
   const paid=bills.filter(b=>b.paid);
@@ -6297,7 +6291,11 @@ function AppInner(){
     clearUserDataRowVersions();
   }
   async function handleSignOut(){
-    await flushPendingSync();
+    const syncOut=await flushPendingSync();
+    if(authSession?.user?.id&&(syncOut?.error||syncOut?.conflict||syncOut?.skipped)){
+      showToast("Sign out paused — export a backup or try again online after sync finishes.","error");
+      return false;
+    }
     // Unsubscribe push notifications so this device stops receiving alerts after sign-out
     try{
       if("serviceWorker" in navigator){
@@ -6322,6 +6320,7 @@ function AppInner(){
     setSyncRecoverableError(false);
     setStorageQuotaBlocked(false);
     resetLocalStorageQuotaWarned();
+    return true;
   }
   const[ready,setReady]=useState(false);
   useEffect(()=>{readyRef.current=ready;},[ready]);
@@ -6667,32 +6666,17 @@ function AppInner(){
     ss("fv6:dashConfig",dashConfig);ss("fv6:household",household);
   },[profCategory,profSub,appName,greetName,dashConfig,household,ready]);
   useEffect(()=>{try{localStorage.setItem("fv_account_rates",JSON.stringify(accountRates));}catch{};if(ready)ss("fv6:accountRates",accountRates);},[accountRates,ready]);
-  // Auto-unpay One-time bills at the start of each new calendar month.
-  // We store the last month we ran this check so it only fires once per month.
-  useEffect(()=>{
-    if(!ready||!bills.length)return;
-    const _now=new Date();const currentMonth=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0");
-    let lastMonth="";
-    try{lastMonth=localStorage.getItem("fv_bills_reset_month")||"";}catch{}
-    if(lastMonth===currentMonth)return;
-    const needsReset=bills.some(b=>b.paid&&(!b.recurring||b.recurring==="One-time"));
-    if(!needsReset)return;
-    setBills(p=>p.map(b=>{
-      if(!b.paid)return b;
-      if(b.recurring&&b.recurring!=="One-time")return b;
-      return{...b,paid:false,paidDate:undefined};
-    }));
-    try{localStorage.setItem("fv_bills_reset_month",currentMonth);}catch{}
-  },[ready,bills.length]);
   // Recurring bills marked paid stay in history until the next due is within the cadence-specific window — then they return to Upcoming (unpaid for the new cycle).
+  // One-time paid bills stay paid until the user manually marks them unpaid, so balances cannot be double-applied by an automatic reset.
   useEffect(()=>{
     if(!ready||!bills.length||!billsNeedingRecurringReshow)return;
     setBills(p=>p.map(b=>{
       if(!b.paid||!b.recurring||b.recurring==="One-time")return b;
-      if(isBillDueDateUnusable(b.dueDate))return{...b,paid:false,paidDate:undefined};
+      const cleared={...b,paid:false,paidDate:undefined,loanPrincipalApplied:undefined,loanPrevInterestAsOfDate:undefined,loanPrevAccruedInterest:undefined};
+      if(isBillDueDateUnusable(b.dueDate))return cleared;
       const w=recurringReshowUpcomingWithinDays(b.recurring,settings);
       if(dueIn(b.dueDate)>w)return b;
-      return{...b,paid:false,paidDate:undefined};
+      return cleared;
     }));
   },[ready,billsNeedingRecurringReshow,settings]);
   /** Prevents duplicate system notifications: SW showNotification is async, so two effect runs can both schedule OS before the in-app dedupe row exists. */
@@ -7412,6 +7396,29 @@ function AppInner(){
       return true;
     }catch(e){showToast&&showToast("Import failed — "+(e?.message||"try another backup file"),"error");return false;}
   }
+  async function handleResetAllData(){
+    const syncOut=await flushPendingSync();
+    if(authSession?.user?.id&&(syncOut?.error||syncOut?.conflict||syncOut?.skipped)){
+      showToast("Reset paused — export a backup or try again online after sync finishes.","error");
+      return false;
+    }
+    const uid=_getUserId();
+    if(uid){
+      const out=await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}`,{method:"DELETE"});
+      if(out?.error){
+        showToast("Reset paused — cloud data could not be deleted. Try again while online.","error");
+        return false;
+      }
+    }
+    resetUserState();
+    setOnboarded(false);
+    try{localStorage.removeItem("fv_onboarded");}catch{}
+    setSyncRecoverableError(false);
+    setStorageQuotaBlocked(false);
+    resetLocalStorageQuotaWarned();
+    showToast("All data cleared","error");
+    return true;
+  }
 
   if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
 
@@ -7494,7 +7501,7 @@ function AppInner(){
       <style>{CSS}</style>
       <div id="fv-scroll" style={{flex:1,minHeight:0,minWidth:0,width:"100%",overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch",padding:"max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-left)) max(110px, calc(88px + env(safe-area-inset-bottom))) max(16px, env(safe-area-inset-right))",boxSizing:"border-box"}}>
         {!isOnline&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:"#1e293b",color:"#f1f5f9",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35}}>{authSession?.user?.id&&isSupabaseConfigured()?"📡 No internet — edits stay on this device and sync when you’re back online.":skipAuth?"📡 No internet — you can keep editing; everything stays in this browser.":"📡 No internet — you can keep editing on this device."}</div>}
-        {pwaUpdateReady&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.accent,border:`1px solid ${C.accentMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>New version available — reload to get the latest fixes.</span><button type="button" className="ba" onClick={()=>{try{navigator.serviceWorker?.controller?.postMessage({type:"SKIP_WAITING"});}catch{}window.location.reload();}} style={{background:"rgba(255,255,255,.22)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Reload</button><button type="button" className="ba" onClick={()=>setPwaUpdateReady(false)} style={{background:"transparent",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Later</button></div>}
+        {pwaUpdateReady&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.accent,border:`1px solid ${C.accentMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>New version available — reload to get the latest fixes.</span><button type="button" className="ba" onClick={async()=>{try{const reg=await navigator.serviceWorker?.getRegistration?.();if(reg?.waiting){navigator.serviceWorker.addEventListener("controllerchange",()=>window.location.reload(),{once:true});reg.waiting.postMessage({type:"SKIP_WAITING"});setTimeout(()=>window.location.reload(),1500);return;}navigator.serviceWorker?.controller?.postMessage({type:"SKIP_WAITING"});}catch{}window.location.reload();}} style={{background:"rgba(255,255,255,.22)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Reload</button><button type="button" className="ba" onClick={()=>setPwaUpdateReady(false)} style={{background:"transparent",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Later</button></div>}
         {storageQuotaBlocked&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.amber,border:`1px solid ${C.amberMid}`,color:"#78350f",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Storage full — this browser can’t save more data. Export a backup, then free space or clear old data.</span><button type="button" className="ba" onClick={()=>navTo("export")} style={{background:"rgba(255,255,255,.35)",border:"1px solid rgba(120,53,15,.25)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Export</button><button type="button" className="ba" onClick={()=>{setStorageQuotaBlocked(false);resetLocalStorageQuotaWarned();}} style={{background:"transparent",border:"1px solid rgba(120,53,15,.35)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Dismiss</button></div>}
         {syncRecoverableError&&isOnline&&authSession?.user?.id&&isSupabaseConfigured()&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.red,border:`1px solid ${C.redMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Couldn’t refresh data from the cloud. You’re still using what’s on this device.</span><button type="button" className="ba" onClick={()=>{void loadFromSupabase(authSession);}} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Try again</button></div>}
         {["spend","home","bills"].includes(tab)&&<button className="ba" type="button" aria-label={tab==="bills"?"Add bill":"Log expense"} onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
@@ -7989,7 +7996,7 @@ function AppInner(){
                 <div style={{flex:"1 1 180px",minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#fff",overflowWrap:"anywhere",wordBreak:"break-word"}}>{authSession?.user?.email}</div><div style={{fontSize:11,color:"rgba(255,255,255,.5)",marginTop:2}}>{(()=>{const t=parseInt(localStorage.getItem("fv_last_sync")||"0");const ago=t?Math.floor((Date.now()-t)/1000):null;return ago===null?"Signed in":ago<10?"✓ Just synced":ago<60?"✓ Synced "+ago+"s ago":ago<3600?"✓ Synced "+Math.floor(ago/60)+"m ago":"Signed in";})()}</div></div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:8,marginLeft:"auto",flex:"0 1 auto",justifyContent:"flex-end"}}>
                   <button onClick={async()=>{if(authSession&&!syncing){await loadFromSupabase(authSession);showToast("✓ Synced");}}} style={{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,.8)",fontSize:12,fontWeight:700,cursor:syncing?"default":"pointer",display:"flex",alignItems:"center",gap:5,opacity:syncing?0.6:1,whiteSpace:"nowrap"}}>{syncing?"Syncing...":"↻ Sync now"}</button>
-                  <button onClick={()=>setConfirm({title:"Sign Out",message:"You'll stay in offline mode. Your local data is safe.",onConfirm:()=>{handleSignOut();setConfirm(null);},danger:false})} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,.7)",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Sign Out</button>
+                  <button onClick={()=>setConfirm({title:"Sign Out",message:"You'll stay in offline mode. Your local data is safe.",onConfirm:async()=>{const ok=await handleSignOut();if(ok)setConfirm(null);},danger:false})} style={{background:"rgba(255,255,255,.1)",border:"none",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,.7)",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>Sign Out</button>
                 </div>
               </div>
             ):(
@@ -8153,7 +8160,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast} settlements={settlements} setSettlements={setSettlements} hhBudgets={hhBudgets} setHhBudgets={setHhBudgets}/>}
         {tab==="export"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Export Data</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button onClick={()=>setShowExport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:12}}><Download size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4}}>Import Bank CSV</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button onClick={()=>setShowImport(true)} style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:`linear-gradient(135deg,${C.green},${C.teal})`,border:"none",borderRadius:16,padding:"18px 20px",cursor:"pointer",marginBottom:16}}><FileText size={22} color="white"/><div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.7)"}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"12px 14px",fontSize:13,color:C.accent,lineHeight:1.6}}>💡 100% offline — your bank data never leaves your device. Export CSV from your bank's website, then paste it here. Auto-detects format and categorizes by merchant.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This removes expenses, bills, debts, goals, household, recurring, notifications, chart history, categories, and settings from this device, and deletes synced cloud rows for this account. Your session stays signed in; PIN and other browser site data outside cleared keys are unchanged. Export JSON under Data first if you need a backup. This cannot be undone.",onConfirm:async()=>{resetUserState();setOnboarded(false);try{localStorage.removeItem("fv_onboarded");}catch{}setSyncRecoverableError(false);setStorageQuotaBlocked(false);resetLocalStorageQuotaWarned();const uid=_getUserId();if(uid){try{await supaFetch(`/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}`,{method:"DELETE"});}catch{}}showToast("All data cleared","error");setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast} onLoadDemo={isDemoMode?undefined:requestLoadDemo} cloudSyncBump={cloudSyncMetaBump} supabaseConfigured={isSupabaseConfigured()} skipAuthMode={skipAuth} signedInForSync={!!authSession?.user?.id} netOnline={isOnline} syncing={syncing} syncRecoverableError={syncRecoverableError}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This removes expenses, bills, debts, goals, household, recurring, notifications, chart history, categories, and settings from this device, and deletes synced cloud rows for this account. Your session stays signed in; PIN and other browser site data outside cleared keys are unchanged. Export JSON under Data first if you need a backup. This cannot be undone.",onConfirm:async()=>{const ok=await handleResetAllData();if(ok)setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast} onLoadDemo={isDemoMode?undefined:requestLoadDemo} cloudSyncBump={cloudSyncMetaBump} supabaseConfigured={isSupabaseConfigured()} skipAuthMode={skipAuth} signedInForSync={!!authSession?.user?.id} netOnline={isOnline} syncing={syncing} syncRecoverableError={syncRecoverableError}/>}
 
         {tab==="notifs"&&(
           <div className="fu">

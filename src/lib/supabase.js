@@ -465,6 +465,7 @@ export async function flushPendingSync() {
   const allowCloud = !!uid && !isTrackfiDemoMode();
   const keys = Object.keys(_ssBuffer);
   let conflict = false;
+  let error = false;
   for (const bare of keys) {
     const buf = _ssBuffer[bare];
     if (!buf) continue;
@@ -478,9 +479,10 @@ export async function flushPendingSync() {
       if (val !== undefined) {
         const out = await _flushKey(uid, bare, val);
         if (out?.conflict) conflict = true;
+        if (out?.error) error = true;
       }
     }
     delete _ssBuffer[bare];
   }
-  return { conflict };
+  return { conflict, error, skipped: keys.length > 0 && !allowCloud };
 }

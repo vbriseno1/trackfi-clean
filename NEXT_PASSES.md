@@ -36,9 +36,12 @@
 - Done: Audit import/export/reset edge cases around corrupted local data and backup restore.
 - Done: Validate backup restore before writing app state.
 - Done: Quarantine corrupt local JSON so startup can fall back cleanly.
+- Done: Remove unsafe one-time bill auto-unpay and consolidate recurring bill reshow.
+- Done: Pause sign-out/reset when pending sync or cloud delete cannot finish safely.
 
 ## Pass 5: PWA and Update UX
 - Done: Add "new version available, reload" UX when the service worker updates.
+- Done: Send update reload message to the waiting service worker before reload.
 - Add an e2e or manual checklist for offline shell load.
 - Confirm service worker cache behavior after deploy.
 
