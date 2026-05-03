@@ -5447,13 +5447,7 @@ function RecurringView({expenses,setExpenses,categories,showToast,appReady,recur
     const updated=recurrings.map(r=>{
       if(r.nextDate<=today&&r.active!==false){
         newExps.push({id:Date.now()+Math.random(),name:r.name,amount:r.amount,category:r.category,date:today,notes:"Auto-logged",paidFrom:normalizePaidFrom(defaultExpensePaidFrom)});
-        const d=new Date(r.nextDate+"T00:00:00");
-        if(r.frequency==="Weekly")d.setDate(d.getDate()+7);
-        else if(r.frequency==="Bi-weekly")d.setDate(d.getDate()+14);
-        else if(r.frequency==="Monthly")d.setMonth(d.getMonth()+1);
-        else if(r.frequency==="Quarterly")d.setMonth(d.getMonth()+3);
-        else if(r.frequency==="Annual")d.setFullYear(d.getFullYear()+1);
-        const _nd=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+        const _nd=shiftRecurringBillDueDate(r.nextDate,r.frequency,today,true);
         return{...r,nextDate:_nd,lastLogged:today};
       }
       return r;
@@ -5841,6 +5835,9 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
       {/* ── TAB: SETTLE UP ── */}
       {tab==="settle"&&(
         <div>
+          <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 12px",fontSize:12,color:C.accent,lineHeight:1.45,marginBottom:12}}>
+            Settle Up currently balances each member's personal spending plus equal share of items tagged Shared. It does not yet track who actually paid for every shared purchase.
+          </div>
           <div style={{background:C.surface,borderRadius:16,padding:16,marginBottom:14,boxShadow:"0 1px 4px rgba(10,22,40,.07)"}}>
             <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Current Balances</div>
             {balances.map(m=>{
@@ -5875,7 +5872,7 @@ function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBi
                   {p.from.emoji} <strong style={{color:"#fff"}}>{memberLabel(p.from)}</strong> pays {p.to.emoji} <strong style={{color:"#fff"}}>{memberLabel(p.to)}</strong> → <span style={{color:"#34D399",fontWeight:700}}>{fmt(p.amount)}</span>
                 </div>
               ))}
-              <div style={{fontSize:11,color:"rgba(255,255,255,.65)",marginTop:10,lineHeight:1.45}}>This records who settled with whom; it does not change or delete expenses.</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,.65)",marginTop:10,lineHeight:1.45}}>This records who settled the equal shared-cost split; it does not change or delete expenses.</div>
               <button onClick={markSettled} style={{marginTop:12,width:"100%",background:"#6366F1",border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:800,fontSize:14,cursor:"pointer",fontFamily:MF}}>
                 Mark as Settled ✓
               </button>
@@ -6978,6 +6975,7 @@ function AppInner(){
       });
       return;
     }
+    if((pf==="checking"||pf==="savings")&&hasCashSubaccounts(accounts))return;
     setAccounts(p=>{
       const n={...p};
       if(pf==="checking")n.checking=String(round2(parseFloat(p.checking||0)-a));
@@ -7016,6 +7014,7 @@ function AppInner(){
       });
       return;
     }
+    if((pf==="checking"||pf==="savings")&&hasCashSubaccounts(accounts))return;
     setAccounts(p=>{
       const n={...p};
       if(pf==="checking")n.checking=String(round2(parseFloat(p.checking||0)+a));

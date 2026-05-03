@@ -41,6 +41,9 @@
 - Done: Add basic dialog semantics to confirmation modals.
 - Done: Add accessible names to home icon-only controls.
 - Done: Guard legacy credit-card owed from double-counting when card debts exist.
+- Done: Prevent checking/savings balance fallback when subaccounts are active.
+- Done: Use month-safe date shifting for recurring expenses.
+- Done: Clarify household Settle Up as equal shared-cost split until payer tracking exists.
 
 ## Pass 5: PWA and Update UX
 - Done: Add "new version available, reload" UX when the service worker updates.
