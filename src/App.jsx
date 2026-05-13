@@ -34,6 +34,7 @@ import {
   setLastSyncUiBumpHandler,
 } from "./lib/supabase.js";
 import { allocateLoanPayment, round2 } from "./lib/loanSplit.js";
+import { simulateMultiDebtPayoff, simRowsFromDebts, singleDebtPayoffMonths } from "./lib/debtPayoffSim.js";
 import { shiftRecurringBillDueDate } from "./lib/billDueDates.js";
 import { isCreditCardDebt, cardDebtsList, legacyCreditCardOwed } from "./lib/creditCardTotals.js";
 import { optimizedSettlementPairs } from "./lib/household.js";
@@ -3230,10 +3231,31 @@ function ExtraPayModal({debt,onConfirm,onClose}){
   );
 }
 
-function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt,onAddDebt}){
+function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt,onAddDebt,debtSavePing=0}){
   const[selectedDebt,setSelectedDebt]=useState(null);
   const[strategy,setStrategy]=useState("avalanche");
   const[payModal,setPayModal]=useState(null);
+  const simRows=useMemo(()=>simRowsFromDebts(debts),[debts]);
+  const baseSim=useMemo(()=>simulateMultiDebtPayoff(simRows,{strategy,extraMonthly:0,maxMonths:600,returnSeries:true}),[simRows,strategy]);
+  const extraSim=useMemo(()=>(extraPayDebt>0?simulateMultiDebtPayoff(simRows,{strategy,extraMonthly:Number(extraPayDebt)||0,maxMonths:600,returnSeries:true}):null),[simRows,strategy,extraPayDebt]);
+  const chartDebtData=useMemo(()=>{
+    const s=baseSim.series;
+    if(!s?.length)return[];
+    const exS=extraSim?.series;
+    const last=s[s.length-1]?.month||0;
+    const maxPts=15;
+    const step=Math.max(1,Math.ceil(last/Math.max(1,maxPts-1)));
+    const out=[];
+    for(let mo=0;mo<=last;mo+=step){
+      const bp=s.find(x=>x.month>=mo)??s[s.length-1];
+      let extraPt;
+      if(exS?.length)extraPt=(exS.find(x=>x.month>=mo)??exS[exS.length-1])?.totalOwed;
+      out.push({mo,base:bp.totalOwed,extra:extraPt});
+    }
+    const lastPt=s[s.length-1];
+    if(out.length&&lastPt&&out[out.length-1].mo<lastPt.month)out.push({mo:lastPt.month,base:lastPt.totalOwed,extra:exS?.length?(exS[exS.length-1]?.totalOwed):undefined});
+    return out;
+  },[baseSim.series,extraSim?.series]);
   const totalDebt=debts.reduce((s,d)=>s+debtOwedForBreakdown(d),0);
   const totalOriginal=debts.reduce((s,d)=>s+debtOriginalBaseline(d),0);
   const totalPaidDown=Math.max(0,totalOriginal-totalDebt);
@@ -3241,14 +3263,11 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
   const pieData=debts.map((d)=>({name:d.name,value:debtOwedForBreakdown(d),color:debtDisplayColor(d,debts),debt:d}));
   function calcPayoff(d){
     const owed=debtOwedForBreakdown(d);
-    const rate=(parseFloat(d.rate)||0)/100/12;
-    const minPay=parseFloat(d.minPayment)>0?parseFloat(d.minPayment):Math.max(25,owed*0.02+owed*rate);
+    const r=singleDebtPayoffMonths(owed,d?.rate,d?.minPayment);
     if(owed<=0)return{months:0,totalInterest:0,payoffDate:"Paid off"};
-    if(minPay<=rate*owed)return{months:999,totalInterest:999999,payoffDate:"Never"};
-    let b=owed,mo=0,interest=0;
-    while(b>0.01&&mo<600){const i=b*rate;interest+=i;b=b+i-minPay;mo++;}
-    const d2=new Date();d2.setMonth(d2.getMonth()+mo);
-    return{months:mo,totalInterest:interest,payoffDate:d2.toLocaleDateString("en-US",{month:"long",year:"numeric"})};
+    if(!r.feasible)return{months:999,totalInterest:999999,payoffDate:"Never"};
+    const d2=new Date();d2.setMonth(d2.getMonth()+r.months);
+    return{months:r.months,totalInterest:r.totalInterest,payoffDate:d2.toLocaleDateString("en-US",{month:"long",year:"numeric"})};
   }
   const prioritized=[...debts].sort((a,b)=>strategy==="avalanche"?(parseFloat(b.rate)||0)-(parseFloat(a.rate)||0):debtOwedForBreakdown(a)-debtOwedForBreakdown(b));
   const renderLabel=({cx,cy,midAngle,innerRadius,outerRadius,index})=>{
@@ -3266,6 +3285,7 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
           <div style={{minWidth:0,flex:"1 1 min(200px, 100%)"}}>
             <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Debt Tracker</div>
             <div style={{fontSize:13,color:C.textLight}}>{fmt(totalDebt)} total across {debts.length} debt{debts.length!==1?"s":""}</div>
+            {debts.length>0&&<div style={{fontSize:11,color:C.textLight,marginTop:6,lineHeight:1.45}}>Saves to this device automatically{debtSavePing?<> · last update {new Date(debtSavePing).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</>:null}. Sign in for cloud backup.</div>}
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end",flex:"1 1 auto",minWidth:0}}>
             {debts.length>0&&<button type="button" className="ba" onClick={()=>setModal("simulator")} style={{display:"flex",alignItems:"center",gap:5,background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",color:C.textMid,fontWeight:600,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}><Calculator size={13}/>Sim</button>}
@@ -3344,51 +3364,31 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
         </div>
         {debts.length>0&&(()=>{
           const totalBal=debts.reduce((s,d)=>s+debtOwedForBreakdown(d),0);
-          const totalMin=debts.reduce((s,d)=>{const ow=debtOwedForBreakdown(d);const r=(parseFloat(d.rate)||0)/100/12;return s+(parseFloat(d.minPayment)||Math.max(25,ow*0.02+r*ow));},0);
-          function simPayoff(extraPerMo){
-            let rem=prioritized.map(d=>{const ow=debtOwedForBreakdown(d);const r=(parseFloat(d.rate)||0)/100/12;return{...d,bal:ow,rate:r,min:parseFloat(d.minPayment)||Math.max(25,ow*0.02+r*ow)};});
-            let mo=0,totalInt=0,extraPool=extraPerMo;
-            while(rem.some(d=>d.bal>0.01)&&mo<600){mo++;let freed=0;rem=rem.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;totalInt+=i;const pay=Math.min(d.min,d.bal+i);freed+=Math.max(0,d.min-pay);return{...d,bal:Math.max(0,d.bal+i-pay)};});const focus=rem.find(d=>d.bal>0.01);if(focus){const idx=rem.indexOf(focus);rem[idx].bal=Math.max(0,rem[idx].bal-(freed+extraPool));}}
-            return{months:mo,interest:totalInt};
-          }
-          const base=simPayoff(0);
-          const withExtra=extraPayDebt>0?simPayoff(extraPayDebt):null;
-          const moSaved=withExtra?Math.max(0,base.months-withExtra.months):0;
-          const intSaved=withExtra?Math.max(0,base.interest-withExtra.interest):0;
-          const dfDate=new Date();dfDate.setMonth(dfDate.getMonth()+base.months);
+          const totalMin=debts.reduce((s,d)=>{const ow=debtOwedForBreakdown(d);if(ow<=0)return s;const r=(parseFloat(d.rate)||0)/100/12;return s+(parseFloat(d.minPayment)>0?parseFloat(d.minPayment):Math.max(25,ow*0.02+r*ow));},0);
+          const withExtra=extraSim;
+          const moSaved=withExtra?Math.max(0,baseSim.months-withExtra.months):0;
+          const intSaved=withExtra?Math.max(0,baseSim.totalInterest-withExtra.totalInterest):0;
+          const dfDate=new Date();dfDate.setMonth(dfDate.getMonth()+baseSim.months);
           const dfDateExtra=withExtra?new Date():null;if(dfDateExtra)dfDateExtra.setMonth(dfDateExtra.getMonth()+withExtra.months);
-          const yrs=Math.floor(base.months/12);const mos2=base.months%12;
+          const yrs=Math.floor(baseSim.months/12);const mos2=baseSim.months%12;
           const timeStr=yrs>0?yrs+"y "+(mos2>0?mos2+"mo":""):mos2+"mo";
+          const stratLabel=strategy==="avalanche"?"highest APR":"smallest balance";
+          const stuck=baseSim.capped||!baseSim.debtFree;
           return(
             <div style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
               <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>🎯 Debt-Free Projection</div>
-              <div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:C.greenMid,marginBottom:2,letterSpacing:-.5}}>{base.months>=600?"Increase payments":dfDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
-              <div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginBottom:16}}>{base.months>=600?"Min payments don't cover interest":timeStr+" from today · min payments only"}</div>
+              <div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:C.greenMid,marginBottom:2,letterSpacing:-.5}}>{stuck?"Increase payments":dfDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
+              <div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginBottom:16}}>{stuck?"Payments may not cover interest on one or more debts":`${timeStr} · APR÷12 estimate · minimums on all, roll freed cash to ${stratLabel}`}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,marginBottom:16}}>
-                {[["Total Owed",fmt(totalBal),"#fca5a5"],["Min/mo",fmt(totalMin),"rgba(255,255,255,.8)"],["Total Interest",base.months<600?fmt(base.interest):"—","rgba(255,255,255,.6)"]].map(([l,v,c])=>(
+                {[["Total Owed",fmt(totalBal),"#fca5a5"],["Min/mo",fmt(totalMin),"rgba(255,255,255,.8)"],["Total Interest",!stuck?fmt(baseSim.totalInterest):"—","rgba(255,255,255,.6)"]].map(([l,v,c])=>(
                   <div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}>
                     <div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2,textTransform:"uppercase"}}>{l}</div>
                     <div style={{fontFamily:MF,fontSize:12,fontWeight:700,color:c}}>{v}</div>
                   </div>
                 ))}
               </div>
-              {base.months>0&&base.months<500&&(()=>{
-                // Build balance-over-time data for chart
-                const chartData=[];
-                let rem2=prioritized.map(d=>{const ow=debtOwedForBreakdown(d);const r=(parseFloat(d.rate)||0)/100/12;return{bal:ow,rate:r,min:parseFloat(d.minPayment)||Math.max(25,ow*0.02+r*ow)};});
-                let rem3=withExtra?prioritized.map(d=>{const ow=debtOwedForBreakdown(d);const r=(parseFloat(d.rate)||0)/100/12;return{bal:ow,rate:r,min:parseFloat(d.minPayment)||Math.max(25,ow*0.02+r*ow)};}) : null;
-                const step=Math.max(1,Math.floor(base.months/12));
-                for(let mo=0;mo<=Math.min(base.months,600);mo+=step){
-                  const bal2=rem2.reduce((s,d)=>s+Math.max(0,d.bal),0);
-                  const bal3=rem3?rem3.reduce((s,d)=>s+Math.max(0,d.bal),0):null;
-                  chartData.push({mo,base:parseFloat(bal2.toFixed(0)),extra:bal3!==null?parseFloat(bal3.toFixed(0)):undefined});
-                  // Advance simulation
-                  let freed2=0;
-                  rem2=rem2.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;const pay=Math.min(d.min,d.bal+i);freed2+=Math.max(0,d.min-pay);return{...d,bal:Math.max(0,d.bal+i-pay)};});
-                  const f2=rem2.find(d=>d.bal>0.01);if(f2){const fi=rem2.indexOf(f2);for(let s=0;s<step;s++)rem2[fi].bal=Math.max(0,rem2[fi].bal-(freed2));}
-                  if(rem3){let freed3=0;rem3=rem3.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;const pay=Math.min(d.min,d.bal+i);freed3+=Math.max(0,d.min-pay);return{...d,bal:Math.max(0,d.bal+i-pay)};});const f3=rem3.find(d=>d.bal>0.01);if(f3){const fi3=rem3.indexOf(f3);for(let s=0;s<step;s++)rem3[fi3].bal=Math.max(0,rem3[fi3].bal-(freed3+extraPayDebt));}}
-                }
-                if(chartData[chartData.length-1]?.base>0)chartData.push({mo:base.months,base:0,extra:withExtra?0:undefined});
+              {!stuck&&baseSim.months>0&&baseSim.months<500&&chartDebtData.length>0&&(()=>{
+                const chartData=chartDebtData;
                 return(
                   <div style={{marginBottom:16}}>
                     <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.6)",marginBottom:8}}>Payoff Timeline</div>
@@ -3407,14 +3407,14 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
                         </defs>
                         <R.XAxis dataKey="mo" tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v+"mo"}/>
                         <R.YAxis tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
-                        <R.Tooltip formatter={(v,n)=>[fmt(v),n==="base"?"Min payments":"With extra"]} contentStyle={{background:C.navy,border:"1px solid rgba(255,255,255,.15)",borderRadius:10,fontSize:11}} labelFormatter={v=>v+"mo"}/>
+                        <R.Tooltip formatter={(v,n)=>[fmt(v),n==="base"?`Combined (${strategy})`:"With extra"]} contentStyle={{background:C.navy,border:"1px solid rgba(255,255,255,.15)",borderRadius:10,fontSize:11}} labelFormatter={v=>v+"mo"}/>
                         <R.Area type="monotone" dataKey="base" stroke="#fca5a5" strokeWidth={2} fill="url(#debtGrad)" dot={false} name="base"/>
                         {withExtra&&<R.Area type="monotone" dataKey="extra" stroke={C.greenMid} strokeWidth={2} fill="url(#debtGradX)" dot={false} name="extra"/>}
                       </R.AreaChart>
                     </R.ResponsiveContainer>
                     )}/>
                     {withExtra&&<div style={{display:"flex",gap:12,justifyContent:"center",marginTop:4}}>
-                      <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"rgba(255,255,255,.5)"}}><div style={{width:12,height:2,background:"#fca5a5",borderRadius:1}}/> Min payments</div>
+                      <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"rgba(255,255,255,.5)"}}><div style={{width:12,height:2,background:"#fca5a5",borderRadius:1}}/> {strategy==="avalanche"?"Avalanche baseline":"Snowball baseline"}</div>
                       <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"rgba(255,255,255,.5)"}}><div style={{width:12,height:2,background:C.greenMid,borderRadius:1}}/> With extra</div>
                     </div>}
                   </div>
@@ -3444,11 +3444,11 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
                   </div>
                   {extraPayDebt>0&&<button onClick={()=>setExtraPayDebt(0)} style={{background:"rgba(255,255,255,.08)",border:"none",borderRadius:8,padding:"10px 12px",color:"rgba(255,255,255,.4)",cursor:"pointer",fontSize:12,fontWeight:600,whiteSpace:"nowrap"}}>Clear</button>}
                 </div>
-                {extraPayDebt>0&&withExtra&&withExtra.months<base.months&&<div style={{background:"rgba(52,211,153,.15)",border:"1px solid rgba(52,211,153,.3)",borderRadius:10,padding:"10px 12px"}}>
+                {extraPayDebt>0&&withExtra&&withExtra.months<baseSim.months&&<div style={{background:"rgba(52,211,153,.15)",border:"1px solid rgba(52,211,153,.3)",borderRadius:10,padding:"10px 12px"}}>
                   <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.greenMid,marginBottom:2}}>{dfDateExtra.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
                   <div style={{fontSize:12,color:"rgba(255,255,255,.6)"}}>🎉 {moSaved} months sooner · save {fmt(intSaved)} in interest</div>
                 </div>}
-                {extraPayDebt>0&&withExtra&&withExtra.months>=base.months&&<div style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>Already at minimum threshold</div>}
+                {extraPayDebt>0&&withExtra&&withExtra.months>=baseSim.months&&<div style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>Already at minimum threshold</div>}
               </div>
             </div>
           );
@@ -3518,43 +3518,57 @@ function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraP
       </>}
   
     {debts.length>0&&(()=>{
-      const extra=50;
-      const ordered=strategy==="avalanche"
-        ?[...debts].sort((a,b)=>(parseFloat(b.rate)||0)-(parseFloat(a.rate)||0))
-        :[...debts].sort((a,b)=>debtOwedForBreakdown(a)-debtOwedForBreakdown(b));
-      let rolling=extra;
-      const plan=ordered.map(d=>{
-        const po=calcPayoff(d);
-        const ow=debtOwedForBreakdown(d);
-        const rMo=(parseFloat(d.rate)||0)/100/12;
-        const minPay=parseFloat(d.minPayment)||Math.max(25,ow*0.02+ow*rMo);
-        const mo=po.months;
-        const result2={name:d.name,months:mo,minPay,extra:rolling,interest:po.totalInterest,color:debtDisplayColor(d,debts)};
-        rolling+=minPay;
-        return result2;
-      });
-      const _filtMo=plan.map(p=>p.months).filter(m=>m<500);const maxMo=_filtMo.length?Math.max(..._filtMo):1;
-      return(<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:'14px',marginTop:14}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-          <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Payoff Schedule</div>
-          <div style={{display:'flex',gap:4,background:C.borderLight,borderRadius:8,padding:2}}>
-            {[['avalanche','⬆ Rate'],['snowball','⬇ Balance']].map(([s,l])=><button key={s} onClick={()=>setStrategy(s)} style={{padding:'5px 10px',borderRadius:6,border:'none',background:strategy===s?C.surface:'transparent',fontWeight:strategy===s?700:500,fontSize:11,cursor:'pointer',color:strategy===s?C.accent:C.textMid}}>{l}</button>)}
+      const ex=Number(extraPayDebt)||0;
+      const baselineAva=simulateMultiDebtPayoff(simRows,{strategy:"avalanche",extraMonthly:0,maxMonths:600});
+      const road=simulateMultiDebtPayoff(simRows,{strategy,extraMonthly:ex,maxMonths:600});
+      const sameExtraAva=ex>0&&strategy==="snowball"?simulateMultiDebtPayoff(simRows,{strategy:"avalanche",extraMonthly:ex,maxMonths:600}):null;
+      return(
+        <div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:14,marginTop:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+            <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Roadmap</div>
+            <div style={{display:"flex",gap:4,background:C.borderLight,borderRadius:8,padding:2}}>
+              {[["avalanche","⬆ Avalanche"],["snowball","⬇ Snowball"]].map(([s,l])=>(
+                <button key={s} type="button" onClick={()=>setStrategy(s)} style={{padding:"5px 10px",borderRadius:6,border:"none",background:strategy===s?C.surface:"transparent",fontWeight:strategy===s?700:500,fontSize:11,cursor:"pointer",color:strategy===s?C.accent:C.textMid}}>{l}</button>
+              ))}
+            </div>
           </div>
-        </div>
-        <div style={{fontSize:11,color:C.textLight,marginBottom:10}}>+${extra}/mo snowball applied • {strategy==="avalanche"?"Highest rate first":"Smallest balance first"}</div>
-        {plan.map((p,i)=><div key={p.name} style={{marginBottom:10}}>
-          <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-            <div style={{display:'flex',alignItems:'center',gap:6}}><div style={{width:8,height:8,borderRadius:'50%',background:p.color}}/><span style={{fontSize:13,fontWeight:600,color:C.text}}>{p.name}</span>{i===0&&<span style={{fontSize:10,background:C.accentBg,color:C.accent,borderRadius:4,padding:'1px 5px',fontWeight:700}}>ATTACK</span>}</div>
-            <span style={{fontSize:12,fontFamily:MF,fontWeight:700,color:p.months<500?C.text:C.red}}>{p.months<500?p.months+'mo':'∞'}</span>
+          <div style={{fontSize:11,color:C.textLight,marginBottom:12,lineHeight:1.45}}>
+            Each month: accrue <strong>APR÷12</strong> on every open balance, pay each debt's <strong>minimum</strong> (or payoff if less), then send what's left to <strong>{strategy==="avalanche"?"the highest APR debt":"the smallest balance"}</strong>. Matches the navy card + slider. Real loan payments in Trackfi still use <strong>actual/365</strong> between payment dates.
           </div>
-          <div style={{height:6,background:C.borderLight,borderRadius:3}}><div style={{height:6,width:p.months<500?((p.months/Math.max(maxMo,1))*100).toFixed(1)+'%':'100%',background:p.color,borderRadius:3}}/></div>
-          <div style={{fontSize:11,color:C.textLight,marginTop:2}}>+${p.extra.toFixed(0)}/mo · {fmt(p.interest)} interest</div>
-        </div>)}
-        <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between'}}>
-          <div style={{fontSize:12,color:C.textLight}}>Total interest: <span style={{fontWeight:700,color:C.red}}>{fmt(plan.reduce((s,p)=>s+(p.interest<999999?p.interest:0),0))}</span></div>
-          <div style={{fontSize:12,color:C.textLight}}>Debt-free in: <span style={{fontWeight:700,color:C.green}}>{(plan.some(p=>p.months<500)?Math.max(...plan.map(p=>p.months).filter(m=>m<500))+"mo":"—")}</span></div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(148px,1fr))",gap:10,marginBottom:14}}>
+            <div style={{background:C.surfaceAlt,borderRadius:10,padding:"10px 12px"}}>
+              <div style={{fontSize:10,color:C.textLight,fontWeight:600}}>BASELINE · MINS + AVALANCHE</div>
+              <div style={{fontFamily:MF,fontWeight:800,fontSize:15,color:C.text}}>{baselineAva.debtFree?baselineAva.months+" mo":"—"}</div>
+              <div style={{fontSize:11,color:C.textLight}}>{baselineAva.debtFree?fmt(baselineAva.totalInterest)+" est. interest":baselineAva.capped?"Raise payments":"—"}</div>
+            </div>
+            <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"10px 12px"}}>
+              <div style={{fontSize:10,color:C.accent,fontWeight:600}}>YOUR PLAN · {strategy.toUpperCase()}{ex>0?" + "+fmt(ex)+"/MO":""}</div>
+              <div style={{fontFamily:MF,fontWeight:800,fontSize:15,color:C.text}}>{road.debtFree?road.months+" mo":"—"}</div>
+              <div style={{fontSize:11,color:C.textLight}}>{road.debtFree?fmt(road.totalInterest)+" est. interest":road.capped?"Raise payments":"—"}</div>
+            </div>
+          </div>
+          {sameExtraAva&&sameExtraAva.debtFree&&road.debtFree&&(
+            <div style={{fontSize:12,color:C.textMid,marginBottom:12,padding:"8px 10px",background:C.greenBg,borderRadius:8,border:`1px solid ${C.greenMid}`}}>
+              Same <strong>+{fmt(ex)}/mo</strong> aimed at <strong>highest APR</strong> instead: <strong>{sameExtraAva.months} mo</strong> · {fmt(sameExtraAva.totalInterest)} interest
+              {sameExtraAva.months<road.months?<> ({road.months-sameExtraAva.months} mo faster than snowball)</>:sameExtraAva.months>road.months?<> (snowball wins on time here)</>:null}
+            </div>
+          )}
+          {road.milestones.length>0&&(
+            <>
+              <div style={{fontSize:11,fontWeight:700,color:C.text,marginBottom:6}}>Milestones — loans disappearing ({strategy}{ex>0?", +"+fmt(ex)+"/mo":""})</div>
+              <div style={{maxHeight:220,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:10}}>
+                {road.milestones.slice(0,50).map((m,i)=>(
+                  <div key={`${m.id}-${i}`} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"8px 12px",borderBottom:i<Math.min(49,road.milestones.length-1)?`1px solid ${C.border}`:"none",fontSize:12}}>
+                    <span style={{color:C.text,minWidth:0}}>Mo {m.month}: <strong>{m.name}</strong> paid off</span>
+                    <span style={{color:C.textLight,fontFamily:MF,fontSize:11,flexShrink:0}}>{fmt(m.totalOwed)} remaining</span>
+                  </div>
+                ))}
+              </div>
+              {road.milestones.length>50&&<div style={{fontSize:11,color:C.textLight,marginTop:6}}>Showing first 50 payoffs.</div>}
+            </>
+          )}
         </div>
-      </div>);
+      );
     })()}
         {payModal&&<ExtraPayModal debt={payModal} onConfirm={pay=>{const raw=parseFloat(pay)||0;if(raw<=0)return;const d=payModal;const payDay=todayStr();if(isLoanDebt(d)){const sp=splitLoanPayment(d,raw,payDay);setDebts(p=>p.map(x=>String(x.id)===String(payModal.id)?applyLoanPaymentToDebtRow(x,sp.principal,payDay,sp.newAccruedCarryover):x));const tail=sp.newAccruedCarryover>0.001?` · ${fmt(sp.newAccruedCarryover)} accrued pending`:"";showToast(`Payment applied — ${fmt(sp.principal)} principal, ${fmt(sp.interest)} to interest (${sp.days}d)${tail}`);}else{setDebts(p=>p.map(x=>String(x.id)===String(payModal.id)?{...x,balance:String(Math.max(0,parseFloat(x.balance||0)-raw))}:x));showToast("Payment applied!");}setSelectedDebt(null);setPayModal(null);}} onClose={()=>setPayModal(null)}/>}
     </div>
@@ -6433,6 +6447,12 @@ function AppInner(){
   const[form,setForm]=useState({});
   const[editItem,setEditItem]=useState(null);
   const[extraPayDebt,setExtraPayDebt]=useState(0);
+  const[debtSavePing,setDebtSavePing]=useState(0);
+  useEffect(()=>{
+    if(!ready)return;
+    const t=setTimeout(()=>setDebtSavePing(Date.now()),450);
+    return()=>clearTimeout(t);
+  },[debts,ready]);
   const[confirm,setConfirm]=useState(null);
   const[syncing,setSyncing]=useState(false);
   const[toast,setToast]=useState(null);
@@ -8170,7 +8190,7 @@ function AppInner(){
           </div>
         )}
 
-        {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setBills={setBills} setModal={setModal} setEditItem={setEditItem} showToast={showToast} extraPayDebt={extraPayDebt} setExtraPayDebt={setExtraPayDebt} onAddDebt={()=>om("debt",{addLoanBill:true,loanBillDueDate:todayStr()})}/>}
+        {tab==="debt"&&<DebtView debts={debts} setDebts={setDebts} setBills={setBills} setModal={setModal} setEditItem={setEditItem} showToast={showToast} extraPayDebt={extraPayDebt} setExtraPayDebt={setExtraPayDebt} debtSavePing={debtSavePing} onAddDebt={()=>om("debt",{addLoanBill:true,loanBillDueDate:todayStr()})}/>}
         {tab==="savings"&&<SavingsGoalsView goals={savingsGoals} setGoals={setSGoals} income={income} accounts={accounts} accountRates={accountRates} setAccountRates={setAccountRates} showToast={showToast} applySpend={applySpend} settings={settings}/>}
         {tab==="recurring"&&<RecurringView expenses={expenses} setExpenses={setExpenses} categories={categories} showToast={showToast} appReady={ready} recurrings={recurrings} setRecurrings={setRecurrings} applySpend={applySpend} defaultExpensePaidFrom={settings.defaultExpensePaidFrom||"checking"} accounts={accounts} settings={settings} debts={debts}/>}
         {tab==="cashflow"&&<IncomeSpendingView expenses={expenses} income={income} bills={bills} trades={trades}/>}
@@ -8320,7 +8340,67 @@ function AppInner(){
       </div>
       <FS label="Category" options={categories.map(c=>c.name)} value={form.category||""} onChange={e=>ff("category",e.target.value)}/><FI label="Note (optional)" placeholder="e.g. haircuts ~2x/month" value={form.note||""} onChange={e=>ff("note",e.target.value)}/><FI label="Monthly Budget ($)" type="number" placeholder="e.g. 150" value={form.limit||""} onChange={e=>ff("limit",e.target.value)}/></Modal>}
       {modal==="receipt"&&<Modal title="Add from Photo" icon={Scan} onClose={cl} accent={C.purple}><div style={{textAlign:"center",padding:"10px 0 20px"}}><div style={{width:64,height:64,borderRadius:18,background:C.purpleBg,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><Scan size={30} color={C.purple}/></div><div style={{fontFamily:MF,fontWeight:700,fontSize:16,color:C.text,marginBottom:6}}>Add from Photo</div><div style={{fontSize:12,color:C.textMid,marginBottom:16,lineHeight:1.5}}>Take or choose a photo — you'll fill in the expense details after.</div><label style={{display:"block",background:C.purple,borderRadius:12,padding:"13px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>📷 Take Photo<input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><label style={{display:"block",background:C.purpleBg,border:`1px solid ${C.purpleMid}`,borderRadius:12,padding:"13px 0",color:C.purple,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:10}}>🖼 Choose from Library<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;cl();om("expense",{name:"Receipt",amount:"",category:"Misc",date:todayStr()});}}/></label><button className="ba" onClick={cl} style={{background:C.bg,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"12px 0",color:C.textMid,fontWeight:600,fontSize:14,cursor:"pointer",width:"100%"}}>Cancel</button></div></Modal>}
-      {modal==="simulator"&&debts.length>0&&(()=>{const dL=debts.map(d=>{const ow=debtOwedForBreakdown(d);const rate=parseFloat(d.rate||0)/100/12;const min=parseFloat(d.minPayment)>0?parseFloat(d.minPayment):Math.max(25,ow*0.02+ow*rate);return{...d,bal:ow,rate,min};});const tm=dL.reduce((s,d)=>s+d.min,0);const ex=Math.max(0,Number(extraPayDebt)||0);function sim(strat){let r=dL.map(d=>({...d}));let mo=0,ti=0;while(r.some(d=>d.bal>0)&&mo<600){mo++;let av=tm+ex;r=r.map(d=>{if(d.bal<=0)return d;const i=d.bal*d.rate;ti+=i;const p=Math.min(d.min,d.bal+i);av-=p;return{...d,bal:Math.max(0,d.bal+i-p)};});const ac=r.filter(d=>d.bal>0);if(ac.length&&av>0){const tgt=strat==="avalanche"?ac.reduce((a,b)=>a.rate>b.rate?a:b):ac.reduce((a,b)=>a.bal<b.bal?a:b);const idx=r.findIndex(d=>d.name===tgt.name);r[idx].bal=Math.max(0,r[idx].bal-av);}}return{months:mo,interest:ti};}const sn=sim("snowball"),av=sim("avalanche"),diff=sn.interest-av.interest;return(<Modal title="Payoff Simulator" icon={Calculator} onClose={cl} accent={C.green} wide><div style={{background:C.navy,borderRadius:14,padding:16,marginBottom:14,color:"#fff"}}><div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",marginBottom:4}}>TOTAL DEBT</div><div style={{fontFamily:MF,fontSize:26,fontWeight:800,color:C.red}}>{fmt(sumDebtsPrincipalAndAccrued(debts))}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>Min payments: {fmt(tm)}/mo · APR\u00f712 projection</div></div><div style={{marginBottom:16}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Extra Monthly Payment</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.accent}}>{ex>0?"+"+fmt(ex):"$0"}</div></div><input type="range" min="0" max="1000" step="25" value={extraPayDebt} onChange={e=>setExtraPayDebt(parseFloat(e.target.value)||0)} style={{width:"100%",accentColor:C.accent,cursor:"pointer",marginBottom:6}}/><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textFaint}}><span>$0</span><span>$500</span><span>$1,000</span></div><div style={{marginTop:8,fontSize:12,color:C.textLight}}>Total: <span style={{fontWeight:700,color:C.text}}>{fmt(tm+ex)}/mo</span></div></div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,158px),1fr))",gap:10,marginBottom:14,width:"100%",minWidth:0,boxSizing:"border-box"}}>{[{label:"❄️ Snowball",sub:"Smallest first",m:sn.months,i:sn.interest,c:C.accent},{label:"🔥 Avalanche",sub:"Highest rate first",m:av.months,i:av.interest,c:C.green}].map(s=><div key={s.label} style={{background:C.surface,border:`1.5px solid ${s.c}44`,borderRadius:14,padding:14,borderTop:`3px solid ${s.c}`,minWidth:0,boxSizing:"border-box"}}><div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:s.c,marginBottom:2}}>{s.label}</div><div style={{fontSize:11,color:C.textLight,marginBottom:10}}>{s.sub}</div><div style={{marginBottom:6}}><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>DEBT FREE</div><div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.text}}>{s.m>=600?"∞":s.m<12?s.m+"mo":Math.floor(s.m/12)+"y "+(s.m%12)+"mo"}</div></div><div><div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>INTEREST</div><div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red}}>{fmt(s.i)}</div></div></div>)}</div>{diff>0&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",fontSize:13,color:C.green,fontWeight:500}}>💡 Avalanche saves <strong>{fmt(diff)}</strong> vs Snowball</div>}</Modal>);})()} 
+            {modal==="simulator"&&debts.length>0&&(()=>{
+        const rows=simRowsFromDebts(debts);
+        const tm=rows.filter(r=>r.bal>0.01).reduce((s,r)=>s+r.min,0);
+        const ex=Math.max(0,Number(extraPayDebt)||0);
+        const sn=simulateMultiDebtPayoff(rows,{strategy:"snowball",extraMonthly:ex,maxMonths:600});
+        const av=simulateMultiDebtPayoff(rows,{strategy:"avalanche",extraMonthly:ex,maxMonths:600});
+        const minBase=simulateMultiDebtPayoff(rows,{strategy:"avalanche",extraMonthly:0,maxMonths:600});
+        const diff=Math.max(0,sn.totalInterest-av.totalInterest);
+        const fmtMo=m=>!m||m>=600?"∞":m<12?m+"mo":Math.floor(m/12)+"y "+(m%12)+"mo";
+        const avRoad=av;
+        return(
+          <Modal title="Payoff Simulator" icon={Calculator} onClose={cl} accent={C.green} wide>
+            <div style={{fontSize:12,color:C.textLight,lineHeight:1.55,marginBottom:14,padding:"10px 12px",background:C.surfaceAlt,borderRadius:12,border:`1px solid ${C.border}`}}>
+              Uses <strong>APR÷12</strong> for this preview. Logged payments still use <strong>actual/365</strong> on loans. Each month: pay every open debt's minimum, then send what's left (including the slider) to the strategy. Paid-off debts drop out of the minimum total.
+            </div>
+            <div style={{background:C.navy,borderRadius:14,padding:16,marginBottom:14,color:"#fff"}}>
+              <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",marginBottom:4}}>TOTAL DEBT</div>
+              <div style={{fontFamily:MF,fontSize:26,fontWeight:800,color:C.red}}>{fmt(sumDebtsPrincipalAndAccrued(debts))}</div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,.45)",marginTop:6,lineHeight:1.45}}>
+                Active minimums now: <strong>{fmt(tm)}/mo</strong>
+                <br/>
+                Minimums + high-rate first, no extra: {minBase.debtFree?<><strong>{fmtMo(minBase.months)}</strong> · {fmt(minBase.totalInterest)} est. interest</>:"raise payments on at least one debt"}
+              </div>
+            </div>
+            <div style={{marginBottom:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5}}>Extra monthly (after mins)</div>
+                <div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.accent}}>{ex>0?"+"+fmt(ex):"$0"}</div>
+              </div>
+              <input type="range" min="0" max="1000" step="25" value={extraPayDebt} onChange={e=>setExtraPayDebt(parseFloat(e.target.value)||0)} style={{width:"100%",accentColor:C.accent,cursor:"pointer",marginBottom:6}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textFaint}}><span>$0</span><span>$500</span><span>$1,000</span></div>
+              <div style={{marginTop:8,fontSize:12,color:C.textLight}}>Cash to debt (est.): <span style={{fontWeight:700,color:C.text}}>{fmt(tm+ex)}/mo</span></div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,158px),1fr))",gap:10,marginBottom:14,width:"100%",minWidth:0,boxSizing:"border-box"}}>
+              {[{label:"🔥 Avalanche",sub:"Highest APR first",r:av,c:C.green},{label:"❄️ Snowball",sub:"Smallest balance first",r:sn,c:C.accent}].map(s=>(
+                <div key={s.label} style={{background:C.surface,border:`1.5px solid ${s.c}44`,borderRadius:14,padding:14,borderTop:`3px solid ${s.c}`,minWidth:0,boxSizing:"border-box"}}>
+                  <div style={{fontFamily:MF,fontWeight:800,fontSize:13,color:s.c,marginBottom:2}}>{s.label}</div>
+                  <div style={{fontSize:11,color:C.textLight,marginBottom:10}}>{s.sub}</div>
+                  <div style={{marginBottom:6}}>
+                    <div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>DEBT FREE</div>
+                    <div style={{fontFamily:MF,fontWeight:800,fontSize:18,color:C.text}}>{fmtMo(s.r.months)}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:C.textLight,fontWeight:600,marginBottom:2}}>INTEREST (est.)</div>
+                    <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.red}}>{s.r.debtFree?fmt(s.r.totalInterest):"—"}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {diff>0.01&&<div style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:12,padding:"11px 14px",fontSize:13,color:C.green,fontWeight:500}}>💡 At +{fmt(ex)}/mo, avalanche saves <strong>{fmt(diff)}</strong> vs snowball</div>}
+            {avRoad.milestones.length>0&&ex>0&&(
+              <div style={{marginTop:12}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.slate,marginBottom:6}}>First payoffs (avalanche + extra)</div>
+                <div style={{fontSize:12,color:C.text,lineHeight:1.65}}>
+                  {avRoad.milestones.slice(0,5).map((m,i)=>(<div key={String(m.id)+"_"+i}>Month {m.month}: <strong>{m.name}</strong></div>))}
+                </div>
+              </div>
+            )}
+          </Modal>
+        );
+      })()} 
 
       {showImport&&<BankImportModal categories={categories} expenses={expenses} setExpenses={setExpenses} household={household} showToast={showToast} onClose={()=>setShowImport(false)}/>}
       {showExport&&<ExportModal expenses={expenses} bills={bills} debts={debts} accounts={accounts} income={income} savingsGoals={savingsGoals} budgetGoals={budgetGoals} trades={trades} shifts={shifts} categories={categories} appName={appName} greetName={greetName} tradingAccount={tradingAccount} onClose={()=>setShowExport(false)}/>}
