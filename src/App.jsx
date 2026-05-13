@@ -6535,6 +6535,7 @@ function AppInner(){
     const bootSafety=setTimeout(()=>{
       if(!bootDone){
         bootDone=true;
+        cloudLoadedRef.current=true;
         setReady(true);
       }
     },12000);
@@ -6636,8 +6637,9 @@ function AppInner(){
         ){
           setDarkMode(bootSettings.darkMode);
         }
-        // After all boot setState calls so ss() effects never see cloudLoadedRef + stale [] (would overwrite Supabase).
-        if(Object.keys(_bulkMap).length>0)cloudLoadedRef.current=true;
+        // After boot hydration: allow ss() effects. (Previously this only flipped for demo _bulkMap, which left
+        // browser-only and signed-in localStorage paths stuck with cloudLoadedRef=false — nothing persisted.)
+        cloudLoadedRef.current=true;
       }catch(e){console.error("Load error",e);}
       finally{
         clearTimeout(bootSafety);
@@ -6663,32 +6665,31 @@ function AppInner(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[ready]);
 
-  useEffect(()=>{if(!ready)return;if(!cloudLoadedRef.current&&!accountsHasPositiveBalance(accounts))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
+  useEffect(()=>{if(!ready)return;if(_getUserId()&&!cloudLoadedRef.current&&!accountsHasPositiveBalance(accounts))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
-  useEffect(()=>{if(!ready)return;if(!balHist.length&&!cloudLoadedRef.current)return;ss("fv6:balHist",balHist);},[balHist,ready]);
-  useEffect(()=>{if(!ready)return;if(!expenses.length&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
-  useEffect(()=>{if(!ready)return;if(!bills.length&&!cloudLoadedRef.current)return;ss("fv6:bills",bills);},[bills,ready]);
-  useEffect(()=>{if(!ready)return;if(!debts.length&&!cloudLoadedRef.current)return;ss("fv6:debts",debts);},[debts,ready]);
-  useEffect(()=>{if(!ready)return;if(!trades.length&&!cloudLoadedRef.current)return;ss("fv6:trades",trades);},[trades,ready]);
-  useEffect(()=>{if(!ready)return;if(!notifs.length&&!cloudLoadedRef.current)return;ss("fv6:notifs",notifs);},[notifs,ready]);
-  useEffect(()=>{if(!ready)return;if(!shifts.length&&!cloudLoadedRef.current)return;ss("fv6:shifts",shifts);},[shifts,ready]);
-  useEffect(()=>{if(!ready)return;if(!recurrings.length&&!cloudLoadedRef.current)return;ss("fv6:recurrings",recurrings);},[recurrings,ready]);
-  useEffect(()=>{if(!ready)return;if(!settlements.length&&!cloudLoadedRef.current)return;ss("fv6:settlements",settlements);},[settlements,ready]);
-  useEffect(()=>{if(!ready)return;if(!hhBudgets.length&&!cloudLoadedRef.current)return;ss("fv6:hhBudgets",hhBudgets);},[hhBudgets,ready]);
-  useEffect(()=>{if(!ready||!cloudLoadedRef.current)return;ss("fv6:nwGoal",nwGoal);},[nwGoal,ready]);
-  useEffect(()=>{if(!ready)return;if(!subDismissed.length&&!cloudLoadedRef.current)return;ss("fv6:subDismissed",subDismissed);},[subDismissed,ready]);
+  useEffect(()=>{if(!ready)return;if(!balHist.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:balHist",balHist);},[balHist,ready]);
+  useEffect(()=>{if(!ready)return;if(!expenses.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
+  useEffect(()=>{if(!ready)return;if(!bills.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:bills",bills);},[bills,ready]);
+  useEffect(()=>{if(!ready)return;if(!debts.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:debts",debts);},[debts,ready]);
+  useEffect(()=>{if(!ready)return;if(!trades.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:trades",trades);},[trades,ready]);
+  useEffect(()=>{if(!ready)return;if(!notifs.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:notifs",notifs);},[notifs,ready]);
+  useEffect(()=>{if(!ready)return;if(!shifts.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:shifts",shifts);},[shifts,ready]);
+  useEffect(()=>{if(!ready)return;if(!recurrings.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:recurrings",recurrings);},[recurrings,ready]);
+  useEffect(()=>{if(!ready)return;if(!settlements.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:settlements",settlements);},[settlements,ready]);
+  useEffect(()=>{if(!ready)return;if(!hhBudgets.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:hhBudgets",hhBudgets);},[hhBudgets,ready]);
+  useEffect(()=>{if(!ready)return;if(_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:nwGoal",nwGoal);},[nwGoal,ready]);
+  useEffect(()=>{if(!ready)return;if(!subDismissed.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:subDismissed",subDismissed);},[subDismissed,ready]);
   // Settings & config (change infrequently)
   useEffect(()=>{
     if(!ready)return;
-    // Only write goals to Supabase once cloud data has been confirmed loaded,
-    // so a fresh boot with empty default state doesn't erase real data.
-    if((!budgetGoals.length||!savingsGoals.length)&&!cloudLoadedRef.current)return;
+    if(_getUserId()&&!cloudLoadedRef.current)return;
     ss("fv6:income",income);ss("fv6:bgoals",budgetGoals);ss("fv6:sgoals",savingsGoals);
     ss("fv6:cats",categories);ss("fv6:settings",settings);
   },[income,budgetGoals,savingsGoals,categories,settings,ready]);
   // Profile & display (change rarely)
   useEffect(()=>{
-    if(!ready||!cloudLoadedRef.current)return;
+    if(!ready)return;
+    if(_getUserId()&&!cloudLoadedRef.current)return;
     ss("fv6:prof",profCategory);ss("fv6:profSub",profSub);
     ss("fv6:appName",appName);ss("fv6:greetName",greetName);
     ss("fv6:dashConfig",dashConfig);ss("fv6:household",household);
