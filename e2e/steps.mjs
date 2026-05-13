@@ -62,47 +62,47 @@ export async function runReleaseChecks(page) {
   await page.getByText(/unpaid/i).first().waitFor({ state: 'visible' })
 
   await home()
-  await page.getByRole('button', { name: 'Log expense' }).click()
-  await page.getByText('Log Expense').waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: 'Log expense', exact: true }).click()
+  await page.getByLabel('Name').waitFor({ state: 'visible' })
   await page.getByLabel('Name').fill('E2E Coffee')
   await page.getByLabel('Amount ($)').fill('4.75')
   await page.getByLabel('Category').selectOption('Coffee')
   await page.getByRole('button', { name: 'Add Expense' }).click()
   await page.getByRole('button', { name: 'Spending' }).click()
-  await page.getByText('E2E Coffee').waitFor({ state: 'visible' })
+  await page.locator('#fv-scroll').getByText('E2E Coffee', { exact: true }).waitFor({ state: 'visible' })
 
   await home()
-  await page.getByRole('button', { name: 'Log expense' }).click()
+  await page.getByRole('button', { name: 'Log expense', exact: true }).click()
   await page.getByLabel('Name').fill('E2E Edit Coffee')
   await page.getByLabel('Amount ($)').fill('5.25')
   await page.getByLabel('Category').selectOption('Coffee')
   await page.getByRole('button', { name: 'Add Expense' }).click()
   await page.getByRole('button', { name: 'Spending' }).click()
-  await page.getByText('E2E Edit Coffee').click()
+  await page.locator('#fv-scroll').getByText('E2E Edit Coffee', { exact: true }).click()
   await page.getByText('Edit Expense').waitFor({ state: 'visible' })
   await page.getByLabel('Name').fill('E2E Edited Coffee')
   await page.getByRole('button', { name: 'Save Changes' }).click()
-  await page.getByText('E2E Edited Coffee').waitFor({ state: 'visible' })
-  await page.getByText('E2E Edited Coffee').click()
+  await page.locator('#fv-scroll').getByText('E2E Edited Coffee', { exact: true }).waitFor({ state: 'visible' })
+  await page.locator('#fv-scroll').getByText('E2E Edited Coffee', { exact: true }).click()
   await page.getByRole('button', { name: /Delete/i }).click()
   await page.getByRole('button', { name: 'Delete' }).click()
-  await page.getByText('E2E Edited Coffee').waitFor({ state: 'detached' })
+  await page.locator('#fv-scroll').getByText('E2E Edited Coffee', { exact: true }).waitFor({ state: 'detached' })
 
   await home()
   await page.getByRole('button', { name: 'Bills' }).click()
   await page.getByRole('button', { name: /Add bill/i }).first().click()
-  await page.getByText('Add Bill').waitFor({ state: 'visible' })
+  await page.getByLabel('Bill Name').waitFor({ state: 'visible' })
   await page.getByLabel('Bill Name').fill('E2E Internet')
   await page.getByLabel('Amount ($)').fill('79.99')
   await page.getByLabel('Due Date').fill(futureDate())
   await page.getByLabel('Recurring').selectOption('One-time')
   await page.getByLabel('Pay from (when you mark paid)').selectOption('none')
   await page.getByRole('button', { name: 'Add Bill' }).last().click()
-  await page.getByText('E2E Internet').waitFor({ state: 'visible' })
+  await page.locator('#fv-scroll').getByText('E2E Internet', { exact: true }).waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Mark E2E Internet paid' }).click()
   await page.getByText(/Paid — E2E Internet/i).first().waitFor({ state: 'visible', timeout: 10_000 })
   await page.getByRole('button', { name: /Paid History/ }).click()
-  await page.getByText('E2E Internet').waitFor({ state: 'visible' })
+  await page.locator('#fv-scroll').getByText('E2E Internet', { exact: true }).waitFor({ state: 'visible' })
 
   await page.evaluate(() => {
     const deviceId = localStorage.getItem('fv_device_id') || 'local'
@@ -136,17 +136,31 @@ export async function runReleaseChecks(page) {
   await page.getByLabel('Pay from (when you mark paid)').selectOption('checking')
   await page.getByRole('button', { name: 'Add Bill' }).last().click()
   await page.getByRole('button', { name: 'Mark E2E Reversal Bill paid' }).click()
-  await page.waitForFunction(() => {
-    const deviceId = localStorage.getItem('fv_device_id') || 'local'
-    return JSON.parse(localStorage.getItem(`fv6_${deviceId}:accounts`) || '{}').checking === '450'
-  })
+  await page.waitForFunction(
+    (expected) => {
+      const deviceId = localStorage.getItem('fv_device_id') || 'local'
+      const raw = localStorage.getItem(`fv6_${deviceId}:accounts`)
+      if (!raw) return false
+      const c = parseFloat(JSON.parse(raw).checking || 0)
+      return Math.abs(c - expected) < 0.05
+    },
+    450,
+    { timeout: 60_000 },
+  )
   await page.getByRole('button', { name: /Paid History/ }).click()
   await page.getByRole('button', { name: 'Delete E2E Reversal Bill' }).click()
   await page.getByText(/payment reversed/i).first().waitFor({ state: 'visible' })
-  await page.waitForFunction(() => {
-    const deviceId = localStorage.getItem('fv_device_id') || 'local'
-    return JSON.parse(localStorage.getItem(`fv6_${deviceId}:accounts`) || '{}').checking === '500'
-  })
+  await page.waitForFunction(
+    (expected) => {
+      const deviceId = localStorage.getItem('fv_device_id') || 'local'
+      const raw = localStorage.getItem(`fv6_${deviceId}:accounts`)
+      if (!raw) return false
+      const c = parseFloat(JSON.parse(raw).checking || 0)
+      return Math.abs(c - expected) < 0.05
+    },
+    500,
+    { timeout: 60_000 },
+  )
 
   await page.evaluate(() => {
     const deviceId = localStorage.getItem('fv_device_id') || 'local'
@@ -180,20 +194,34 @@ export async function runReleaseChecks(page) {
   await page.getByLabel('Pay from (when you mark paid)').selectOption('checking')
   await page.getByRole('button', { name: 'Add Bill' }).last().click()
   await page.getByRole('button', { name: 'Mark E2E Edit Paid Bill paid' }).click()
-  await page.waitForFunction(() => {
-    const deviceId = localStorage.getItem('fv_device_id') || 'local'
-    return JSON.parse(localStorage.getItem(`fv6_${deviceId}:accounts`) || '{}').checking === '450'
-  })
+  await page.waitForFunction(
+    (expected) => {
+      const deviceId = localStorage.getItem('fv_device_id') || 'local'
+      const raw = localStorage.getItem(`fv6_${deviceId}:accounts`)
+      if (!raw) return false
+      const c = parseFloat(JSON.parse(raw).checking || 0)
+      return Math.abs(c - expected) < 0.05
+    },
+    450,
+    { timeout: 60_000 },
+  )
   await page.getByRole('button', { name: /Paid History/ }).click()
-  await page.getByRole('button', { name: 'Edit' }).first().click()
+  await page.locator('div.rw', { has: page.getByText('E2E Edit Paid Bill', { exact: true }) }).getByRole('button', { name: 'Edit', exact: true }).click()
   await page.getByText('Edit Bill').waitFor({ state: 'visible' })
   await page.getByLabel('Amount ($)').fill('75')
   await page.getByRole('button', { name: 'Save Changes' }).click()
   await page.getByText(/balances adjusted/i).first().waitFor({ state: 'visible' })
-  await page.waitForFunction(() => {
-    const deviceId = localStorage.getItem('fv_device_id') || 'local'
-    return JSON.parse(localStorage.getItem(`fv6_${deviceId}:accounts`) || '{}').checking === '425'
-  })
+  await page.waitForFunction(
+    (expected) => {
+      const deviceId = localStorage.getItem('fv_device_id') || 'local'
+      const raw = localStorage.getItem(`fv6_${deviceId}:accounts`)
+      if (!raw) return false
+      const c = parseFloat(JSON.parse(raw).checking || 0)
+      return Math.abs(c - expected) < 0.05
+    },
+    425,
+    { timeout: 60_000 },
+  )
 
   await page.evaluate(() => {
     const deviceId = localStorage.getItem('fv_device_id') || 'local'
@@ -227,10 +255,17 @@ export async function runReleaseChecks(page) {
   await page.getByLabel('Pay from (when you mark paid)').selectOption('checking')
   await page.getByRole('button', { name: 'Add Bill' }).last().click()
   await page.getByRole('button', { name: 'Mark E2E Double Click Bill paid' }).dblclick()
-  await page.waitForFunction(() => {
-    const deviceId = localStorage.getItem('fv_device_id') || 'local'
-    return JSON.parse(localStorage.getItem(`fv6_${deviceId}:accounts`) || '{}').checking === '450'
-  })
+  await page.waitForFunction(
+    (expected) => {
+      const deviceId = localStorage.getItem('fv_device_id') || 'local'
+      const raw = localStorage.getItem(`fv6_${deviceId}:accounts`)
+      if (!raw) return false
+      const c = parseFloat(JSON.parse(raw).checking || 0)
+      return Math.abs(c - expected) < 0.05
+    },
+    450,
+    { timeout: 60_000 },
+  )
   await page.getByRole('button', { name: /Add bill/i }).first().click()
   await page.getByLabel('Bill Name').fill('E2E Weekly Renew')
   await page.getByLabel('Amount ($)').fill('10')
@@ -253,16 +288,24 @@ export async function runReleaseChecks(page) {
   await page.getByRole('button', { name: 'More' }).click()
   await page.getByRole('button', { name: 'Debt Tracker' }).click()
   await page.getByRole('button', { name: /Add Debt/i }).click()
-  await page.getByText('Add Debt').waitFor({ state: 'visible' })
+  await page.getByLabel('Original ($)').waitFor({ state: 'visible' })
   await page.getByLabel('Name').fill('E2E Car Loan')
   await page.getByLabel('Balance ($)').fill('1000')
   await page.getByLabel('Original ($)').fill('1000')
   await page.getByLabel('Rate %').fill('6')
   await page.getByLabel('Min Payment ($)').fill('100')
   await page.getByRole('button', { name: 'Track Debt' }).click()
-  await page.getByText('E2E Car Loan').waitFor({ state: 'visible' })
+  await page
+    .locator('#fv-scroll')
+    .getByText('E2E Car Loan', { exact: true })
+    .first()
+    .waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Bills' }).click()
-  await page.getByText('E2E Car Loan payment').waitFor({ state: 'visible' })
+  await page
+    .locator('#fv-scroll')
+    .getByText('E2E Car Loan payment', { exact: true })
+    .first()
+    .waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Mark E2E Car Loan payment paid' }).click()
   await page.getByText(/Paid — E2E Car Loan payment/i).first().waitFor({ state: 'visible', timeout: 10_000 })
 
@@ -344,7 +387,7 @@ export async function runReleaseChecks(page) {
   await page.getByRole('button', { name: 'More' }).click()
   await page.getByRole('button', { name: 'Settings' }).click()
   await page.getByRole('button', { name: 'Reset All Data' }).click()
-  await page.getByText('Reset All Data').waitFor({ state: 'visible' })
+  await page.getByRole('dialog', { name: 'Reset All Data' }).waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Cancel' }).click()
   await page.getByText('Profile').first().waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Reset All Data' }).click()

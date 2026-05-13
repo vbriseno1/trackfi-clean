@@ -135,11 +135,15 @@ export function singleDebtPayoffMonths(owed, aprPercent, minPayment) {
   let b = owed
   let mo = 0
   let interest = 0
-  while (b > EPS && mo < 1200) {
+  const cap = 1200
+  while (b > EPS && mo < cap) {
     mo++
     const i = b * rate
     interest += i
     b = b + i - minPay
+  }
+  if (b > EPS) {
+    return { months: 999, totalInterest: roundMoney(interest), feasible: false }
   }
   return { months: mo, totalInterest: roundMoney(interest), feasible: true }
 }
