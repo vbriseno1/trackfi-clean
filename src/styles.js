@@ -6,7 +6,7 @@ export const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800;900&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{overflow-x:hidden;-webkit-text-size-adjust:100%;height:100%}
-html,body{background:#F0F2F8;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior:none;width:100%;overflow-x:hidden;height:100%;margin:0}
+html,body{background:#F4F6F9;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior:none;width:100%;overflow-x:hidden;height:100%;margin:0}
 #root{min-height:100vh;min-height:100dvh;height:100%;width:100%;overflow-x:hidden;display:flex;flex-direction:column}
 body.dark-mode{background:#0A1628}
 html::-webkit-scrollbar,body::-webkit-scrollbar{width:0;height:0}
@@ -20,30 +20,34 @@ input,select,button,textarea{font-family:'Inter',sans-serif}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
-@keyframes pop{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+@keyframes pop{0%{transform:scale(.98);opacity:0}100%{transform:scale(1);opacity:1}}
 @keyframes shimmer{0%{background-position:-200px 0}100%{background-position:calc(200px + 100%) 0}}
 @keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 .fu{animation:fadeUp .26s cubic-bezier(.22,1,.36,1) both}
 .si{animation:slideIn .22s cubic-bezier(.22,1,.36,1) both}
 .pop{animation:pop .28s cubic-bezier(.34,1.56,.64,1) both}
 .ba{transition:all .15s cubic-bezier(.22,1,.36,1);cursor:pointer;-webkit-tap-highlight-color:transparent}
-.ba:active{transform:scale(.96)!important;opacity:.8}
-.hl:hover{box-shadow:0 8px 24px rgba(99,102,241,.14)!important;transform:translateY(-2px)!important}
+.ba:active{transform:scale(.98)!important;opacity:.92}
+.hl:hover{box-shadow:0 4px 16px rgba(15,23,42,.08)!important;transform:translateY(-1px)!important}
 .db{opacity:0;transition:opacity .15s}.rw:hover .db{opacity:1}
 .blurred{filter:blur(8px);user-select:none;transition:filter .25s}
 .unblurred{filter:none;transition:filter .25s}
-.card{background:#fff;border-radius:16px;box-shadow:0 1px 3px rgba(10,22,40,.05),0 4px 12px rgba(10,22,40,.04);transition:box-shadow .2s,transform .15s}
-.card:active{box-shadow:0 1px 2px rgba(10,22,40,.06)!important;transform:scale(.99)!important}
+.card{background:#fff;border-radius:12px;border:1px solid #E2E8F0;box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 8px rgba(15,23,42,.04);transition:box-shadow .2s,border-color .2s}
+.card:active{box-shadow:0 1px 2px rgba(15,23,42,.05)!important}
 .glass{background:rgba(255,255,255,.8);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
 .swipe-row{position:relative;overflow:hidden}
 .swipe-content{transition:transform .22s cubic-bezier(.22,1,.36,1)}
 .swipe-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center}
 textarea:focus,input:focus,select:focus{outline:none}
-textarea:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #6366F1;outline-offset:1px}
-button:focus-visible,a:focus-visible,.ba:focus-visible{outline:2px solid #6366F1;outline-offset:2px}
+textarea:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #4F46E5;outline-offset:1px}
+button:focus-visible,a:focus-visible,.ba:focus-visible{outline:2px solid #4F46E5;outline-offset:2px}
 input,select,textarea{-webkit-appearance:none;max-width:100%}
 button{-webkit-tap-highlight-color:transparent}
-.fv-rechart-skel{background:rgba(100,116,139,.1);animation:pulse 1.4s ease-in-out infinite}
+.fv-rechart-skel{background:linear-gradient(90deg,rgba(148,163,184,.08) 0%,rgba(148,163,184,.14) 50%,rgba(148,163,184,.08) 100%);background-size:200px 100%;animation:shimmer 1.2s ease-in-out infinite;border-radius:8px}
+.fv-page-title{font-family:'Manrope',sans-serif;font-size:20px;font-weight:700;color:#0F172A;letter-spacing:-.25px;line-height:1.25}
+.fv-page-sub{font-size:13px;color:#64748B;margin-top:4px;font-weight:400;line-height:1.45}
+.fv-stat-label{font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.04em}
+.fv-hero-panel{background:#0F172A;border-radius:16px;padding:20px;color:#fff;border:1px solid rgba(148,163,184,.12)}
 @media (prefers-reduced-motion: reduce){
   .fu,.si,.pop{animation:none!important}
   .ba,.card,.swipe-content,.blurred,.unblurred{transition:none!important}
