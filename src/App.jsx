@@ -49,7 +49,14 @@ import { isCreditCardDebt, cardDebtsList, legacyCreditCardOwed } from "./lib/cre
 import { optimizedSettlementPairs } from "./lib/household.js";
 import { parseTrackfiBackupJson } from "./lib/dataBackup.js";
 import { fmt, fmtK, todayStr } from "./lib/moneyFormat.js";
-import { cashAccountsByKind, totalCheckingBalance, totalSavingsBalance } from "./lib/cashAccounts.js";
+import {
+  cashAccountsByKind,
+  totalCheckingBalance,
+  totalSavingsBalance,
+  displayCheckingBalance,
+  displaySavingsBalance,
+  applyLiquidBalanceEdit,
+} from "./lib/cashAccounts.js";
 import {
   C, PIE_COLORS, DEBT_PALETTE, isValidHexColor, debtDisplayColor,
   MF, IF, MOS, FULL_MOS,
@@ -89,7 +96,7 @@ import {
   DEMO_MODEL_VERSION, DEMO_IDCHECK_PRIMARY, DEMO_IDCHECK_JOINT, DEMO_IDSAVINGS, DEMO_CC_DEBT_ID,
 } from "./lib/demoData.js";
 import {
-  buildCashAccountsFromOnboarding,
+  accountsFromOnboarding,
   householdFromUseCase,
   incomeFromOnboarding,
   settingsPatchFromOnboarding,
@@ -608,27 +615,26 @@ function AppInner(){
     if(d.profCategory)setProfCategory(d.profCategory);
     if(d.profSub)setProfSub(d.profSub);
     const income=incomeFromOnboarding(d.income||{});
+    const household=householdFromUseCase(d.useCase,d.name);
+    let accountsNext=null;
+    setAccounts(p=>{
+      accountsNext=accountsFromOnboarding(d.accounts||{},p);
+      void ss("fv6:accounts",accountsNext);
+      return accountsNext;
+    });
     setIncome(income);
-    const cashAccounts=buildCashAccountsFromOnboarding(d.accounts||{});
-    if(d.accounts||cashAccounts.length){
-      const acc=d.accounts||{};
-      setAccounts(p=>({
-        ...p,
-        checking:"",
-        savings:"",
-        cushion:acc.cushion??p.cushion??"",
-        investments:acc.investments??p.investments??"",
-        cashAccounts:cashAccounts.length?cashAccounts:p.cashAccounts,
-      }));
-    }
-    const checkingAcc=cashAccounts.find(a=>a.kind==="checking");
-    const savingsAcc=cashAccounts.find(a=>a.kind==="savings");
-    setSettings(s=>({
-      ...settingsPatchFromOnboarding(income,s),
-      ...(checkingAcc?{defaultCheckingAccountId:String(checkingAcc.id)}:{}),
-      ...(savingsAcc?{defaultSavingsAccountId:String(savingsAcc.id)}:{}),
-    }));
-    setHousehold(householdFromUseCase(d.useCase,d.name));
+    void ss("fv6:income",income);
+    setSettings(s=>{
+      const next=settingsPatchFromOnboarding(income,s);
+      void ss("fv6:settings",next);
+      return next;
+    });
+    setHousehold(household);
+    void ss("fv6:household",household);
+    if(d.profCategory)void ss("fv6:prof",d.profCategory);
+    if(d.profSub)void ss("fv6:profSub",d.profSub);
+    void ss("fv6:appName","Trackfi");
+    if(d.name)void ss("fv6:greetName",d.name);
     try{localStorage.setItem("fv_onboarded","1");localStorage.removeItem("fv_pending_name");}catch{}
     ss("fv6:onboarded",true);
     setOnboarded(true);
@@ -2200,11 +2206,14 @@ function AppInner(){
           <div className="fu">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><div><div className="fv-page-title" style={{fontSize:18}}>Accounts & income</div></div><div style={{fontSize:12,color:C.positive,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><div style={{width:7,height:7,borderRadius:"50%",background:C.positive}}/>Auto-saved</div></div>
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-              {[{k:"checking",l:"Checking",c:C.navy},{k:"savings",l:"Savings",c:C.positive},{k:"cushion",l:"Cushion / Emergency",c:C.accent}].map(a=>{const Ico=ACCT_ICON[a.k]||Wallet;return(
+              {[{k:"checking",l:"Checking",c:C.navy,display:displayCheckingBalance},{k:"savings",l:"Savings",c:C.positive,display:displaySavingsBalance},{k:"cushion",l:"Cushion / Emergency",c:C.accent,display:(ac)=>ac.cushion??""}].map(a=>{const Ico=ACCT_ICON[a.k]||Wallet;const subCount=a.k==="cushion"?0:cashAccountsByKind(accounts,a.k).length;const shown=a.display(accounts);return(
                 <div key={a.k} className="fv-section-card" style={{padding:18,display:"flex",flexWrap:"wrap",alignItems:"center",gap:12,rowGap:10,minWidth:0,boxSizing:"border-box",maxWidth:"100%"}}>
                   <div className="fv-icon-tile" style={{background:a.c+"15"}}><Ico size={22} color={a.c} strokeWidth={2}/></div>
-                  <div style={{flex:"1 1 120px",minWidth:0,maxWidth:"100%"}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div></div>
-                  <input type="number" min="0" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>{const v=e.target.value;if(v===""||parseFloat(v)>=0)setAccounts(p=>({...p,[a.k]:v}));}} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{flex:"1 1 120px",width:130,maxWidth:"100%",minWidth:0,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:800,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none",boxSizing:"border-box"}}/>
+                  <div style={{flex:"1 1 120px",minWidth:0,maxWidth:"100%"}}>
+                    <div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div>
+                    {subCount>1&&<div style={{fontSize:10,color:C.textLight,marginTop:2}}>Total across {subCount} accounts — edit rows below</div>}
+                  </div>
+                  <input type="number" min="0" placeholder="0.00" value={shown||""} readOnly={subCount>1} onChange={e=>{const v=e.target.value;if(subCount>1)return;if(v===""||parseFloat(v)>=0)setAccounts(p=>a.k==="cushion"?{...p,cushion:v}:applyLiquidBalanceEdit(p,a.k,v));}} onBlur={e=>{if(subCount>1)return;if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{flex:"1 1 120px",width:130,maxWidth:"100%",minWidth:0,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:800,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none",boxSizing:"border-box",...(subCount>1?{opacity:.85,cursor:"default"}:{})}}/>
                 </div>
               );})}
             </div>

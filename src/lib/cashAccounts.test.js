@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { cashAccountsByKind, totalCheckingBalance, totalSavingsBalance } from './cashAccounts.js'
+import {
+  cashAccountsByKind,
+  totalCheckingBalance,
+  totalSavingsBalance,
+  displayCheckingBalance,
+  displaySavingsBalance,
+  applyLiquidBalanceEdit,
+} from './cashAccounts.js'
 
 describe('cashAccounts', () => {
   const legacy = { checking: '100', savings: '50', cashAccounts: [] }
@@ -22,5 +29,29 @@ describe('cashAccounts', () => {
     expect(totalCheckingBalance(multi)).toBe(250)
     expect(totalSavingsBalance(multi)).toBe(300)
     expect(cashAccountsByKind(multi, 'checking')).toHaveLength(2)
+  })
+
+  it('display helpers mirror totals for sub-accounts', () => {
+    const multi = {
+      checking: '',
+      savings: '',
+      cashAccounts: [
+        { id: '1', kind: 'checking', balance: '3100' },
+        { id: '2', kind: 'savings', balance: '11400' },
+      ],
+    }
+    expect(displayCheckingBalance(multi)).toBe('3100')
+    expect(displaySavingsBalance(multi)).toBe('11400')
+    expect(displayCheckingBalance(legacy)).toBe('100')
+  })
+
+  it('applyLiquidBalanceEdit updates single sub-account row', () => {
+    const ac = {
+      checking: '',
+      cashAccounts: [{ id: '9', kind: 'checking', name: 'Main', balance: '100' }],
+    }
+    const next = applyLiquidBalanceEdit(ac, 'checking', '2500')
+    expect(next.cashAccounts[0].balance).toBe('2500')
+    expect(next.checking).toBe('')
   })
 })

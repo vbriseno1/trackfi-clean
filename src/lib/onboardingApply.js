@@ -20,6 +20,35 @@ export function buildCashAccountsFromOnboarding(accounts = {}) {
   return cashAccounts;
 }
 
+/**
+ * Maps wizard balances to accounts state. Uses legacy checking/savings/cushion fields so
+ * Accounts & Income top cards and safe-to-spend match what the user entered. Sub-accounts
+ * can be added later from the Accounts tab (demo uses cashAccounts for multi-bank).
+ */
+export function accountsFromOnboarding(accounts = {}, prev = {}) {
+  const checking = accounts.checking != null && accounts.checking !== "" ? String(accounts.checking) : "";
+  const savings = accounts.savings != null && accounts.savings !== "" ? String(accounts.savings) : "";
+  const cushion =
+    accounts.cushion != null && accounts.cushion !== ""
+      ? String(accounts.cushion)
+      : prev.cushion != null
+        ? String(prev.cushion)
+        : "";
+  return {
+    ...prev,
+    checking,
+    savings,
+    cushion,
+    investments:
+      accounts.investments != null && accounts.investments !== ""
+        ? String(accounts.investments)
+        : prev.investments != null
+          ? String(prev.investments)
+          : "",
+    cashAccounts: Array.isArray(prev.cashAccounts) ? prev.cashAccounts : [],
+  };
+}
+
 export function householdFromUseCase(useCase, name = "") {
   const first = (name || "").trim().split(/\s+/)[0] || "Me";
   if (useCase === "couple") {

@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCashAccountsFromOnboarding,
+  accountsFromOnboarding,
   householdFromUseCase,
   incomeFromOnboarding,
   settingsPatchFromOnboarding,
 } from "./onboardingApply.js";
+
+describe("accountsFromOnboarding", () => {
+  it("keeps checking and savings on legacy fields for Accounts tab", () => {
+    const next = accountsFromOnboarding({ checking: "2500", savings: "5000", cushion: "1000" }, { checking: "", savings: "" });
+    expect(next.checking).toBe("2500");
+    expect(next.savings).toBe("5000");
+    expect(next.cushion).toBe("1000");
+    expect(next.cashAccounts).toEqual([]);
+  });
+
+  it("leaves empty strings when wizard skipped balances", () => {
+    const next = accountsFromOnboarding({}, { checking: "100", savings: "50" });
+    expect(next.checking).toBe("");
+    expect(next.savings).toBe("");
+  });
+});
 
 describe("buildCashAccountsFromOnboarding", () => {
   it("creates checking and savings cash accounts from balances", () => {
