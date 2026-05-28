@@ -10,6 +10,7 @@
  * - "Resend confirmation" hits `/auth/v1/resend` for users stuck after sign-up.
  * - The pending name is stashed in localStorage as `fv_pending_name` so onboarding
  *   can greet the user even before their profile syncs.
+ * - `onTryDemo` — optional; loads sample data and skips auth (parent: handleTryDemoFresh).
  */
 import React, { useEffect, useRef, useState } from "react";
 import { Mail, Wallet, Sparkles } from "lucide-react";
@@ -17,7 +18,7 @@ import { C, MF } from "../theme.js";
 import { CSS } from "../styles.js";
 import { signIn, signUp, supaFetch, isSupabaseConfigured } from "../lib/supabase.js";
 
-export default function AuthScreen({ onAuth, onSkip }) {
+export default function AuthScreen({ onAuth, onSkip, onTryDemo }) {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
