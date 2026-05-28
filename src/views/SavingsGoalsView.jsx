@@ -4,19 +4,21 @@ import { C, MF, PIE_COLORS, FULL_MOS } from "../theme.js";
 import { fmt, todayStr } from "../lib/moneyFormat.js";
 import { Modal, FI, FS, BarProg } from "../components/ui.jsx";
 import { GoalRing } from "../components/GoalRing.jsx";
-import { RechartsReady } from "../components/RechartsBridge.jsx";
+import { RechartsReady, ChartPanel, useChartTheme } from "../components/RechartsBridge.jsx";
+import { chartColor } from "../lib/chartTheme.js";
 import { EmojiPicker } from "../components/EmojiPicker.jsx";
 import { normalizePaidFrom, pickDefaultBankAccountId, hasCashSubaccounts, PAID_FROM_OPTIONS, PAID_FROM_FS_LABELS } from "../lib/accountsLogic.js";
 import { cashAccountsByKind } from "../lib/cashAccounts.js";
 
 export default function SavingsGoalsView({goals,setGoals,income,accounts,accountRates={},setAccountRates,showToast,applySpend,settings={}}){
+  const ct=useChartTheme();
   const[view,setView]=useState("rings");
   const[editGoal,setEditGoal]=useState(null);
   const[editForm,setEditForm]=useState({});
   const[showAdd,setShowAdd]=useState(false);
   const[form,setForm]=useState({});
   const ff=k=>e=>setForm(p=>({...p,[k]:e.target.value}));
-  function add(){if(!form.name||!form.target)return;setGoals(p=>[...p,{id:Date.now().toString(),name:form.name,target:parseFloat(form.target),saved:parseFloat(form.saved||0),monthly:parseFloat(form.monthly||0),icon:form.icon||"🎯",color:form.color||C.teal}]);showToast&&showToast("✓ Goal added — "+form.name);setForm({});setShowAdd(false);}
+  function add(){if(!form.name||!form.target)return;setGoals(p=>[...p,{id:Date.now().toString(),name:form.name,target:parseFloat(form.target),saved:parseFloat(form.saved||0),monthly:parseFloat(form.monthly||0),icon:form.icon||"🎯",color:form.color||C.teal}]);showToast&&showToast("Goal added — "+form.name);setForm({});setShowAdd(false);}
   const depositToGoal=React.useCallback((goal,rawAmt)=>{
     const amt=parseFloat(rawAmt);
     if(!(amt>0))return;
@@ -37,7 +39,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
       const newSaved=parseFloat(Math.min(tgt,prevS+amt).toFixed(2));
       const oldPct=tgt>0?Math.floor((prevS/tgt)*4)*25:0;
       const newPct=tgt>0?Math.floor((newSaved/tgt)*4)*25:0;
-      if(newPct>oldPct)setTimeout(()=>showToast&&showToast(newSaved>=tgt?"🎉 Goal complete: "+g.name+"!":"🎯 "+newPct+"% reached — "+g.name),100);
+      if(newPct>oldPct)setTimeout(()=>showToast&&showToast(newSaved>=tgt?"Goal complete: "+g.name:newPct+"% reached — "+g.name),100);
       else showToast&&showToast("+"+fmt(amt)+" → "+g.name);
       return{...g,saved:newSaved};
     }));
@@ -76,13 +78,12 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
   return(
     <div className="fu">
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:12,padding:4,marginBottom:16}}>
-        {[["rings","Rings"],["list","List"],["earn","💰 Earn"]].map(([id,l])=>(<button key={id} onClick={()=>setView(id)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:view===id?C.surface:"transparent",color:view===id?C.accent:C.textLight,fontWeight:view===id?700:500,fontSize:13,cursor:"pointer"}}>{l}</button>))}
+        {[["rings","Rings"],["list","List"],["earn","Earn"]].map(([id,l])=>(<button key={id} type="button" className="ba" onClick={()=>setView(id)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:view===id?C.surface:"transparent",color:view===id?C.accent:C.textLight,fontWeight:view===id?700:500,fontSize:13,cursor:"pointer",boxShadow:view===id?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{l}</button>))}
       </div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:goals.length>0?10:16}}>
-        <div><div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Savings Goals</div><div style={{fontSize:13,color:C.textLight}}>{goals.length} goal{goals.length!==1?"s":""} · {fmt(goals.reduce((s,g)=>s+(parseFloat(g.saved||0)),0))} saved total</div></div>
+        <div><div className="fv-page-title">Savings Goals</div><div className="fv-page-sub">{goals.length} goal{goals.length!==1?"s":""} · {fmt(goals.reduce((s,g)=>s+(parseFloat(g.saved||0)),0))} saved total</div></div>
         <button onClick={()=>setShowAdd(true)} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Add Goal</button>
       </div>
-      {goals.length>0&&(()=>{const totalTarget=goals.reduce((s,g)=>s+(parseFloat(g.target||0)),0);const totalSaved=goals.reduce((s,g)=>s+(parseFloat(g.saved||0)),0);const overallPct=totalTarget>0?Math.min(100,(totalSaved/totalTarget)*100):0;const complete=goals.filter(g=>parseFloat(g.saved||0)>=parseFloat(g.target||1)).length;return(<div style={{background:C.surface,borderRadius:14,padding:"12px 16px",marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{fontSize:13,fontWeight:600,color:C.text}}>Overall Progress</span><span style={{fontSize:13,fontWeight:700,color:C.green}}>{fmt(totalSaved)} / {fmt(totalTarget)}</span></div><div style={{height:8,background:C.borderLight,borderRadius:99,overflow:"hidden",marginBottom:5}}><div style={{height:"100%",width:overallPct.toFixed(1)+"%",background:`linear-gradient(90deg,${C.teal},${C.green})`,borderRadius:99,transition:"width .6s"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textLight}}><span>{overallPct.toFixed(0)}% of total goals</span><span>{complete}/{goals.length} complete</span></div></div>);})()}
       {goals.length>0&&(()=>{
         const totalTarget=goals.reduce((s,g)=>s+(parseFloat(g.target||0)),0);
         const totalSaved=goals.reduce((s,g)=>s+(parseFloat(g.saved||0)),0);
@@ -90,17 +91,19 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
         const pct=Math.min(100,(totalSaved/totalTarget)*100);
         const complete=goals.filter(g=>parseFloat(g.saved||0)>=parseFloat(g.target||1)).length;
         const nearComplete=goals.filter(g=>{const p=parseFloat(g.target||1)>0?(parseFloat(g.saved||0)/parseFloat(g.target))*100:0;return p>=75&&p<100;});
-        return(<div style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:16,padding:18,marginBottom:14,color:'#fff'}}>
-          <div style={{fontSize:11,fontWeight:600,color:'rgba(255,255,255,.5)',textTransform:'uppercase',letterSpacing:.5,marginBottom:4}}>All Goals Progress</div>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:10}}>
-            <div><div style={{fontFamily:MF,fontWeight:800,fontSize:26,color:'#fff'}}>{fmt(totalSaved)}</div><div style={{fontSize:12,color:'rgba(255,255,255,.5)'}}>of {fmt(totalTarget)} total</div></div>
-            <div style={{textAlign:'right'}}><div style={{fontFamily:MF,fontWeight:800,fontSize:22,color:C.green}}>{pct.toFixed(0)}%</div><div style={{fontSize:11,color:'rgba(255,255,255,.5)'}}>{complete}/{goals.length} complete</div></div>
+        return(
+          <div className="fv-hero-panel" style={{marginBottom:14}}>
+            <div className="fv-stat-label" style={{color:"rgba(255,255,255,.55)",marginBottom:4}}>All goals</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:10}}>
+              <div><div style={{fontFamily:MF,fontWeight:800,fontSize:26,color:"#fff"}}>{fmt(totalSaved)}</div><div style={{fontSize:12,color:"rgba(255,255,255,.5)"}}>of {fmt(totalTarget)} total</div></div>
+              <div style={{textAlign:"right"}}><div style={{fontFamily:MF,fontWeight:800,fontSize:22,color:C.positiveMid}}>{pct.toFixed(0)}%</div><div style={{fontSize:11,color:"rgba(255,255,255,.5)"}}>{complete}/{goals.length} complete</div></div>
+            </div>
+            <div style={{height:8,background:"rgba(255,255,255,.12)",borderRadius:99,overflow:"hidden",marginBottom:nearComplete.length?8:0}}>
+              <div style={{height:"100%",width:pct.toFixed(1)+"%",background:C.positiveMid,borderRadius:99,transition:"width .6s"}}/>
+            </div>
+            {nearComplete.length>0&&<div style={{fontSize:12,color:C.amberMid,fontWeight:500}}>{nearComplete.map(g=>g.name).join(", ")} almost done</div>}
           </div>
-          <div style={{height:8,background:'rgba(255,255,255,.15)',borderRadius:99,overflow:'hidden',marginBottom:10}}>
-            <div style={{height:'100%',width:pct.toFixed(1)+'%',background:`linear-gradient(90deg,${C.teal},${C.green})`,borderRadius:99,transition:'width .6s'}}/>
-          </div>
-          {nearComplete.length>0&&<div style={{fontSize:12,color:C.amberMid}}>⚡ {nearComplete.map(g=>g.name).join(', ')} almost done!</div>}
-        </div>);
+        );
       })()}
       {goals.length>0&&goals.some(g=>parseFloat(g.monthly||0)>0)&&(()=>{
         // Build projected savings chart — next 12 months
@@ -116,17 +119,16 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
         });
         const GOAL_COLORS=[C.teal,C.accent,C.green,C.purple,C.amber];
         return(
-          <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
-            <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>12-Month Projection</div>
-            <div style={{fontSize:12,color:C.textLight,marginBottom:14}}>Where each goal lands if you contribute monthly</div>
+          <ChartPanel title="12-month projection" subtitle="Where each goal lands with monthly contributions">
             <RechartsReady minHeight={160} render={R=>(
             <R.ResponsiveContainer width="100%" height={160}>
-              <R.LineChart data={chartData} margin={{left:-10,right:4,top:4,bottom:0}}>
-                <R.XAxis dataKey="month" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false}/>
-                <R.YAxis tick={{fill:C.textLight,fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={38}/>
-                <R.Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/>
+              <R.LineChart data={chartData} margin={ct.marginWide}>
+                <R.CartesianGrid stroke={ct.gridStroke} strokeDasharray="3 3" vertical={false}/>
+                <R.XAxis dataKey="month" tick={ct.axisTickSm} axisLine={false} tickLine={false}/>
+                <R.YAxis tick={ct.axisTickSm} axisLine={false} tickLine={false} tickFormatter={ct.formatYAxis} width={42}/>
+                <R.Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={ct.tooltipStyle}/>
                 {goals.filter(g=>parseFloat(g.monthly||0)>0).map((g,i)=>(
-                  <R.Line key={g.id} type="monotone" dataKey={g.name} stroke={g.color||GOAL_COLORS[i%GOAL_COLORS.length]} strokeWidth={2.5} dot={false} strokeDasharray={i>0?"4 2":"none"}/>
+                  <R.Line key={g.id} type="monotone" dataKey={g.name} stroke={g.color||chartColor(i)} strokeWidth={ct.areaStrokeWidth} dot={false} strokeDasharray={i>0?"4 2":"none"}/>
                 ))}
               </R.LineChart>
             </R.ResponsiveContainer>
@@ -143,10 +145,10 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
                 </div>);
               })}
             </div>
-          </div>
+          </ChartPanel>
         );
       })()}
-      {goals.length===0&&<div style={{textAlign:"center",padding:"40px 20px"}}><div style={{fontSize:48,marginBottom:12}}>🎯</div><div style={{fontFamily:MF,fontSize:16,fontWeight:700,color:C.text,marginBottom:8}}>No savings goals yet</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Set a goal and watch your ring fill up</div><button onClick={()=>setShowAdd(true)} style={{padding:"12px 24px",borderRadius:14,background:C.accent,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add First Goal</button></div>}
+      {goals.length===0&&<div className="fv-card" style={{textAlign:"center",padding:"40px 20px",marginBottom:16}}><Target size={32} color={C.textLight} style={{margin:"0 auto 12px"}}/><div style={{fontFamily:MF,fontSize:16,fontWeight:700,color:C.text,marginBottom:8}}>No savings goals yet</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Set a goal and watch your ring fill up</div><button onClick={()=>setShowAdd(true)} style={{padding:"12px 24px",borderRadius:14,background:C.accent,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add First Goal</button></div>}
       {view==="rings"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
         {goals.map(g=><div key={g.id} style={{position:"relative"}}><GoalRingInner goal={{...g,saved:parseFloat(g.saved||0),target:parseFloat(g.target||0),monthly:parseFloat(g.monthly||0)}}/><button onClick={()=>{setGoals(p=>p.filter(x=>x.id!==g.id));showToast&&showToast("Goal removed","error");}} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,.06)",border:"none",borderRadius:"50%",width:24,height:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={12} color={C.textLight}/></button></div>)}
       </div>}
@@ -228,11 +230,11 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
         return(
           <div>
             {/* Earnings summary bar */}
-            <div style={{background:"#0A1628",borderRadius:16,padding:18,marginBottom:14}}>
-              <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.4)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Your Money Earns</div>
+            <div className="fv-hero-panel" style={{marginBottom:14}}>
+              <div className="fv-stat-label" style={{color:"rgba(255,255,255,.55)",marginBottom:4}}>Your money earns</div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:10}}>
                 <div>
-                  <div style={{fontFamily:MF,fontWeight:900,fontSize:32,color:"#34D399",letterSpacing:-1}}>{fmt(totalYearlyEarnings)}/yr</div>
+                  <div style={{fontFamily:MF,fontWeight:900,fontSize:32,color:C.positiveMid,letterSpacing:-1}}>{fmt(totalYearlyEarnings)}/yr</div>
                   <div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>{fmt(totalYearlyEarnings/12)}/mo across all accounts</div>
                 </div>
                 {leaveOnTable>50&&<div style={{textAlign:"right"}}>
@@ -298,7 +300,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
             {/* Smart tips */}
             {tips.length>0&&(
               <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
-                <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:2}}>💡 Personalized Tips</div>
+                <div className="fv-page-title" style={{fontSize:14,marginBottom:2}}>Personalized tips</div>
                 {tips.map((tip,i)=>(
                   <div key={i} style={{background:tip.urgency==="high"?C.greenBg:C.accentBg,border:`1px solid ${tip.urgency==="high"?C.greenMid:C.accentMid}`,borderRadius:12,padding:"12px 14px"}}>
                     <div style={{fontSize:13,fontWeight:700,color:tip.urgency==="high"?C.green:C.accent,marginBottom:4}}>{tip.icon} {tip.title}</div>

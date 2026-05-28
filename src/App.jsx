@@ -1753,7 +1753,7 @@ function AppInner(){
                         <div className={hidden?"blurred":"unblurred"} style={{fontSize:12,color:C.greenMid,fontWeight:700}}>{goalsDone_c}/{savingsGoals.length} done</div>
                       </div>
                       <div style={{height:6,background:"rgba(255,255,255,.1)",borderRadius:99,overflow:"hidden",marginBottom:4}}>
-                        <div style={{height:"100%",width:goalsPct_c.toFixed(1)+"%",background:`linear-gradient(90deg,${C.teal},${C.green})`,borderRadius:99}}/>
+                        <div style={{height:"100%",width:goalsPct_c.toFixed(1)+"%",background:C.positiveMid,borderRadius:99}}/>
                       </div>
                       <div style={{display:"flex",justifyContent:"space-between"}}>
                         <div className={hidden?"blurred":"unblurred"} style={{fontSize:11,color:"rgba(255,255,255,.5)"}}>{fmt(goalsSaved_c)} saved</div>
@@ -1766,7 +1766,7 @@ function AppInner(){
                         <div className={hidden?"blurred":"unblurred"} style={{fontSize:12,color:"#fca5a5",fontWeight:700}}>{fmt(totalDebt)} left</div>
                       </div>
                       <div style={{height:6,background:"rgba(255,255,255,.1)",borderRadius:99,overflow:"hidden",marginBottom:4}}>
-                        <div style={{height:"100%",width:debtPct_c.toFixed(1)+"%",background:`linear-gradient(90deg,${C.amber},${C.green})`,borderRadius:99}}/>
+                        <div style={{height:"100%",width:debtPct_c.toFixed(1)+"%",background:C.amberMid,borderRadius:99}}/>
                       </div>
                       <div style={{display:"flex",justifyContent:"space-between"}}>
                         <div className={hidden?"blurred":"unblurred"} style={{fontSize:11,color:"rgba(255,255,255,.5)"}}>{debtPct_c.toFixed(0)}% paid off</div>
@@ -1832,8 +1832,8 @@ function AppInner(){
 
             {/* PWA Install Banner */}
             {pwaPrompt&&!pwaInstalled&&(
-              <div style={{background:`linear-gradient(135deg,${C.accent},${C.purple})`,borderRadius:16,padding:"14px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:12}}>
-                <span style={{fontSize:24,flexShrink:0}}>📲</span>
+              <div className="fv-card" style={{padding:"14px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:12,borderColor:C.accentMid}}>
+                <Download size={22} color={C.accent} style={{flexShrink:0}}/>
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:700,color:"#fff",marginBottom:2}}>Add to Home Screen</div>
                   <div style={{fontSize:11,color:"rgba(255,255,255,.7)"}}>Install Trackfi for offline access & faster loading</div>
@@ -1866,7 +1866,7 @@ function AppInner(){
               ].filter(Boolean);
               if(!insights.length)return null;
               const insight=insights[now2.getDate()%insights.length];
-              return(<div onClick={()=>navTo("insights")} style={{background:`linear-gradient(135deg,${C.accentBg},${C.purpleBg})`,border:`1px solid ${C.accentMid}`,borderRadius:14,padding:"12px 14px",marginBottom:14,cursor:"pointer",display:"flex",gap:10,alignItems:"center"}}><span style={{fontSize:18,flexShrink:0}}>💡</span><div style={{flex:1}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}><div style={{fontSize:10,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:.5}}>Spending Insight</div><div style={{fontSize:10,fontWeight:700,color:C.accent,background:C.accent+"18",borderRadius:99,padding:"1px 7px"}}>View Charts →</div></div><div style={{fontSize:13,color:C.text,lineHeight:1.4,fontWeight:500}}>{insight}</div></div></div>);
+              return(<div role="button" tabIndex={0} onClick={()=>navTo("insights")} onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")navTo("insights");}} className="fv-insight-card" style={{marginBottom:14}}><div style={{flex:1,minWidth:0}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}><div style={{fontSize:10,fontWeight:700,color:C.accent,textTransform:"uppercase",letterSpacing:.5}}>Spending insight</div><div style={{fontSize:10,fontWeight:700,color:C.accent,background:C.accent+"18",borderRadius:99,padding:"1px 7px"}}>Charts</div></div><div style={{fontSize:13,color:C.text,lineHeight:1.4,fontWeight:500}}>{insight}</div></div></div>);
             })()}
 
             {/* ── 5. QUICK ACTIONS ──────────────────────────────── */}
