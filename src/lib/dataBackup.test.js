@@ -17,4 +17,15 @@ describe('backup validation', () => {
     expect(result.ok).toBe(true);
     expect(result.data.accounts.checking).toBe('100');
   });
+
+  it('accepts full demo-shaped backup export', async () => {
+    const { buildFullDemoSyncMap, syncMapToBackupExport } = await import('./demoSyncFixture.js');
+    const backup = syncMapToBackupExport(buildFullDemoSyncMap());
+    const result = parseTrackfiBackupJson(JSON.stringify(backup));
+    expect(result.ok).toBe(true);
+    expect(result.data.expenses.length).toBeGreaterThan(80);
+    expect(result.data.savingsGoals).toHaveLength(5);
+    expect(result.data.household.members).toHaveLength(2);
+    expect(result.data.income.lastPayDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
 });
