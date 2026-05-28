@@ -4,7 +4,7 @@ import { C, MF, FULL_MOS, debtDisplayColor } from "../theme.js";
 import { fmt } from "../lib/moneyFormat.js";
 import { BarProg } from "../components/ui.jsx";
 import { RechartsReady, ChartPanel, useChartTheme } from "../components/RechartsBridge.jsx";
-import { totalCheckingBalance, totalSavingsBalance } from "../lib/cashAccounts.js";
+import { totalCheckingBalance, totalSavingsBalance, liquidAssetBreakdownRows } from "../lib/cashAccounts.js";
 import { legacyCreditCardOwed } from "../lib/creditCardTotals.js";
 import { sumDebtsPrincipalAndAccrued, debtOwedForBreakdown, debtOriginalBaseline } from "../lib/debtLogic.js";
 
@@ -144,7 +144,7 @@ export default function NetWorthTrendView({balHist,debts,accounts,tradingAccount
       })()}
       <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Asset Breakdown</div>
-        {[{l:"Checking",v:accounts.checking,ic:"🏦"},{l:"Savings",v:accounts.savings,ic:"💰"},{l:"Cushion",v:accounts.cushion,ic:"🛡️"},{l:"Investments",v:accounts.investments,ic:"📈"},{l:"Property",v:accounts.property,ic:"🏠"},{l:"Vehicles",v:accounts.vehicles,ic:"🚗"}].filter(a=>parseFloat(a.v||0)>0).map(a=>{
+        {liquidAssetBreakdownRows(accounts).filter(a=>parseFloat(a.v||0)>0).map(a=>{
           const val=parseFloat(a.v||0);const pct=totalAssets>0?(val/totalAssets*100):0;
           return(<div key={a.l} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><div style={{display:"flex",alignItems:"center",gap:6}}><span>{a.ic}</span><span style={{fontSize:13,fontWeight:600,color:C.text}}>{a.l}</span></div><div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:12,color:C.textLight}}>{pct.toFixed(0)}%</span><span style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.green}}>{fmt(val)}</span></div></div><BarProg pct={pct} color={C.green} h={5}/></div>);
         })}

@@ -6,6 +6,9 @@ import {
   displayCheckingBalance,
   displaySavingsBalance,
   applyLiquidBalanceEdit,
+  liquidFieldDisplay,
+  normalizeAccountsForPersistence,
+  liquidAssetBreakdownRows,
 } from './cashAccounts.js'
 
 describe('cashAccounts', () => {
@@ -53,5 +56,32 @@ describe('cashAccounts', () => {
     const next = applyLiquidBalanceEdit(ac, 'checking', '2500')
     expect(next.cashAccounts[0].balance).toBe('2500')
     expect(next.checking).toBe('')
+  })
+
+  it('normalizeAccountsForPersistence mirrors sub-account totals to legacy fields', () => {
+    const ac = {
+      checking: '',
+      savings: '',
+      cashAccounts: [
+        { id: '1', kind: 'checking', balance: '3100' },
+        { id: '2', kind: 'checking', balance: '1180' },
+        { id: '3', kind: 'savings', balance: '11400' },
+      ],
+    }
+    const norm = normalizeAccountsForPersistence(ac)
+    expect(norm.checking).toBe('4280')
+    expect(norm.savings).toBe('11400')
+    expect(liquidFieldDisplay(norm, 'checking')).toBe('4280')
+  })
+
+  it('liquidAssetBreakdownRows includes checking total from cashAccounts', () => {
+    const rows = liquidAssetBreakdownRows({
+      checking: '',
+      savings: '',
+      cushion: '500',
+      cashAccounts: [{ id: '1', kind: 'checking', balance: '2000' }],
+    })
+    const ch = rows.find((r) => r.l === 'Checking')
+    expect(ch.v).toBe('2000')
   })
 })

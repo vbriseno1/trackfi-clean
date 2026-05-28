@@ -53,9 +53,10 @@ import {
   cashAccountsByKind,
   totalCheckingBalance,
   totalSavingsBalance,
-  displayCheckingBalance,
-  displaySavingsBalance,
-  applyLiquidBalanceEdit,
+  liquidFieldDisplay,
+  liquidFieldSubCount,
+  applyLiquidFieldEdit,
+  normalizeAccountsForPersistence,
 } from "./lib/cashAccounts.js";
 import {
   C, PIE_COLORS, DEBT_PALETTE, isValidHexColor, debtDisplayColor,
@@ -619,7 +620,7 @@ function AppInner(){
     let accountsNext=null;
     setAccounts(p=>{
       accountsNext=accountsFromOnboarding(d.accounts||{},p);
-      void ss("fv6:accounts",accountsNext);
+      void ss("fv6:accounts",normalizeAccountsForPersistence(accountsNext));
       return accountsNext;
     });
     setIncome(income);
@@ -871,7 +872,7 @@ function AppInner(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[ready]);
 
-  useEffect(()=>{if(!ready)return;if(_getUserId()&&!cloudLoadedRef.current&&!accountsHasPositiveBalance(accounts))return;ss("fv6:accounts",accounts);const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
+  useEffect(()=>{if(!ready)return;if(_getUserId()&&!cloudLoadedRef.current&&!accountsHasPositiveBalance(accounts))return;ss("fv6:accounts",normalizeAccountsForPersistence(accounts));const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
   useEffect(()=>{if(!ready)return;if(!balHist.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:balHist",balHist);},[balHist,ready]);
   useEffect(()=>{if(!ready)return;if(!expenses.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
@@ -1475,9 +1476,7 @@ function AppInner(){
   function requestLoadDemo(){
     const hasLocalData=expenses.length>0||bills.length>0||debts.length>0||trades.length>0
       ||savingsGoals.length>0||budgetGoals.length>0
-      ||Math.abs(parseFloat(accounts.checking||0))>0.009||Math.abs(parseFloat(accounts.savings||0))>0.009
-      ||Math.abs(parseFloat(accounts.cushion||0))>0.009
-      ||(accounts.cashAccounts||[]).some(a=>Math.abs(parseFloat(a.balance||0))>0.009);
+      ||accountsHasPositiveBalance(accounts);
     const signedIn=!!authSession?.user?.id;
     setConfirm({
       title:"Try sample data?",
@@ -1528,7 +1527,7 @@ function AppInner(){
         return false;
       }
       const d=parsed.data;
-      if(d.accounts)setAccounts(p=>({...p,...d.accounts}));
+      if(d.accounts)setAccounts(p=>normalizeAccountsForPersistence({...p,...d.accounts}));
       if(d.income)setIncome(p=>({...p,...d.income}));
       if(Array.isArray(d.expenses))setExpenses(d.expenses);
       if(Array.isArray(d.bills))setBills(d.bills);
@@ -2206,14 +2205,14 @@ function AppInner(){
           <div className="fu">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><div><div className="fv-page-title" style={{fontSize:18}}>Accounts & income</div></div><div style={{fontSize:12,color:C.positive,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><div style={{width:7,height:7,borderRadius:"50%",background:C.positive}}/>Auto-saved</div></div>
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-              {[{k:"checking",l:"Checking",c:C.navy,display:displayCheckingBalance},{k:"savings",l:"Savings",c:C.positive,display:displaySavingsBalance},{k:"cushion",l:"Cushion / Emergency",c:C.accent,display:(ac)=>ac.cushion??""}].map(a=>{const Ico=ACCT_ICON[a.k]||Wallet;const subCount=a.k==="cushion"?0:cashAccountsByKind(accounts,a.k).length;const shown=a.display(accounts);return(
+              {[{k:"checking",l:"Checking",c:C.navy},{k:"savings",l:"Savings",c:C.positive},{k:"cushion",l:"Cushion / Emergency",c:C.accent}].map(a=>{const Ico=ACCT_ICON[a.k]||Wallet;const subCount=liquidFieldSubCount(accounts,a.k);const shown=liquidFieldDisplay(accounts,a.k);return(
                 <div key={a.k} className="fv-section-card" style={{padding:18,display:"flex",flexWrap:"wrap",alignItems:"center",gap:12,rowGap:10,minWidth:0,boxSizing:"border-box",maxWidth:"100%"}}>
                   <div className="fv-icon-tile" style={{background:a.c+"15"}}><Ico size={22} color={a.c} strokeWidth={2}/></div>
                   <div style={{flex:"1 1 120px",minWidth:0,maxWidth:"100%"}}>
                     <div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div>
                     {subCount>1&&<div style={{fontSize:10,color:C.textLight,marginTop:2}}>Total across {subCount} accounts — edit rows below</div>}
                   </div>
-                  <input type="number" min="0" placeholder="0.00" value={shown||""} readOnly={subCount>1} onChange={e=>{const v=e.target.value;if(subCount>1)return;if(v===""||parseFloat(v)>=0)setAccounts(p=>a.k==="cushion"?{...p,cushion:v}:applyLiquidBalanceEdit(p,a.k,v));}} onBlur={e=>{if(subCount>1)return;if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{flex:"1 1 120px",width:130,maxWidth:"100%",minWidth:0,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:800,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none",boxSizing:"border-box",...(subCount>1?{opacity:.85,cursor:"default"}:{})}}/>
+                  <input type="number" min="0" placeholder="0.00" value={shown||""} readOnly={subCount>1} onChange={e=>{const v=e.target.value;if(subCount>1)return;if(v===""||parseFloat(v)>=0)setAccounts(p=>applyLiquidFieldEdit(p,a.k,v));}} onBlur={e=>{if(subCount>1)return;if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{flex:"1 1 120px",width:130,maxWidth:"100%",minWidth:0,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:800,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none",boxSizing:"border-box",...(subCount>1?{opacity:.85,cursor:"default"}:{})}}/>
                 </div>
               );})}
             </div>

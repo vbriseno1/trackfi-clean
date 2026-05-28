@@ -2,7 +2,7 @@ import React from "react";
 import { Download, X } from "lucide-react";
 import { C, MF } from "../lib/uiTokens.js";
 import { todayStr } from "../lib/moneyFormat.js";
-import { totalCheckingBalance, totalSavingsBalance } from "../lib/cashAccounts.js";
+import { totalCheckingBalance, totalSavingsBalance, liquidFieldDisplay } from "../lib/cashAccounts.js";
 import { escapeHtml } from "../lib/escapeHtml.js";
 
 function safeHexColor(c, fb = "#6366F1") {
@@ -227,8 +227,8 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
   // ── REPORT 2: Net Worth Report ────────────────────────────────────────────
   function exportNetWorthReport(){
     const assetItems=[
-      {l:"Checking",v:accounts.checking,ic:"🏦"},{l:"Savings",v:accounts.savings,ic:"💰"},
-      {l:"Emergency Fund",v:accounts.cushion,ic:"🛡️"},{l:"401(k)",v:accounts.k401,ic:"🏢"},
+      {l:"Checking",v:liquidFieldDisplay(accounts,"checking"),ic:"🏦"},{l:"Savings",v:liquidFieldDisplay(accounts,"savings"),ic:"💰"},
+      {l:"Emergency Fund",v:liquidFieldDisplay(accounts,"cushion"),ic:"🛡️"},{l:"401(k)",v:accounts.k401,ic:"🏢"},
       {l:"Roth IRA",v:accounts.roth_ira,ic:"🌱"},{l:"Brokerage",v:accounts.brokerage,ic:"📊"},
       {l:"HSA",v:accounts.hsa,ic:"🏥"},{l:"Crypto",v:accounts.crypto,ic:"₿"},
       {l:"Investments",v:accounts.investments,ic:"📈"},{l:"Property",v:accounts.property,ic:"🏠"},

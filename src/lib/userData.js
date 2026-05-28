@@ -16,6 +16,7 @@ import {
   DEF_CATS,
   DEF_CALCOLORS,
 } from "./defaults.js";
+import { normalizeAccountsForPersistence } from "./cashAccounts.js";
 
 export function applyUserDataSnapshot(map, H, { bootDefaults = false, cloudPull = false } = {}) {
   const setArr = (key, setter) => {
@@ -56,7 +57,12 @@ export function applyUserDataSnapshot(map, H, { bootDefaults = false, cloudPull 
     try {
       if (map.accounts != null && typeof map.accounts === "object") {
         const a = map.accounts;
-        H.setAccounts({ ...a, cashAccounts: Array.isArray(a.cashAccounts) ? a.cashAccounts.map((c) => ({ ...c })) : [] });
+        H.setAccounts(
+          normalizeAccountsForPersistence({
+            ...a,
+            cashAccounts: Array.isArray(a.cashAccounts) ? a.cashAccounts.map((c) => ({ ...c })) : [],
+          })
+        );
       }
     } catch {}
     try { if (map.income != null && typeof map.income === "object") H.setIncome({ ...map.income }); } catch {}

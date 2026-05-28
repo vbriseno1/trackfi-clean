@@ -8,7 +8,7 @@ import { CashAccountsBlock } from "../components/CashAccountsBlock.jsx";
 import { PROFESSIONS, getProfession } from "../lib/professions.js";
 import { PAID_FROM_OPTIONS, PAID_FROM_FS_LABELS, normalizePaidFrom } from "../lib/accountsLogic.js";
 import { cardDebtsList } from "../lib/creditCardTotals.js";
-import { cashAccountsByKind } from "../lib/cashAccounts.js";
+import { cashAccountsByKind, liquidFieldDisplay, liquidFieldSubCount, applyLiquidFieldEdit } from "../lib/cashAccounts.js";
 import { BILL_RESHOW_PRESETS } from "../lib/billsLogic.js";
 import { supaFetch } from "../lib/supabase.js";
 
@@ -88,12 +88,16 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
         </div>
       ))}
       <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:16}}>Account Balances</div>
-      {[{k:"checking",l:"🏦 Checking",ph:"0"},{k:"savings",l:"💰 Savings",ph:"0"},{k:"cushion",l:"🛡️ Cushion / Emergency",ph:"0"},{k:"credit_card",l:"💳 Credit card (balance owed)",ph:"0"},{k:"investments",l:"📈 Investments",ph:"0"},{k:"property",l:"🏠 Property",ph:"0"},{k:"vehicles",l:"🚗 Vehicles",ph:"0"}].map(a=>(
-        <div key={a.k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-          <div style={{flex:1,fontSize:13,color:C.textMid}}>{a.l}</div>
-          <input type="number" placeholder={a.ph} value={accounts[a.k]||""} onChange={e=>setAccounts(p=>({...p,[a.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast&&showToast("✓ Balance saved");}} style={{width:120,background:C.surfaceAlt,border:`1.5px solid ${accounts[a.k]?C.accent:C.border}`,borderRadius:10,padding:"8px 10px",fontSize:14,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right",transition:"border-color .15s"}}/>
+      {[{k:"checking",l:"🏦 Checking",ph:"0"},{k:"savings",l:"💰 Savings",ph:"0"},{k:"cushion",l:"🛡️ Cushion / Emergency",ph:"0"},{k:"credit_card",l:"💳 Credit card (balance owed)",ph:"0"},{k:"investments",l:"📈 Investments",ph:"0"},{k:"property",l:"🏠 Property",ph:"0"},{k:"vehicles",l:"🚗 Vehicles",ph:"0"}].map(a=>{
+        const isLiquid=a.k==="checking"||a.k==="savings"||a.k==="cushion";
+        const subCount=isLiquid?liquidFieldSubCount(accounts,a.k):0;
+        const shown=isLiquid?liquidFieldDisplay(accounts,a.k):(accounts[a.k]||"");
+        return(
+        <div key={a.k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+          <div style={{flex:1,fontSize:13,color:C.textMid,minWidth:120}}>{a.l}{subCount>1&&<span style={{display:"block",fontSize:10,color:C.textLight,marginTop:2}}>Total — edit rows below</span>}</div>
+          <input type="number" placeholder={a.ph} value={shown} readOnly={subCount>1} onChange={e=>{if(subCount>1)return;const v=e.target.value;setAccounts(p=>isLiquid?applyLiquidFieldEdit(p,a.k,v):{...p,[a.k]:v});}} onBlur={e=>{if(subCount>1)return;if(e.target.value)showToast&&showToast("✓ Balance saved");}} style={{width:120,background:C.surfaceAlt,border:`1.5px solid ${parseFloat(shown||0)>0?C.accent:C.border}`,borderRadius:10,padding:"8px 10px",fontSize:14,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right",transition:"border-color .15s",...(subCount>1?{opacity:.85,cursor:"default"}:{})}}/>
         </div>
-      ))}
+      );})}
       <CashAccountsBlock accounts={accounts} setAccounts={setAccounts} showToast={showToast} variant="settings"/>
       <div style={{fontSize:12,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:.5,marginBottom:8,marginTop:4}}>Defaults</div>
       <div style={{fontSize:11,color:C.textLight,marginBottom:8,lineHeight:1.45}}>Used for new expenses, bills, recurring auto-log, and goal deposits. With <strong>multiple</strong> checking, savings, or credit cards, choose defaults here — the app won’t pick for you.</div>
