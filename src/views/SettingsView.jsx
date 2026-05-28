@@ -9,7 +9,7 @@ import { PROFESSIONS, getProfession } from "../lib/professions.js";
 import { PAID_FROM_OPTIONS, PAID_FROM_FS_LABELS, normalizePaidFrom } from "../lib/accountsLogic.js";
 import { cardDebtsList } from "../lib/creditCardTotals.js";
 import { cashAccountsByKind, liquidFieldDisplay, liquidFieldSubCount, applyLiquidFieldEdit } from "../lib/cashAccounts.js";
-import { BILL_RESHOW_PRESETS } from "../lib/billsLogic.js";
+import { BILL_RESHOW_PRESETS, nearestBillReshowPreset } from "../lib/billsLogic.js";
 import { supaFetch } from "../lib/supabase.js";
 
 export default function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo,backupExport,backupImport,onLoadDemo,cloudSyncBump,supabaseConfigured,skipAuthMode,signedInForSync,netOnline,syncing=false,syncRecoverableError=false}){

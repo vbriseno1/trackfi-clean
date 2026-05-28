@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Plus, Download, Printer } from "lucide-react";
+import { Plus, Download, Printer, FileText } from "lucide-react";
 import { C, MF, FULL_MOS, PIE_COLORS } from "../theme.js";
 import { fmt } from "../lib/moneyFormat.js";
 import { BarProg, Empty } from "../components/ui.jsx";
