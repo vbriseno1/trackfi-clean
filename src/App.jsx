@@ -453,7 +453,14 @@ function AppInner(){
   }
   const loadFromSupabaseRef=useRef(loadFromSupabase);
   loadFromSupabaseRef.current=loadFromSupabase;
-  function handleSkip(){try{localStorage.setItem("fv_skip_auth","1");}catch{}setSkipAuth(true);}
+  function handleSkip(){
+    try{
+      localStorage.setItem("fv_skip_auth","1");
+      localStorage.removeItem("fv_session");
+    }catch{}
+    setAuthSession(null);
+    setSkipAuth(true);
+  }
   function resetUserState(opts={}){
     const clearOnboarding=opts.clearOnboarding!==false;
     setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);
@@ -886,17 +893,15 @@ function AppInner(){
   useEffect(()=>{if(!ready)return;if(!hhBudgets.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:hhBudgets",hhBudgets);},[hhBudgets,ready]);
   useEffect(()=>{if(!ready)return;if(_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:nwGoal",nwGoal);},[nwGoal,ready]);
   useEffect(()=>{if(!ready)return;if(!subDismissed.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:subDismissed",subDismissed);},[subDismissed,ready]);
-  // Settings & config (change infrequently)
+  // Settings & config — always persist locally when ready (don't wait for cloud pull)
   useEffect(()=>{
     if(!ready)return;
-    if(_getUserId()&&!cloudLoadedRef.current)return;
     ss("fv6:income",income);ss("fv6:bgoals",budgetGoals);ss("fv6:sgoals",savingsGoals);
     ss("fv6:cats",categories);ss("fv6:settings",settings);
   },[income,budgetGoals,savingsGoals,categories,settings,ready]);
-  // Profile & display (change rarely)
+  // Profile & display
   useEffect(()=>{
     if(!ready)return;
-    if(_getUserId()&&!cloudLoadedRef.current)return;
     ss("fv6:prof",profCategory);ss("fv6:profSub",profSub);
     ss("fv6:appName",appName);ss("fv6:greetName",greetName);
     ss("fv6:dashConfig",dashConfig);ss("fv6:household",household);
@@ -1379,7 +1384,58 @@ function AppInner(){
     {id:"more",icon:Menu,label:"More",badge:unread>0?unread:null},
   ];
 
+  const PRE_DEMO_SNAP_KEY="fv_pre_demo_snapshot";
+  function buildDataBundleFromState(){
+    return{
+      accounts:normalizeAccountsForPersistence(accounts),income,expenses,bills,debts,trades,shifts,
+      savingsGoals,budgetGoals,categories,settings,calColors,dashConfig,household,recurrings,settlements,
+      hhBudgets,nwGoal,subDismissed,profCategory,profSub,tradingAccount,accountRates,balHist,notifs,
+      appName,greetName,onboarded,
+      merchantCats:typeof window!=="undefined"?window._merchantCats:void 0,
+    };
+  }
+  function applyDataBundle(d){
+    if(d.accounts)setAccounts(p=>mergeAccountsState(p,d.accounts));
+    if(d.income)setIncome(p=>({...p,...d.income}));
+    if(Array.isArray(d.expenses))setExpenses(d.expenses);
+    if(Array.isArray(d.bills))setBills(d.bills);
+    if(Array.isArray(d.debts))setDebts(d.debts);
+    if(Array.isArray(d.trades))setTrades(d.trades);
+    if(Array.isArray(d.shifts))setShifts(d.shifts);
+    if(Array.isArray(d.savingsGoals))setSGoals(d.savingsGoals);
+    if(Array.isArray(d.budgetGoals))setBGoals(d.budgetGoals);
+    if(Array.isArray(d.categories))setCats(d.categories);
+    if(d.settings)setSettings(p=>({...p,...d.settings}));
+    if(d.calColors)setCalColors(p=>({...p,...d.calColors}));
+    if(d.dashConfig)setDashConfig(p=>({...p,...d.dashConfig}));
+    if(d.household)setHousehold(p=>({...p,...d.household}));
+    if(Array.isArray(d.recurrings))setRecurrings(d.recurrings);
+    if(Array.isArray(d.settlements))setSettlements(d.settlements);
+    if(Array.isArray(d.hhBudgets))setHhBudgets(d.hhBudgets);
+    if(d.nwGoal!==undefined)setNwGoal(d.nwGoal);
+    if(Array.isArray(d.subDismissed))setSubDismissed(d.subDismissed);
+    if(d.profCategory)setProfCategory(d.profCategory);
+    if(d.profSub)setProfSub(d.profSub);
+    if(d.tradingAccount)setTradingAccount(p=>({...p,...d.tradingAccount}));
+    if(d.accountRates)setAccountRates(p=>({...p,...d.accountRates}));
+    if(Array.isArray(d.balHist))setBalHist(d.balHist);
+    if(Array.isArray(d.notifs))setNotifs(d.notifs);
+    if(d.appName)setAppName(d.appName);
+    if(d.greetName!==undefined)setGreetName(d.greetName);
+    if(d.onboarded===true){try{localStorage.setItem("fv_onboarded","1");}catch{}setOnboarded(true);ss("fv6:onboarded",true);}
+    else if(d.onboarded===false){try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);ss("fv6:onboarded",false);}
+    if(d.merchantCats)try{window._merchantCats=d.merchantCats;ss("fv6:merchantCats",d.merchantCats);}catch{}
+    cloudLoadedRef.current=true;
+  }
+  function capturePreDemoSnapshotIfNeeded(){
+    try{
+      if(isTrackfiDemoMode())return;
+      if(localStorage.getItem(PRE_DEMO_SNAP_KEY))return;
+      localStorage.setItem(PRE_DEMO_SNAP_KEY,JSON.stringify(buildDataBundleFromState()));
+    }catch{}
+  }
   async function loadDemo(){
+    capturePreDemoSnapshotIfNeeded();
     const d=generateDemoData();
     const _lpd=new Date();_lpd.setDate(_lpd.getDate()-11);
     const lastPayDate=_lpd.getFullYear()+"-"+String(_lpd.getMonth()+1).padStart(2,"0")+"-"+String(_lpd.getDate()).padStart(2,"0");
@@ -1461,14 +1517,29 @@ function AppInner(){
   },[]);
 
   async function exitDemo(){
-    const uid=authSession?.user?.id;
-    // Signed-in: don't clear onboarding — resetUserState() would drop fv_onboarded and show the wizard again.
-    resetUserState({clearOnboarding:!uid});
-    setAppName("Trackfi");
+    const signedIn=!!authSession?.user?.id&&!skipAuth;
+    let preDemoSnap=null;
+    try{
+      const raw=localStorage.getItem(PRE_DEMO_SNAP_KEY);
+      if(raw)preDemoSnap=JSON.parse(raw);
+    }catch{}
+    setIsDemoMode(false);
+    setDemoBannerVisible(false);
     try{delete window.__trackfiDemoInfo;}catch{}
     try{localStorage.removeItem("fv_demo");}catch{}
-    if(uid&&authSession){
+    if(signedIn){
+      resetUserState({clearOnboarding:false});
+      setAppName("Trackfi");
+      try{localStorage.removeItem(PRE_DEMO_SNAP_KEY);}catch{}
       await loadFromSupabase(authSession);
+      showToast("Sample data cleared — your account data is restored","info");
+    }else{
+      resetUserState({clearOnboarding:true});
+      setAppName("Trackfi");
+      try{localStorage.removeItem(PRE_DEMO_SNAP_KEY);}catch{}
+      if(preDemoSnap)applyDataBundle(preDemoSnap);
+      else cloudLoadedRef.current=true;
+      showToast(preDemoSnap?"Sample data cleared — your numbers are back":"Sample data cleared","info");
     }
     navTo("home");
   }
@@ -1527,36 +1598,7 @@ function AppInner(){
         return false;
       }
       const d=parsed.data;
-      if(d.accounts)setAccounts(p=>mergeAccountsState(p,d.accounts));
-      if(d.income)setIncome(p=>({...p,...d.income}));
-      if(Array.isArray(d.expenses))setExpenses(d.expenses);
-      if(Array.isArray(d.bills))setBills(d.bills);
-      if(Array.isArray(d.debts))setDebts(d.debts);
-      if(Array.isArray(d.trades))setTrades(d.trades);
-      if(Array.isArray(d.shifts))setShifts(d.shifts);
-      if(Array.isArray(d.savingsGoals))setSGoals(d.savingsGoals);
-      if(Array.isArray(d.budgetGoals))setBGoals(d.budgetGoals);
-      if(Array.isArray(d.categories))setCats(d.categories);
-      if(d.settings)setSettings(p=>({...p,...d.settings}));
-      if(d.calColors)setCalColors(p=>({...p,...d.calColors}));
-      if(d.dashConfig)setDashConfig(p=>({...p,...d.dashConfig}));
-      if(d.household)setHousehold(p=>({...p,...d.household}));
-      if(Array.isArray(d.recurrings))setRecurrings(d.recurrings);
-      if(Array.isArray(d.settlements))setSettlements(d.settlements);
-      if(Array.isArray(d.hhBudgets))setHhBudgets(d.hhBudgets);
-      if(d.nwGoal!==undefined)setNwGoal(d.nwGoal);
-      if(Array.isArray(d.subDismissed))setSubDismissed(d.subDismissed);
-      if(d.profCategory)setProfCategory(d.profCategory);
-      if(d.profSub)setProfSub(d.profSub);
-      if(d.tradingAccount)setTradingAccount(p=>({...p,...d.tradingAccount}));
-      if(d.accountRates)setAccountRates(p=>({...p,...d.accountRates}));
-      if(Array.isArray(d.balHist))setBalHist(d.balHist);
-      if(Array.isArray(d.notifs))setNotifs(d.notifs);
-      if(d.appName)setAppName(d.appName);
-      if(d.greetName!==undefined)setGreetName(d.greetName);
-      if(d.onboarded===true){try{localStorage.setItem("fv_onboarded","1");}catch{}setOnboarded(true);ss("fv6:onboarded",true);}
-      else if(d.onboarded===false){try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);ss("fv6:onboarded",false);}
-      if(d.merchantCats)try{window._merchantCats=d.merchantCats;ss("fv6:merchantCats",d.merchantCats);}catch{}
+      applyDataBundle(d);
       showToast&&showToast(isTrackfiDemoMode()?"✅ Backup imported (on this device — sample mode doesn\u2019t sync to the cloud).":"✅ Backup validated and imported — saving to your account\u2026");
       if(parsed.warnings?.length)console.warn("[Trackfi] Backup import warnings:",parsed.warnings);
       return true;

@@ -180,10 +180,21 @@ export async function signIn(email, password) {
   }
 }
 
+/** True when user chose "Try without account" — ignore stale session for scope/sync. */
+export function isOfflineOnlyMode() {
+  try {
+    return localStorage.getItem("fv_skip_auth") === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function getScope() {
   try {
-    const s = JSON.parse(localStorage.getItem("fv_session") || "null");
-    if (s?.user?.id) return "fv6_" + s.user.id.slice(0, 8) + ":";
+    if (!isOfflineOnlyMode()) {
+      const s = JSON.parse(localStorage.getItem("fv_session") || "null");
+      if (s?.user?.id) return "fv6_" + s.user.id.slice(0, 8) + ":";
+    }
     let d = localStorage.getItem("fv_device_id");
     if (!d) {
       d = "d_" + Math.random().toString(36).slice(2, 10);
@@ -204,6 +215,7 @@ export function getSession() {
 }
 
 export function getUserId() {
+  if (isOfflineOnlyMode()) return null;
   return getSession()?.user?.id || null;
 }
 
@@ -400,7 +412,7 @@ async function _flushKey(uid, bare, v) {
 export async function sg(k) {
   const uid = getUserId();
   const bare = k.replace("fv6:", "");
-  if (uid && !isTrackfiDemoMode()) {
+  if (uid && !isTrackfiDemoMode() && !isOfflineOnlyMode()) {
     try {
       const res = await supaFetch(
         `/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&key=eq.${encodeURIComponent(bare)}&select=value,updated_at`
@@ -457,7 +469,7 @@ export async function ss(k, v) {
       } catch {}
     }
   }
-  if (uid && !isTrackfiDemoMode()) {
+  if (uid && !isTrackfiDemoMode() && !isOfflineOnlyMode()) {
     if (_ssBuffer[bare]?.timer) clearTimeout(_ssBuffer[bare].timer);
     const buf = { value: v, timer: null };
     buf.timer = setTimeout(() => {
@@ -492,7 +504,7 @@ export function cancelPendingDebouncedSync() {
 
 export async function flushPendingSync() {
   const uid = getUserId();
-  const allowCloud = !!uid && !isTrackfiDemoMode();
+  const allowCloud = !!uid && !isTrackfiDemoMode() && !isOfflineOnlyMode();
   const keys = Object.keys(_ssBuffer);
   let conflict = false;
   let error = false;

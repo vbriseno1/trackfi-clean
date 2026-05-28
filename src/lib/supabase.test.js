@@ -29,6 +29,21 @@ describe('supabase helpers', () => {
     expect(getScope()).toBe('fv6_abcdefgh:')
   })
 
+  it('getScope and getUserId ignore session when fv_skip_auth is set', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'k')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem(
+      'fv_session',
+      JSON.stringify({ user: { id: 'abcdefghijklmnop' } })
+    )
+    localStorage.setItem('fv_skip_auth', '1')
+    vi.resetModules()
+    const { getScope, getUserId } = await import('./supabase.js')
+    expect(getUserId()).toBeNull()
+    expect(getScope()).toMatch(/^fv6_d_[a-z0-9]+:$/)
+  })
+
   it('getScope falls back to device bucket when logged out', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'k')
