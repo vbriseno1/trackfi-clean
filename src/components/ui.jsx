@@ -182,6 +182,61 @@ export function SH({ title, sub, onAdd, addLabel = "Add", right }) {
   );
 }
 
+/** List row with optional badge, right column, and delete. */
+export function ListRow({ icon, title, sub, right, rightColor, rightSub, onDelete, badge, onClick }) {
+  const iconNode =
+    typeof icon === "string" ? (
+      <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
+    ) : (
+      icon
+    );
+  return (
+    <div
+      className="rw"
+      style={{
+        background: C.surface,
+        borderRadius: UI.radiusLg,
+        border: `1px solid ${C.border}`,
+        boxShadow: UI.shadow,
+        padding: "13px 16px",
+        marginBottom: 8,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        cursor: onClick ? "pointer" : "default",
+      }}
+      onClick={onClick}
+    >
+      <div style={{ width: 38, height: 38, borderRadius: 10, background: C.surfaceAlt, border: `1px solid ${C.borderLight}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {iconNode}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{title}</span>
+          {badge && (
+            <span style={{ fontSize: 10, fontWeight: 700, background: badge.bg, color: badge.color, padding: "2px 7px", borderRadius: 99 }}>
+              {badge.label}
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: C.textLight, lineHeight: 1.4 }}>{sub}</div>
+        {rightSub && <div style={{ fontSize: 11, color: C.textLight, marginTop: 2 }}>{rightSub}</div>}
+      </div>
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontFamily: MF, fontWeight: 700, fontSize: 14, color: rightColor || C.text }}>{right}</div>
+      </div>
+      {onDelete && (
+        <button className="ba db" onClick={(e) => { e.stopPropagation(); onDelete(); }} style={{ background: "none", border: "none", cursor: "pointer", color: C.textLight, padding: 4, display: "flex" }}>
+          <Trash2 size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** @deprecated Use ListRow — alias kept for older views. */
+export const Row = ListRow;
+
 /** Empty-state with icon + optional CTA. */
 export function Empty({ text, icon: Icon = DollarSign, cta, onCta }) {
   return (

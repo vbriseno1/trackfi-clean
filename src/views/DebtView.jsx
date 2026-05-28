@@ -3,7 +3,7 @@ import { Plus, CreditCard, TrendingDown, ChevronRight, ChevronLeft, Wallet, X, T
 import { C, MF, debtDisplayColor, PIE_COLORS } from "../theme.js";
 import { fmt } from "../lib/moneyFormat.js";
 import { BarProg, Empty } from "../components/ui.jsx";
-import { RechartsReady } from "../components/RechartsBridge.jsx";
+import { RechartsReady, ChartPanel, useChartTheme } from "../components/RechartsBridge.jsx";
 import ExtraPayModal from "../modals/ExtraPayModal.jsx";
 import { isLoanDebt, splitLoanPayment, applyLoanPaymentToDebtRow, debtOwedForBreakdown, sumDebtsPrincipalAndAccrued, approxMonthlyInterestOnDebts, debtOriginalBaseline, loanDebtsList } from "../lib/debtLogic.js";
 import { simRowsFromDebts, simulateMultiDebtPayoff, singleDebtPayoffMonths } from "../lib/debtPayoffSim.js";
@@ -12,6 +12,7 @@ import { todayStr } from "../lib/moneyFormat.js";
 import { round2 } from "../lib/loanSplit.js";
 
 export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,showToast,extraPayDebt=0,setExtraPayDebt,onAddDebt,debtSavePing=0}){
+  const ct=useChartTheme();
   const[selectedDebt,setSelectedDebt]=useState(null);
   const[strategy,setStrategy]=useState("avalanche");
   const[payModal,setPayModal]=useState(null);
@@ -63,7 +64,7 @@ export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,s
       <div style={{marginBottom:16}}>
         <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",gap:10,minWidth:0}}>
           <div style={{minWidth:0,flex:"1 1 min(200px, 100%)"}}>
-            <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Debt Tracker</div>
+            <div className="fv-page-title">Debt Tracker</div>
             <div style={{fontSize:13,color:C.textLight}}>{fmt(totalDebt)} total across {debts.length} debt{debts.length!==1?"s":""}</div>
             {debts.length>0&&<div style={{fontSize:11,color:C.textLight,marginTop:6,lineHeight:1.45}}>Saves to this device automatically{debtSavePing?<> · last update {new Date(debtSavePing).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</>:null}. Sign in for cloud backup.</div>}
           </div>
@@ -76,17 +77,16 @@ export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,s
       </div>
       {debts.length===0&&<Empty text="No debts tracked. Add one to start your payoff plan!" icon={CreditCard}/>}
       {debts.length>0&&<>
-        <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:20,marginBottom:14}}>
-          <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:4}}>Debt Breakdown</div>
-          <div style={{fontSize:12,color:C.textLight,marginBottom:12}}>Tap a slice to see details</div>
+        <ChartPanel title="Debt breakdown" subtitle="Tap a slice for details">
           <div className="debt-pie-row">
             <div className="fv-chart-wrap" style={{width:"100%",maxWidth:300,margin:"0 auto"}}>
             <RechartsReady minHeight={200} render={R=>(
             <R.ResponsiveContainer width="100%" height={200}>
               <R.PieChart>
-              <R.Pie data={pieData} cx="50%" cy="50%" innerRadius="28%" outerRadius="48%" dataKey="value" labelLine={false} label={renderLabel} onClick={(entry)=>setSelectedDebt(selectedDebt?.debt?.id===entry.debt?.id?null:entry)}>
-                {pieData.map((entry,i)=>(<R.Cell key={i} fill={entry.color} stroke={selectedDebt?.debt?.id===entry.debt?.id?"#fff":"transparent"} strokeWidth={selectedDebt?.debt?.id===entry.debt?.id?3:0} style={{cursor:"pointer",opacity:selectedDebt&&selectedDebt.debt?.id!==entry.debt?.id?0.5:1}}/>))}
+              <R.Pie data={pieData} cx="50%" cy="50%" innerRadius="32%" outerRadius="46%" dataKey="value" labelLine={false} label={renderLabel} onClick={(entry)=>setSelectedDebt(selectedDebt?.debt?.id===entry.debt?.id?null:entry)} stroke="none">
+                {pieData.map((entry,i)=>(<R.Cell key={i} fill={entry.color} stroke={selectedDebt?.debt?.id===entry.debt?.id?C.surface:"transparent"} strokeWidth={selectedDebt?.debt?.id===entry.debt?.id?2:0} style={{cursor:"pointer",opacity:selectedDebt&&selectedDebt.debt?.id!==entry.debt?.id?0.55:1}}/>))}
               </R.Pie>
+              <R.Tooltip formatter={(v)=>fmt(v)} contentStyle={ct.tooltipStyle}/>
             </R.PieChart>
             </R.ResponsiveContainer>
             )}/>
@@ -141,7 +141,7 @@ export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,s
               </div>
             );
           })()}
-        </div>
+        </ChartPanel>
         {debts.length>0&&(()=>{
           const totalBal=debts.reduce((s,d)=>s+debtOwedForBreakdown(d),0);
           const totalMin=debts.reduce((s,d)=>{const ow=debtOwedForBreakdown(d);if(ow<=0)return s;const r=(parseFloat(d.rate)||0)/100/12;return s+(parseFloat(d.minPayment)>0?parseFloat(d.minPayment):Math.max(25,ow*0.02+r*ow));},0);
@@ -155,8 +155,8 @@ export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,s
           const stratLabel=strategy==="avalanche"?"highest APR":"smallest balance";
           const stuck=baseSim.capped||!baseSim.debtFree;
           return(
-            <div style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
-              <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>🎯 Debt-Free Projection</div>
+            <div className="fv-hero-panel" style={{marginBottom:14}}>
+              <div className="fv-stat-label" style={{color:"rgba(255,255,255,.55)",marginBottom:4}}>Debt-free projection</div>
               <div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:C.greenMid,marginBottom:2,letterSpacing:-.5}}>{stuck?"Increase payments":dfDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
               <div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginBottom:16}}>{stuck?"Payments may not cover interest on one or more debts":`${timeStr} · APR÷12 estimate · minimums on all, roll freed cash to ${stratLabel}`}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,marginBottom:16}}>
@@ -174,22 +174,23 @@ export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,s
                     <div style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.6)",marginBottom:8}}>Payoff Timeline</div>
                     <RechartsReady minHeight={120} render={R=>(
                     <R.ResponsiveContainer width="100%" height={120}>
-                      <R.AreaChart data={chartData} margin={{left:0,right:8,top:4,bottom:0}}>
+                      <R.AreaChart data={chartData} margin={ct.margin}>
                         <defs>
                           <linearGradient id="debtGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#fca5a5" stopOpacity={.3}/>
-                            <stop offset="95%" stopColor="#fca5a5" stopOpacity={0}/>
+                            <stop offset="0%" stopColor={C.negativeMid} stopOpacity={.25}/>
+                            <stop offset="100%" stopColor={C.negativeMid} stopOpacity={0}/>
                           </linearGradient>
                           <linearGradient id="debtGradX" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={C.green} stopOpacity={.3}/>
-                            <stop offset="95%" stopColor={C.green} stopOpacity={0}/>
+                            <stop offset="0%" stopColor={C.positiveMid} stopOpacity={.25}/>
+                            <stop offset="100%" stopColor={C.positiveMid} stopOpacity={0}/>
                           </linearGradient>
                         </defs>
-                        <R.XAxis dataKey="mo" tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v+"mo"}/>
-                        <R.YAxis tick={{fill:"rgba(255,255,255,.3)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
-                        <R.Tooltip formatter={(v,n)=>[fmt(v),n==="base"?`Combined (${strategy})`:"With extra"]} contentStyle={{background:C.navy,border:"1px solid rgba(255,255,255,.15)",borderRadius:10,fontSize:11}} labelFormatter={v=>v+"mo"}/>
-                        <R.Area type="monotone" dataKey="base" stroke="#fca5a5" strokeWidth={2} fill="url(#debtGrad)" dot={false} name="base"/>
-                        {withExtra&&<R.Area type="monotone" dataKey="extra" stroke={C.greenMid} strokeWidth={2} fill="url(#debtGradX)" dot={false} name="extra"/>}
+                        <R.CartesianGrid stroke="rgba(255,255,255,.08)" strokeDasharray="3 3" vertical={false}/>
+                        <R.XAxis dataKey="mo" tick={{fill:"rgba(255,255,255,.45)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>v+"mo"}/>
+                        <R.YAxis tick={{fill:"rgba(255,255,255,.45)",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={ct.formatYAxis} width={40}/>
+                        <R.Tooltip formatter={(v,n)=>[fmt(v),n==="base"?`Combined (${strategy})`:"With extra"]} contentStyle={{background:C.navyMid,border:"1px solid rgba(148,163,184,.2)",borderRadius:8,fontSize:11,color:"#f8fafc"}} labelFormatter={v=>v+"mo"}/>
+                        <R.Area type="monotone" dataKey="base" stroke={C.negativeMid} strokeWidth={ct.areaStrokeWidth} fill="url(#debtGrad)" dot={false} name="base"/>
+                        {withExtra&&<R.Area type="monotone" dataKey="extra" stroke={C.positiveMid} strokeWidth={ct.areaStrokeWidth} fill="url(#debtGradX)" dot={false} name="extra"/>}
                       </R.AreaChart>
                     </R.ResponsiveContainer>
                     )}/>
