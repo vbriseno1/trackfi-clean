@@ -12,6 +12,7 @@
  *   can greet the user even before their profile syncs.
  */
 import React, { useEffect, useRef, useState } from "react";
+import { Mail, Wallet } from "lucide-react";
 import { C, MF } from "../theme.js";
 import { CSS } from "../styles.js";
 import { signIn, signUp, supaFetch, isSupabaseConfigured } from "../lib/supabase.js";
@@ -136,7 +137,7 @@ export default function AuthScreen({ onAuth, onSkip }) {
   }
 
   if (confirmed) return (
-    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 50%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div className="fv-auth-shell">
       <style>{CSS}</style>
       {!isSupabaseConfigured()&&(
         <div role="alert" style={{position:"fixed",top:0,left:0,right:0,zIndex:50,background:"#fef3c7",borderBottom:"1px solid #f59e0b",color:"#92400e",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 14px",lineHeight:1.4}}>
@@ -144,7 +145,7 @@ export default function AuthScreen({ onAuth, onSkip }) {
         </div>
       )}
       <div style={{background:"#fff",borderRadius:28,width:"100%",maxWidth:400,padding:"40px 32px",textAlign:"center",boxShadow:"0 32px 80px rgba(0,0,0,.35)"}}>
-        <div style={{width:80,height:80,borderRadius:"50%",background:`linear-gradient(135deg,${C.accentBg},${C.purpleBg})`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",fontSize:36}}>📧</div>
+        <div style={{width:80,height:80,borderRadius:"50%",background:C.accentBg,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><Mail size={36} color={C.accent} strokeWidth={1.75}/></div>
         <div style={{fontFamily:MF,fontSize:24,fontWeight:900,color:C.navy,marginBottom:8,letterSpacing:-.5}}>Check your inbox</div>
         <div style={{fontSize:14,color:C.textLight,marginBottom:6,lineHeight:1.6}}>Confirmation link sent to</div>
         <div style={{fontWeight:800,color:C.accent,fontSize:16,marginBottom:20,background:C.accentBg,padding:"8px 16px",borderRadius:10,display:"inline-block"}}>{email}</div>
@@ -154,7 +155,7 @@ export default function AuthScreen({ onAuth, onSkip }) {
           <div>2. Click "Confirm your email"</div>
           <div>3. Come back here and sign in</div>
         </div>
-        <button onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.green})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",marginBottom:12,letterSpacing:.2}}>✓ I confirmed — Sign In</button>
+        <button type="button" className="fv-btn-primary ba" onClick={()=>{setConfirmed(false);setMode("login");setPass("");setErr("");}} style={{justifyContent:"center",marginBottom:12,fontFamily:MF}}>I confirmed — sign in</button>
         <button onClick={resendConfirmation} style={{width:"100%",padding:"12px",borderRadius:14,border:`1.5px solid ${C.accentMid}`,background:C.accentBg,color:C.accent,fontWeight:700,fontSize:14,cursor:"pointer",marginBottom:12}}>
           ↻ Resend confirmation email
         </button>
@@ -165,7 +166,7 @@ export default function AuthScreen({ onAuth, onSkip }) {
   );
 
   return (
-    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 55%,${C.accent} 100%)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20,position:"relative",overflow:"hidden"}}>
+    <div className="fv-auth-shell fv-auth-shell-col">
       <style>{CSS}</style>
       {!isSupabaseConfigured()&&(
         <div role="alert" style={{position:"fixed",top:0,left:0,right:0,zIndex:50,background:"#fef3c7",borderBottom:"1px solid #f59e0b",color:"#92400e",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 14px",lineHeight:1.4}}>
@@ -176,13 +177,13 @@ export default function AuthScreen({ onAuth, onSkip }) {
       <div style={{position:"absolute",bottom:-60,left:-60,width:240,height:240,borderRadius:"50%",background:"rgba(13,148,136,.1)",pointerEvents:"none"}}/>
       <div style={{textAlign:"center",marginBottom:28,zIndex:1}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:8}}>
-          <div style={{width:48,height:48,borderRadius:14,background:`linear-gradient(135deg,${C.accent},${C.teal})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,boxShadow:"0 8px 24px rgba(99,102,241,.4)"}}>💰</div>
+          <div className="fv-auth-logo"><Wallet size={24} strokeWidth={2}/></div>
           <div style={{fontFamily:MF,fontSize:34,fontWeight:900,color:"#fff",letterSpacing:-1}}>Trackfi</div>
         </div>
         <div style={{fontSize:15,color:"rgba(255,255,255,.6)",fontWeight:500,letterSpacing:.2}}>Your money, finally making sense</div>
       </div>
       {mode==="signup"&&<div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap",justifyContent:"center",zIndex:1}}>
-        {["📊 Live spending insights","💸 Smart safe-to-spend","🎯 Goals & debt payoff"].map(f=>(
+        {["Live spending insights","Smart safe-to-spend","Goals & debt payoff"].map(f=>(
           <div key={f} style={{background:"rgba(255,255,255,.1)",borderRadius:99,padding:"5px 12px",fontSize:11,color:"rgba(255,255,255,.8)",fontWeight:600,backdropFilter:"blur(8px)"}}>{f}</div>
         ))}
       </div>}
@@ -217,7 +218,7 @@ export default function AuthScreen({ onAuth, onSkip }) {
           </div>}
         </div>
         {err&&<div style={{background:err.includes("found")||err.includes("sent")?C.accentBg:C.redBg,border:`1px solid ${err.includes("found")||err.includes("sent")?C.accentMid:C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:err.includes("found")||err.includes("sent")?C.accent:C.red,marginBottom:14,lineHeight:1.5}}>{err}</div>}
-        <button onClick={submit} disabled={loading||cooldown>0||!email.trim()||!pass.trim()} style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:loading||cooldown>0||!email.trim()||!pass.trim()?C.borderLight:`linear-gradient(135deg,${C.accent},${C.teal})`,color:loading||cooldown>0||!email.trim()||!pass.trim()?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:loading||cooldown>0||!email.trim()||!pass.trim()?"default":"pointer",marginBottom:14,letterSpacing:.2,transition:"all .2s",boxShadow:loading||cooldown>0||!email.trim()||!pass.trim()?"none":`0 4px 16px ${C.accent}50`}}>{loading?"Just a sec...":cooldown>0?`Wait ${cooldown}s...`:(mode==="login"?"Sign In →":"Create Account →")}</button>
+        <button type="button" className="fv-btn-primary ba" onClick={submit} disabled={loading||cooldown>0||!email.trim()||!pass.trim()} style={{justifyContent:"center",marginBottom:14,fontFamily:MF}}>{loading?"Just a sec...":cooldown>0?`Wait ${cooldown}s...`:(mode==="login"?"Sign in":"Create account")}</button>
         {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}>
           <button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,fontWeight:600,cursor:"pointer",padding:"6px 0"}}>Try without account →</button>
           <div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data stays on your device</div>

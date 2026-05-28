@@ -80,4 +80,10 @@ button{-webkit-tap-highlight-color:transparent}
 .fv-btn-primary:disabled{background:#E2E8F0;color:#94A3B8;cursor:default;box-shadow:none}
 .fv-btn-success{background:#047857;box-shadow:0 2px 8px rgba(4,120,87,.22)}
 .fv-insight-card{background:#EEF2FF;border:1px solid #C7D2FE;border-radius:12px;padding:12px 14px;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.fv-auth-shell{min-height:100vh;background:linear-gradient(165deg,#0F172A 0%,#1E293B 58%,#334155 100%);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
+.fv-auth-shell-col{flex-direction:column;position:relative;overflow:hidden}
+.fv-auth-logo{width:48px;height:48px;border-radius:14px;background:#4F46E5;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 6px 20px rgba(79,70,229,.35);flex-shrink:0}
+.fv-avatar-chip{width:40px;height:40px;border-radius:50%;background:#4F46E5;display:flex;align-items:center;justify-content:center;font-family:'Manrope',sans-serif;font-weight:800;font-size:16px;color:#fff;flex-shrink:0}
+.fv-chat-fab{width:36px;height:36px;border-radius:50%;background:#4F46E5;display:flex;align-items:center;justify-content:center;margin-top:-10px;margin-bottom:2px;box-shadow:0 4px 12px rgba(79,70,229,.35)}
+.fv-offline-banner{background:#4F46E5;border-radius:16px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
 `;

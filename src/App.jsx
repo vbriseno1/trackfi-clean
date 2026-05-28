@@ -1490,15 +1490,15 @@ function AppInner(){
     return true;
   }
 
-  if(authLoading)return(<div style={{minHeight:"100vh",background:C.navy,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>💰 Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
+  if(authLoading)return(<div className="fv-auth-shell"><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:8}}>Trackfi</div><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading...</div></div></div>);
 
   // Password reset flow — show set-new-password screen
   if(pwResetMode&&authSession){return(
-    <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 55%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div className="fv-auth-shell">
       <style>{CSS}</style>
       <div style={{background:"rgba(255,255,255,.97)",borderRadius:24,width:"100%",maxWidth:400,padding:"32px 28px",boxShadow:"0 32px 80px rgba(0,0,0,.3)"}}>
         <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{fontSize:36,marginBottom:8}}>🔐</div>
+          <div style={{width:56,height:56,borderRadius:14,background:C.accentBg,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><Lock size={28} color={C.accent} strokeWidth={1.75}/></div>
           <div style={{fontFamily:MF,fontSize:22,fontWeight:900,color:C.navy,marginBottom:4}}>Set New Password</div>
           <div style={{fontSize:13,color:C.textLight}}>Choose something strong</div>
         </div>
@@ -1519,19 +1519,18 @@ function AppInner(){
             setPwMsg("✓ Password updated! Signing you in...");
             setTimeout(()=>handleAuth(authSession),1200);
           }catch{setPwMsg("Network error — try again.");setPwLoading(false);}
-        }} disabled={pwLoading||newPw.length<6}
-          style={{width:"100%",padding:"15px",borderRadius:14,border:"none",background:pwLoading||newPw.length<6?C.borderLight:`linear-gradient(135deg,${C.accent},${C.teal})`,color:pwLoading||newPw.length<6?C.textFaint:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:pwLoading||newPw.length<6?"default":"pointer"}}>
-          {pwLoading?"Updating...":"Set New Password →"}
+        }} type="button" className="fv-btn-primary ba" style={{justifyContent:"center",fontFamily:MF}} disabled={pwLoading||newPw.length<6}>
+          {pwLoading?"Updating...":"Set new password"}
         </button>
       </div>
     </div>
   );}
   if(sessionExpired&&!authSession&&!skipAuth){
     return(
-      <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,#1a2a4a 55%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div className="fv-auth-shell">
         <style>{CSS}</style>
         <div style={{background:C.surface,borderRadius:20,padding:28,maxWidth:340,width:"100%",boxShadow:"0 24px 64px rgba(10,22,40,.25)",textAlign:"center"}}>
-          <div style={{fontSize:36,marginBottom:12}}>🔒</div>
+          <div style={{width:48,height:48,borderRadius:12,background:C.surfaceAlt,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><Lock size={24} color={C.textMid} strokeWidth={1.75}/></div>
           <div style={{fontFamily:MF,fontSize:17,fontWeight:800,color:C.text,marginBottom:8}}>Session expired</div>
           <div style={{fontSize:13,color:C.textMid,marginBottom:22,lineHeight:1.5}}>Sign in again to sync across devices. Your data on this device is still here.</div>
           <button type="button" className="fv-btn-primary ba" onClick={()=>setSessionExpired(false)} style={{justifyContent:"center",marginBottom:10,fontFamily:MF}}>
@@ -1545,7 +1544,7 @@ function AppInner(){
     );
   }
   if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip}/>;
-  if(!ready)return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.navy} 0%,${C.navyMid} 100%)`,display:"flex",alignItems:"center",justifyContent:"center"}}><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:20}}>💰 Trackfi</div><div style={{width:36,height:36,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading your data...</div></div></div>);
+  if(!ready)return(<div className="fv-auth-shell"><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:20}}>Trackfi</div><div style={{width:36,height:36,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading your data...</div></div></div>);
   if(!onboarded&&ready)return(<><style>{CSS}</style><OnboardingWizard onComplete={async d=>{
     if(d.name)setGreetName(d.name);
     setAppName("Trackfi");
@@ -2062,7 +2061,7 @@ function AppInner(){
             {/* Account pill at top of More */}
             {authSession?(
               <div style={{background:C.navy,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",flexWrap:"wrap",alignItems:"flex-start",gap:12,rowGap:10}}>
-                <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MF,fontWeight:800,fontSize:16,color:"#fff",flexShrink:0}}>{(authSession?.user?.email||"?")[0].toUpperCase()}</div>
+                <div className="fv-avatar-chip">{(authSession?.user?.email||"?")[0].toUpperCase()}</div>
                 <div style={{flex:"1 1 180px",minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#fff",overflowWrap:"anywhere",wordBreak:"break-word"}}>{authSession?.user?.email}</div><div style={{fontSize:11,color:"rgba(255,255,255,.5)",marginTop:2}}>{(()=>{const t=parseInt(localStorage.getItem("fv_last_sync")||"0");const ago=t?Math.floor((Date.now()-t)/1000):null;return ago===null?"Signed in":ago<10?"✓ Just synced":ago<60?"✓ Synced "+ago+"s ago":ago<3600?"✓ Synced "+Math.floor(ago/60)+"m ago":"Signed in";})()}</div></div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:8,marginLeft:"auto",flex:"0 1 auto",justifyContent:"flex-end"}}>
                   <button onClick={async()=>{if(authSession&&!syncing){await loadFromSupabase(authSession);showToast("✓ Synced");}}} style={{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.15)",borderRadius:8,padding:"6px 12px",color:"rgba(255,255,255,.8)",fontSize:12,fontWeight:700,cursor:syncing?"default":"pointer",display:"flex",alignItems:"center",gap:5,opacity:syncing?0.6:1,whiteSpace:"nowrap"}}>{syncing?"Syncing...":"↻ Sync now"}</button>
@@ -2070,8 +2069,8 @@ function AppInner(){
                 </div>
               </div>
             ):(
-              <div style={{background:`linear-gradient(135deg,${C.accent},${C.purple})`,borderRadius:16,padding:"14px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
-                <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>Using offline mode</div><div style={{fontSize:11,color:"rgba(255,255,255,.7)"}}>Sign in to sync across devices</div></div>
+              <div className="fv-offline-banner">
+                <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#fff",marginBottom:2}}>Using offline mode</div><div style={{fontSize:11,color:"rgba(255,255,255,.75)"}}>Sign in to sync across devices</div></div>
                 <button onClick={()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:8,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>Sign In</button>
               </div>
             )}
@@ -2258,9 +2257,9 @@ function AppInner(){
               );
               return(
                 <div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"14px",marginBottom:14}}>
-                  <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>🔔 Enable Push Notifications</div>
+                  <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:4}}>Enable push notifications</div>
                   <div style={{fontSize:13,color:C.textLight,marginBottom:12,lineHeight:1.5}}>Get alerts for overdue bills, budget warnings, payday reminders, and goal completions — even when the app is closed.</div>
-                  <button onClick={async()=>{const r=await requestNotifPermission();if(r==="granted")showToast("✅ Notifications enabled!");else showToast("Notifications not enabled","error");}} style={{width:"100%",padding:"11px",borderRadius:12,border:"none",background:`linear-gradient(135deg,${C.accent},${C.teal})`,color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Enable Notifications →</button>
+                  <button type="button" className="fv-btn-primary ba" onClick={async()=>{const r=await requestNotifPermission();if(r==="granted")showToast("Notifications enabled");else showToast("Notifications not enabled","error");}} style={{justifyContent:"center"}}>Enable notifications</button>
                 </div>
               );
             })()}
@@ -2319,7 +2318,7 @@ function AppInner(){
               ?"⚠️ You spent "+fmt(monthlySummary.total-monthlySummary.prevTotal)+" more than the month before"
               :"✅ You spent "+fmt(monthlySummary.prevTotal-monthlySummary.total)+" less than the month before"}
           </div>}
-          <button onClick={()=>setMonthlySummary(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.accent},${C.teal})`,color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer"}}>Got it 👍</button>
+          <button type="button" className="fv-btn-primary ba" onClick={()=>setMonthlySummary(null)} style={{justifyContent:"center",fontFamily:MF}}>Done</button>
         </div>
       </div>}
       {toast&&<div role="status" aria-live={toast.type==="error"?"assertive":"polite"} aria-atomic="true" style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 18px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:10,maxWidth:340,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}} onClick={()=>setToast(null)}>
@@ -2330,7 +2329,7 @@ function AppInner(){
         {NAV.map(n=>{const active=n.id==="more"?isMoreTab||tab==="more":tab===n.id;return(
           <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:active?"rgba(99,102,241,.08)":"transparent",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",transition:"all .18s"}}>
             {n.id==="chat"?(
-              <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,display:"flex",alignItems:"center",justifyContent:"center",marginTop:-10,boxShadow:`0 4px 12px ${C.accent}55`,marginBottom:2}}>
+              <div className="fv-chat-fab">
                 <n.icon size={18} color="#fff" strokeWidth={2.2}/>
               </div>
             ):(

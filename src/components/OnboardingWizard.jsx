@@ -191,19 +191,19 @@ export default function OnboardingWizard({ onComplete }) {
   const isLast = step === STEPS.length - 1;
 
   return (
-    <div style={{minHeight:"100dvh",background:`linear-gradient(160deg,${C.navy} 0%,${C.accent} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:"max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left))",boxSizing:"border-box"}}>
+    <div className="fv-auth-shell" style={{minHeight:"100dvh",padding:"max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left))"}}>
       <div style={{background:C.surface,borderRadius:24,width:"100%",maxWidth:500,boxShadow:"0 20px 60px rgba(0,0,0,.25)",overflow:"hidden",maxHeight:"min(90dvh, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px))",display:"flex",flexDirection:"column"}}>
-        {step>0&&<div style={{height:4,background:C.borderLight,flexShrink:0}}><div style={{height:"100%",width:`${(step/(STEPS.length-1))*100}%`,background:`linear-gradient(90deg,${C.accent},${C.teal})`,transition:"width .4s",borderRadius:99}}/></div>}
+        {step>0&&<div style={{height:4,background:C.borderLight,flexShrink:0}}><div style={{height:"100%",width:`${(step/(STEPS.length-1))*100}%`,background:C.accent,transition:"width .4s",borderRadius:99}}/></div>}
         <div style={{padding:"22px clamp(14px, 4vw, 24px) 28px",overflowY:"auto",WebkitOverflowScrolling:"touch",flex:1,minHeight:0}}>
           {step>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
             <button onClick={()=>setStep(s=>s-1)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 12px",fontSize:12,color:C.textMid,cursor:"pointer"}}>← Back</button>
             <span style={{fontSize:12,color:C.textLight,fontWeight:600}}>Step {step} of {STEPS.length-1}</span>
           </div>}
-          {cur.title&&<div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:18,letterSpacing:-.3}}>{cur.title}</div>}
+          {cur.title&&<div className="fv-page-title" style={{marginBottom:18}}>{cur.title}</div>}
           {cur.body}
-          <button onClick={()=>{if(isLast){onComplete({...d,isTrader:parseFloat(d.income?.trading||0)>0});}else{setStep(s=>s+1);}}}
-            style={{width:"100%",marginTop:20,background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:14,padding:"15px 0",color:"#fff",fontFamily:MF,fontWeight:800,fontSize:16,cursor:"pointer",letterSpacing:.2}}>
-            {cur.btnLabel}
+          <button type="button" className="fv-btn-primary ba" onClick={()=>{if(isLast){onComplete({...d,isTrader:parseFloat(d.income?.trading||0)>0});}else{setStep(s=>s+1);}}}
+            style={{justifyContent:"center",marginTop:20,fontFamily:MF}}>
+            {cur.btnLabel?.replace(/ 🚀$/, "") || "Continue"}
           </button>
           {cur.canSkip&&!isLast&&<button onClick={()=>setStep(s=>s+1)} style={{width:"100%",marginTop:10,background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer",padding:"4px 0"}}>Skip for now →</button>}
           {cur.canSkip&&isLast&&<button onClick={()=>onComplete({...d,isTrader:false})} style={{width:"100%",marginTop:10,background:"none",border:"none",color:C.textLight,fontSize:13,cursor:"pointer",padding:"4px 0"}}>Skip for now →</button>}
