@@ -28,17 +28,17 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
 
     {/* ── Header ─────────────────────────────────── */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-      <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.4}}>Settings</div>
+      <div className="fv-page-title">Settings</div>
     </div>
     {userEmail&&<div style={{background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",flexWrap:"wrap",alignItems:"center",gap:10,rowGap:8,position:"relative",zIndex:2}}>
-      <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:MF,fontWeight:800,fontSize:13,color:"#fff",flexShrink:0}}>{userEmail[0].toUpperCase()}</div>
+      <div className="fv-avatar-chip" style={{width:32,height:32,fontSize:13}}>{userEmail[0].toUpperCase()}</div>
       <div style={{flex:"1 1 160px",minWidth:0}}><div style={{fontSize:13,fontWeight:700,color:C.accent,overflowWrap:"anywhere",wordBreak:"break-word"}}>{userEmail}</div><div style={{fontSize:11,color:C.textLight}}>Signed in</div></div>
     </div>}
 
     {/* ── 1. PROFILE ─────────────────────────────── */}
     <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
-        <span style={{fontSize:18}}>👤</span>
+        <User size={18} color={C.accent} strokeWidth={2}/>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Profile</div>
       </div>
       <div style={{display:"flex",gap:8,marginBottom:14}}>
@@ -288,7 +288,7 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
         );
       })()}
       {onSignOut&&<button className="ba" onClick={()=>onSignOut()} style={{width:"100%",marginBottom:8,background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:12,padding:"12px 0",color:C.red,fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign Out</button>}
-      {onSignIn&&<button className="ba" onClick={onSignIn} style={{width:"100%",background:`linear-gradient(135deg,${C.accent},${C.green})`,border:"none",borderRadius:12,padding:"12px 0",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Sign In / Create Account</button>}
+      {onSignIn&&<button type="button" className="fv-btn-primary ba" onClick={onSignIn} style={{justifyContent:"center"}}>Sign in / create account</button>}
     </div>
 
     <div style={{textAlign:"center",padding:"20px 8px 6px",fontSize:11,color:C.textLight,lineHeight:1.5,letterSpacing:.15}}>

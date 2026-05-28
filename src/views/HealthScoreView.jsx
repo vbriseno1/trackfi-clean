@@ -36,9 +36,8 @@ export default function HealthScoreView({income,expenses,debts,accounts,bills,tr
   const dash=circ*(overall/10);
   return(
     <div className="fu">
-      <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3,marginBottom:16}}>Financial Health</div>
-      {/* score gauge */}
-      <div style={{background:C.navy,borderRadius:18,padding:'24px',marginBottom:16,display:'flex',alignItems:'center',gap:20}}>
+      <div className="fv-page-title" style={{marginBottom:16}}>Financial health</div>
+      <div className="fv-hero-panel" style={{padding:24,marginBottom:16,display:"flex",alignItems:"center",gap:20}}>
         <div style={{position:'relative',width:100,height:100,flexShrink:0}}>
           <svg viewBox="0 0 100 100" style={{transform:'rotate(-90deg)'}}>
             <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,.1)" strokeWidth="10"/>
@@ -51,7 +50,7 @@ export default function HealthScoreView({income,expenses,debts,accounts,bills,tr
         </div>
         <div style={{flex:1}}>
           <div style={{fontFamily:MF,fontWeight:800,fontSize:22,color:'#fff',marginBottom:4}}>
-            {overall>=8?'Excellent 🏆':overall>=6?'Good 👍':overall>=4?'Fair ⚠️':'Needs Work 🔴'}
+            {overall>=8?"Excellent":overall>=6?"Good":overall>=4?"Fair":"Needs work"}
           </div>
           <div style={{fontSize:13,color:'rgba(255,255,255,.6)',lineHeight:1.5}}>
             {overall>=8?'Your finances are in great shape. Keep it up.':overall>=6?'Solid foundation — a few areas to improve.':overall>=4?'Some important areas need attention.':'Take action on the items below to improve your score.'}

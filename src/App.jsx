@@ -6,7 +6,7 @@ import { LayoutDashboard, Wallet, CalendarClock, CreditCard, Target, PiggyBank,
   Check, Sparkles, Bell, Settings, Activity, ToggleLeft, ToggleRight,
   ChevronRight, BarChart2, Menu, Calendar, Eye, EyeOff, HelpCircle, Search,
   Zap, FileText, Download, Clock, Moon, Sun, Lock,
-  Filter, Database, RefreshCw, ChevronDown } from "lucide-react";
+  Filter, Database, RefreshCw, ChevronDown, Package, Heart } from "lucide-react";
 import {
   SUPA_URL,
   SUPA_KEY,
@@ -134,6 +134,24 @@ import TrendView from "./views/TrendView.jsx";
 
 /** Shared UI for `accounts.cashAccounts` — used on Accounts & Income and Settings → Money Setup */
 
+const QA_ICON = {
+  expense: DollarSign,
+  receipt: Scan,
+  bill: Calendar,
+  debt: CreditCard,
+  simulator: Calculator,
+  budget: Package,
+  shift: Activity,
+  trade: TrendingUp,
+  savings: Target,
+  networth: TrendingUp,
+  insights: BarChart2,
+  paycheck: Wallet,
+  health: Heart,
+  bills_nav: CalendarClock,
+  calendar_nav: Calendar,
+  recurring_nav: RefreshCw,
+};
 
 function AppInner(){
   const[tab,setTabRaw]=useState("home");
@@ -1871,22 +1889,22 @@ function AppInner(){
             {/* ── 5. QUICK ACTIONS ──────────────────────────────── */}
             {(()=>{
               const ALL_QA=[
-                {id:"expense",l:"Log Expense",ic:"💸",a:()=>om("expense"),bg:C.accentBg,c:C.accent},
-                {id:"receipt",l:"Add from Photo",ic:"📷",a:()=>om("receipt"),bg:C.purpleBg,c:C.purple},
-                {id:"bill",l:"Add Bill",ic:"📅",a:()=>om("bill"),bg:C.amberBg,c:C.amber},
-                {id:"debt",l:"Add Debt",ic:"💳",a:()=>om("debt",{addLoanBill:true,loanBillDueDate:todayStr()}),bg:C.redBg,c:C.red},
-                {id:"simulator",l:"Payoff Sim",ic:"🧮",a:()=>debts.length?setModal("simulator"):om("debt",{addLoanBill:true,loanBillDueDate:todayStr()}),bg:C.greenBg,c:C.green},
-                {id:"budget",l:"Envelopes",ic:"📦",a:()=>om("bgoal_home"),bg:C.purpleBg,c:C.purple},
-                {id:"shift",l:"Log Shift",ic:"🏥",a:()=>navTo("shifts"),bg:C.accentBg,c:C.accent},
-                {id:"trade",l:"Log Trade",ic:"📈",a:()=>navTo("trading"),bg:C.greenBg,c:C.green},
-                {id:"savings",l:"Add Goal",ic:"🎯",a:()=>navTo("savings"),bg:C.amberBg,c:C.amber},
-                {id:"insights",l:"Insights",ic:"📊",a:()=>navTo("insights"),bg:C.purpleBg,c:C.purple},
-                {id:"paycheck",l:"Paycheck",ic:"💰",a:()=>navTo("paycheck"),bg:C.greenBg,c:C.green},
-                {id:"health",l:"Health Score",ic:"❤️",a:()=>navTo("health"),bg:C.redBg,c:C.red},
-                {id:"bills_nav",l:"View Bills",ic:"📅",a:()=>navTo("bills"),bg:C.amberBg,c:C.amber},
-                {id:"recurring_nav",l:"Recurring",ic:"🔄",a:()=>navTo("recurring"),bg:C.accentBg,c:C.accent},
-                {id:"networth",l:"Net Worth",ic:"📈",a:()=>navTo("networthtrend"),bg:C.greenBg,c:C.green},
-                {id:"calendar_nav",l:"Calendar",ic:"📅",a:()=>navTo("calendar"),bg:C.amberBg,c:C.amber},
+                {id:"expense",l:"Log Expense",a:()=>om("expense"),bg:C.accentBg,c:C.accent},
+                {id:"receipt",l:"Add Photo",a:()=>om("receipt"),bg:C.purpleBg,c:C.purple},
+                {id:"bill",l:"Add Bill",a:()=>om("bill"),bg:C.amberBg,c:C.amber},
+                {id:"debt",l:"Add Debt",a:()=>om("debt",{addLoanBill:true,loanBillDueDate:todayStr()}),bg:C.redBg,c:C.red},
+                {id:"simulator",l:"Payoff Sim",a:()=>debts.length?setModal("simulator"):om("debt",{addLoanBill:true,loanBillDueDate:todayStr()}),bg:C.greenBg,c:C.green},
+                {id:"budget",l:"Envelopes",a:()=>om("bgoal_home"),bg:C.purpleBg,c:C.purple},
+                {id:"shift",l:"Log Shift",a:()=>navTo("shifts"),bg:C.accentBg,c:C.accent},
+                {id:"trade",l:"Log Trade",a:()=>navTo("trading"),bg:C.greenBg,c:C.green},
+                {id:"savings",l:"Add Goal",a:()=>navTo("savings"),bg:C.amberBg,c:C.amber},
+                {id:"insights",l:"Insights",a:()=>navTo("insights"),bg:C.purpleBg,c:C.purple},
+                {id:"paycheck",l:"Paycheck",a:()=>navTo("paycheck"),bg:C.greenBg,c:C.green},
+                {id:"health",l:"Health",a:()=>navTo("health"),bg:C.redBg,c:C.red},
+                {id:"bills_nav",l:"Bills",a:()=>navTo("bills"),bg:C.amberBg,c:C.amber},
+                {id:"recurring_nav",l:"Recurring",a:()=>navTo("recurring"),bg:C.accentBg,c:C.accent},
+                {id:"networth",l:"Net Worth",a:()=>navTo("networthtrend"),bg:C.greenBg,c:C.green},
+                {id:"calendar_nav",l:"Calendar",a:()=>navTo("calendar"),bg:C.amberBg,c:C.amber},
               ];
               const activeIds=settings.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];
               const active=ALL_QA.filter(q=>activeIds.includes(q.id));
@@ -1898,7 +1916,7 @@ function AppInner(){
                   {(overdueQA.length>0||urgentBillsQA.length>0)&&(
                     <div onClick={()=>navTo("bills")} style={{background:overdueQA.length>0?C.redBg:C.amberBg,border:`1px solid ${overdueQA.length>0?C.redMid:C.amberMid}`,borderRadius:12,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
                       <div style={{fontSize:13,fontWeight:700,color:overdueQA.length>0?C.red:C.amber}}>
-                        {overdueQA.length>0?`⚠️ ${overdueQA.length} bill${overdueQA.length>1?"s":""} overdue — tap to pay`:`📅 ${urgentBillsQA.length} bill${urgentBillsQA.length>1?"s":""} due in 3 days`}
+                        {overdueQA.length>0?`${overdueQA.length} bill${overdueQA.length>1?"s":""} overdue — tap to pay`:`${urgentBillsQA.length} bill${urgentBillsQA.length>1?"s":""} due in 3 days`}
                       </div>
                       <div style={{fontSize:13,fontWeight:800,color:overdueQA.length>0?C.red:C.amber}}>
                         {fmt(overdueQA.length>0?overdueQA.reduce((s,b)=>s+(parseFloat(b.amount)||0),0):urgentBillsQA.reduce((s,b)=>s+(parseFloat(b.amount)||0),0))} →
@@ -1910,7 +1928,7 @@ function AppInner(){
                     <button onClick={()=>setModal("quickactions")} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.textLight,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Settings size={12}/>Edit</button>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-                    {active.slice(0,8).map(q=>(<button key={q.id} onClick={q.a} style={{background:q.bg,borderRadius:14,padding:"14px 6px 12px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:7,border:"none",boxShadow:"0 1px 3px rgba(10,22,40,.06)",transition:"transform .1s,box-shadow .1s"}}><span style={{fontSize:22}}>{q.ic}</span><span style={{fontSize:10,fontWeight:700,color:q.c,lineHeight:1.3,textAlign:"center"}}>{q.l}</span></button>))}
+                    {active.slice(0,8).map(q=>{const Ico=QA_ICON[q.id]||Plus;return(<button key={q.id} type="button" className="ba" onClick={q.a} style={{background:q.bg,borderRadius:14,padding:"14px 6px 12px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:7,border:"none",boxShadow:"0 1px 3px rgba(15,23,42,.06)"}}><Ico size={20} color={q.c} strokeWidth={2}/><span style={{fontSize:10,fontWeight:700,color:q.c,lineHeight:1.3,textAlign:"center"}}>{q.l}</span></button>);})}
                   </div>
                 </div>
               );
@@ -2267,14 +2285,14 @@ function AppInner(){
             <div style={{background:C.surface,borderRadius:16,padding:"4px 14px",marginBottom:14,border:`1px solid ${C.borderLight}`}}>
               <div style={{fontSize:11,fontWeight:700,color:C.textFaint,letterSpacing:.6,textTransform:"uppercase",padding:"10px 0 6px"}}>Alert Preferences</div>
               {[
-                {k:"notifBills",    ic:"📅", label:"Bill reminders",      desc:"Overdue & due within 3 days"},
-                {k:"notifBudget",   ic:"📦", label:"Budget warnings",     desc:"At 80% and over limit"},
-                {k:"notifSavings",  ic:"🎯", label:"Savings goals",       desc:"75% reached & goal complete"},
-                {k:"notifPayday",   ic:"💰", label:"Payday reminders",    desc:"Today and tomorrow alerts"},
-                {k:"notifMilestones",ic:"🎉",label:"Net worth milestones",desc:"Celebration when you hit a new high"},
-              ].map(({k,ic,label,desc})=>(
+                {k:"notifBills",    Icon:Calendar, label:"Bill reminders",      desc:"Overdue & due within 3 days"},
+                {k:"notifBudget",   Icon:Package, label:"Budget warnings",     desc:"At 80% and over limit"},
+                {k:"notifSavings",  Icon:Target, label:"Savings goals",       desc:"75% reached & goal complete"},
+                {k:"notifPayday",   Icon:Wallet, label:"Payday reminders",    desc:"Today and tomorrow alerts"},
+                {k:"notifMilestones",Icon:TrendingUp,label:"Net worth milestones",desc:"When you hit a new high"},
+              ].map(({k,Icon,label,desc})=>(
                 <div key={k} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:`1px solid ${C.borderLight}`}}>
-                  <span style={{fontSize:18,flexShrink:0}}>{ic}</span>
+                  <div style={{width:32,height:32,borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.borderLight}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Icon size={16} color={C.textMid} strokeWidth={2}/></div>
                   <div style={{flex:1}}>
                     <div style={{fontSize:13,fontWeight:600,color:C.text}}>{label}</div>
                     <div style={{fontSize:11,color:C.textLight}}>{desc}</div>
@@ -2428,10 +2446,10 @@ function AppInner(){
       {editItem&&editItem.type==="bill"&&<EditModal item={editItem} categories={categories} debts={debts} accounts={accounts} settings={settings} onSave={u=>saveBillEditWithBalanceAdjustment(editItem.data,u)} onDelete={()=>setConfirm({title:"Delete Bill",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>{const rev=reversePaidBillForDelete(editItem.data);setBills(p=>p.filter(x=>x.id!==editItem.data.id));if(editItem.data.paid)showToast(rev.reversed?"Bill removed — payment reversed":"Bill removed — balances unchanged (pay-from no longer resolves)","error");setEditItem(null);setConfirm(null);},danger:true})} onClose={()=>setEditItem(null)}/>}
       {editItem&&editItem.type==="debt"&&<EditModal key={editItem.data.id} item={editItem} categories={categories} household={household} debts={debts} bills={bills} accounts={accounts} settings={settings} onSave={u=>{const {addLoanBill,loanBillDueDate,billPaidFrom,billBankAccountId,...debtRest}=u;const did=editItem.data.id;const dk=u.debtKind==="credit_card"?"credit_card":"loan";const resetIntAcc=dk!=="credit_card"&&(parseFloat(debtRest.balance||0)!==parseFloat(editItem.data.balance||0)||String(debtRest.rate??"")!==String(editItem.data.rate??""));const becameLoan=dk!=="credit_card"&&editItem.data.debtKind==="credit_card";setDebts(p=>p.map(x=>String(x.id)!==String(did)?x:(()=>{const row={...x,...debtRest};if(resetIntAcc||becameLoan){row.loanInterestAsOfDate=todayStr();delete row.loanAccruedInterest;}return row;})()));setBills(p=>{if(dk==="credit_card")return p.filter(b=>String(b.linkedDebtId)!==String(did));const mp=parseFloat(u.minPayment||0);const want=addLoanBill!==false&&mp>0;if(want){let bpf=normalizePaidFrom(billPaidFrom||settings.defaultBillPaidFrom||"checking");if(bpf==="credit")bpf="checking";const bch=cashAccountsByKind(accounts,"checking");const bsv=cashAccountsByKind(accounts,"savings");let bbid="";if(bpf==="checking"){if(bch.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("checking",accounts,settings)||"");else if(bch.length===1)bbid=String(bch[0].id);}else if(bpf==="savings"){if(bsv.length>=2)bbid=String(billBankAccountId||pickDefaultBankAccountId("savings",accounts,settings)||"");else if(bsv.length===1)bbid=String(bsv[0].id);}const due=loanBillDueDate||todayStr();const payName=(u.name||"Loan")+" payment";const linked=p.filter(b=>String(b.linkedDebtId)===String(did));if(linked.length)return p.map(b=>String(b.linkedDebtId)!==String(did)?b:{...b,name:payName,amount:String(mp),dueDate:due,paidFrom:bpf,...(bbid?{bankAccountId:bbid}:{})});return[...p,{id:Date.now(),name:payName,amount:String(mp),dueDate:due,recurring:"Monthly",paid:false,autoPay:false,paidBy:"me",paidFrom:bpf,linkedDebtId:String(did),...(bbid?{bankAccountId:bbid}:{})}];}return p.filter(b=>String(b.linkedDebtId)!==String(did));});showToast("✓ Debt updated");setEditItem(null);}} onDelete={()=>setConfirm({title:"Delete Debt",message:`Delete "${editItem.data.name}"?`,onConfirm:()=>deleteDebtSafely(editItem.data),danger:true})} onClose={()=>setEditItem(null)}/>}
       {modal==="quickactions"&&(()=>{
-        const QA_ALL=[{id:"expense",l:"Log Expense",ic:"💸"},{id:"receipt",l:"Add from Photo",ic:"📷"},{id:"bill",l:"Add Bill",ic:"📅"},{id:"debt",l:"Add Debt",ic:"💳"},{id:"simulator",l:"Payoff Sim",ic:"🧮"},{id:"budget",l:"Envelopes",ic:"📦"},{id:"shift",l:"Log Shift",ic:"🏥"},{id:"trade",l:"Log Trade",ic:"📈"},{id:"savings",l:"Add Goal",ic:"🎯"},{id:"networth",l:"Net Worth",ic:"📈"},{id:"insights",l:"Insights",ic:"📊"},{id:"paycheck",l:"Paycheck",ic:"💰"},{id:"health",l:"Health Score",ic:"❤️"},{id:"bills_nav",l:"View Bills",ic:"📅"},{id:"calendar_nav",l:"Calendar",ic:"📅"},{id:"recurring_nav",l:"Recurring",ic:"🔄"}];
+        const QA_ALL=[{id:"expense",l:"Log Expense"},{id:"receipt",l:"Add Photo"},{id:"bill",l:"Add Bill"},{id:"debt",l:"Add Debt"},{id:"simulator",l:"Payoff Sim"},{id:"budget",l:"Envelopes"},{id:"shift",l:"Log Shift"},{id:"trade",l:"Log Trade"},{id:"savings",l:"Add Goal"},{id:"networth",l:"Net Worth"},{id:"insights",l:"Insights"},{id:"paycheck",l:"Paycheck"},{id:"health",l:"Health"},{id:"bills_nav",l:"Bills"},{id:"calendar_nav",l:"Calendar"},{id:"recurring_nav",l:"Recurring"}];
         const active=settings.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];
         const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];const next=cur.includes(id)?cur.filter(x=>x!==id):cur.length<8?[...cur,id]:cur;return{...p,quickActions:next};});
-        return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:4}}>Customize Quick Actions</div><div style={{fontSize:13,color:C.textLight,marginBottom:18}}>Choose up to 8 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);return(<button key={q.id} onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:"#fff",cursor:"pointer",textAlign:"left"}}><span style={{fontSize:20}}>{q.ic}</span><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button onClick={()=>setModal(null)} style={{width:"100%",padding:"14px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button></div></div>);
+        return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div className="fv-page-title" style={{fontSize:18,marginBottom:4}}>Customize quick actions</div><div className="fv-page-sub" style={{marginBottom:18}}>Choose up to 8 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);const Ico=QA_ICON[q.id]||Plus;return(<button key={q.id} type="button" className="ba" onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:C.surface,cursor:"pointer",textAlign:"left"}}><Ico size={18} color={on?C.accent:C.textMid} strokeWidth={2}/><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button type="button" className="fv-btn-primary ba" onClick={()=>setModal(null)} style={{justifyContent:"center",fontFamily:MF}}>Done</button></div></div>);
       })()}
     </div>
     </TrackfiRechartsProvider>
