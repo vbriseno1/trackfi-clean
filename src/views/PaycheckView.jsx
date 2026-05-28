@@ -106,7 +106,7 @@ export default function PaycheckView({bills,income,setIncome,expenses,accounts,b
           </div>}
         </>);
       })()}
-      <div style={{background:`linear-gradient(135deg,${C.navy} 0%,${C.navyMid} 50%,${C.accent} 100%)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
+      <div className="fv-hero-panel" style={{marginBottom:14}}>
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Next Payday</div>
         <div style={{fontFamily:MF,fontSize:32,fontWeight:800,color:"#fff",marginBottom:4}}>{daysUntilPay===0?"Today!":daysUntilPay+" days"}</div>
         <div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginBottom:16}}>{nextPay.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>

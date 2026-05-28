@@ -3,12 +3,13 @@ import { Plus, X } from "lucide-react";
 import { C, MF, FULL_MOS, debtDisplayColor } from "../theme.js";
 import { fmt } from "../lib/moneyFormat.js";
 import { BarProg } from "../components/ui.jsx";
-import { RechartsReady } from "../components/RechartsBridge.jsx";
+import { RechartsReady, ChartPanel, useChartTheme } from "../components/RechartsBridge.jsx";
 import { totalCheckingBalance, totalSavingsBalance } from "../lib/cashAccounts.js";
 import { legacyCreditCardOwed } from "../lib/creditCardTotals.js";
 import { sumDebtsPrincipalAndAccrued, debtOwedForBreakdown, debtOriginalBaseline } from "../lib/debtLogic.js";
 
 export default function NetWorthTrendView({balHist,debts,accounts,tradingAccount,onNavigate,nwGoal,setNwGoal}){
+  const ct=useChartTheme();
   const[showGoalInput,setShowGoalInput]=useState(false);
   const[goalInput,setGoalInput]=useState("");
   function saveGoal(){const v=parseFloat(goalInput);if(v>0){const g={target:v,created:Date.now()};setNwGoal(g);setShowGoalInput(false);}}
@@ -29,33 +30,34 @@ export default function NetWorthTrendView({balHist,debts,accounts,tradingAccount
   return(
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-        <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Net Worth Trend</div>
+        <div className="fv-page-title">Net Worth Trend</div>
         <button className="ba" onClick={()=>onNavigate("accounts")} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Update</button>
       </div>
       <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>Track your wealth over time</div>
-      <div style={{background:`linear-gradient(135deg,${C.navy} 0%,${C.navyLight} 60%,${C.accent} 100%)`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
+      <div className="fv-hero-panel" style={{marginBottom:14}}>
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Current Net Worth</div>
         <div style={{fontFamily:MF,fontSize:36,fontWeight:800,color:currentNW>=0?C.green:C.red,lineHeight:1,marginBottom:8}}>{fmt(currentNW)}</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>{[["Assets",fmt(totalAssets),C.greenMid],["Debt",fmt(totalDebt),C.redMid],["Change",`${change>=0?"+":""}${fmt(change)}`,change>=0?C.greenMid:C.redMid]].map(([l,v,c])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div><div style={{fontFamily:MF,fontSize:12,fontWeight:700,color:c}}>{v}</div></div>)}</div>
       </div>
-      {chartData.length>1?<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"18px 4px 12px",marginBottom:14}}>
-        <div style={{paddingLeft:16,marginBottom:12,display:"flex",gap:16}}>{[[C.green,"Net Worth"],[C.accent,"Assets"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:3,background:c}}/><span style={{fontSize:12,color:C.textLight}}>{l}</span></div>)}</div>
-        <RechartsReady minHeight={200} render={R=>(
-        <R.ResponsiveContainer width="100%" height={200}>
-          <R.AreaChart data={chartData} margin={{left:8,right:8,top:4,bottom:0}}>
+      {chartData.length>1?<ChartPanel title="Net worth over time" subtitle="Assets and net worth (last 52 snapshots)">
+        <div style={{marginBottom:10,display:"flex",gap:16}}>{[[C.positive,"Net worth"],[C.accent,"Assets"]].map(([c,l])=><div key={l} style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:8,height:8,borderRadius:2,background:c}}/><span style={{fontSize:11,color:C.textLight}}>{l}</span></div>)}</div>
+        <RechartsReady minHeight={208} render={R=>(
+        <R.ResponsiveContainer width="100%" height={208}>
+          <R.AreaChart data={chartData} margin={ct.marginWide}>
             <defs>
-              <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.green} stopOpacity={.2}/><stop offset="95%" stopColor={C.green} stopOpacity={0}/></linearGradient>
-              <linearGradient id="aGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.accent} stopOpacity={.15}/><stop offset="95%" stopColor={C.accent} stopOpacity={0}/></linearGradient>
+              <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C.positive} stopOpacity={.14}/><stop offset="100%" stopColor={C.positive} stopOpacity={0}/></linearGradient>
+              <linearGradient id="aGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C.accent} stopOpacity={.1}/><stop offset="100%" stopColor={C.accent} stopOpacity={0}/></linearGradient>
             </defs>
-            <R.XAxis dataKey="date" tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/>
-            <R.YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={50}/>
+            <R.CartesianGrid stroke={ct.gridStroke} strokeDasharray="3 3" vertical={false}/>
+            <R.XAxis dataKey="date" tick={ct.axisTickSm} axisLine={false} tickLine={false} tickFormatter={fD} interval="preserveStartEnd"/>
+            <R.YAxis tick={ct.axisTickSm} axisLine={false} tickLine={false} tickFormatter={ct.formatYAxis} width={48}/>
             <R.Tooltip content={<TT/>}/>
-            <R.Area type="monotone" dataKey="assets" name="Assets" stroke={C.accent} strokeWidth={2} fill="url(#aGrad)" dot={false}/>
-            <R.Area type="monotone" dataKey="netWorth" name="Net Worth" stroke={C.green} strokeWidth={2.5} fill="url(#nwGrad)" dot={false}/>
+            <R.Area type="monotone" dataKey="assets" name="Assets" stroke={C.accent} strokeWidth={ct.areaStrokeWidth} fill="url(#aGrad)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }}/>
+            <R.Area type="monotone" dataKey="netWorth" name="Net Worth" stroke={C.positive} strokeWidth={ct.areaStrokeWidth} fill="url(#nwGrad)" dot={false} activeDot={{ r: 3, strokeWidth: 0 }}/>
           </R.AreaChart>
         </R.ResponsiveContainer>
         )}/>
-      </div>:<div style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:32,textAlign:"center",marginBottom:14}}><div style={{fontSize:32,marginBottom:10}}>📈</div><div style={{fontSize:14,fontWeight:600,color:C.text,marginBottom:4}}>Building your trend</div><div style={{fontSize:13,color:C.textLight}}>Update your balances regularly to see your net worth grow over time.</div></div>}
+      </ChartPanel>:<ChartPanel title="Building your trend"><div style={{textAlign:"center",padding:"24px 12px"}}><div style={{fontSize:14,fontWeight:600,color:C.text,marginBottom:4}}>Not enough history yet</div><div style={{fontSize:13,color:C.textLight}}>Update balances regularly to see your net worth trend.</div></div></ChartPanel>}
       {(debts.length>0||ccOwedNw>0)&&(()=>{
         // Liability vs asset breakdown stacked bar
         const assetBreakdown=[

@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import { C, MF, FULL_MOS, PIE_COLORS } from "../theme.js";
 import { fmt } from "../lib/moneyFormat.js";
 import { BarProg } from "../components/ui.jsx";
-import { RechartsReady } from "../components/RechartsBridge.jsx";
+import { RechartsReady, ChartPanel, useChartTheme } from "../components/RechartsBridge.jsx";
+import { chartColor } from "../lib/chartTheme.js";
 import CategoryDrillView from "./CategoryDrillView.jsx";
 
 export default function InsightsView({expenses,income,bills,debts,budgetGoals,savingsGoals}){
+  const ct=useChartTheme();
   const[drillCat,setDrillCat]=useState(null);
   const now=new Date();
   // Render category drill-down if selected
@@ -27,10 +29,10 @@ export default function InsightsView({expenses,income,bills,debts,budgetGoals,sa
   return(
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-        <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Spending Insights</div>
+        <div className="fv-page-title">Spending Insights</div>
 
       </div>
-      <div style={{fontSize:13,color:C.textLight,marginBottom:14}}>Deep dive into your spending patterns</div>
+      <div className="fv-page-sub" style={{marginBottom:14}}>Deep dive into your spending patterns</div>
 
       {/* Smart insight callouts — personalized to real data */}
       {(()=>{
@@ -71,7 +73,7 @@ export default function InsightsView({expenses,income,bills,debts,budgetGoals,sa
         );
       })()}
 
-      <div style={{background:C.navy,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
+      <div className="fv-hero-panel" style={{marginBottom:14}}>
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>This Month vs Last Month</div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
           <div><div style={{fontFamily:MF,fontSize:32,fontWeight:800,color:"#fff"}}>{fmt(thisTotal)}</div><div style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:2}}>{FULL_MOS[now.getMonth()]} spending</div></div>
@@ -141,7 +143,7 @@ export default function InsightsView({expenses,income,bills,debts,budgetGoals,sa
           </div>);
         })}
       </div>}
-      {catSorted.length>0&&<div style={{background:C.surface,borderRadius:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 14px 6px",marginBottom:14}}><div style={{fontSize:12,fontWeight:600,color:C.textLight,marginBottom:12}}>Top Spending This Month</div><div className="fv-chart-wrap"><RechartsReady minHeight={Math.min(catSorted.length*38+20,220)} render={R=>(<R.ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><R.BarChart data={catSorted.slice(0,5).map(([name,amt])=>({name,amt}))} layout="vertical" barSize={14} margin={{left:0,right:12,top:4,bottom:4}}><R.XAxis type="number" hide/><R.YAxis type="category" dataKey="name" tick={{fontSize:10,fill:C.textMid}} width={68} tickFormatter={v=>(v&&String(v).length>12?String(v).slice(0,11)+"…":v)} axisLine={false} tickLine={false}/><R.Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/><R.Bar dataKey="amt" radius={[0,6,6,0]}>{catSorted.slice(0,5).map((_,i)=><R.Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</R.Bar></R.BarChart></R.ResponsiveContainer>)}/></div></div>}
+      {catSorted.length>0&&<ChartPanel title="Top spending this month"><RechartsReady minHeight={Math.min(catSorted.length*38+20,220)} render={R=>(<R.ResponsiveContainer width="100%" height={Math.min(catSorted.length*38+20,220)}><R.BarChart data={catSorted.slice(0,5).map(([name,amt])=>({name,amt}))} layout="vertical" barSize={12} margin={ct.margin}><R.CartesianGrid stroke={ct.gridStroke} strokeDasharray="3 3" horizontal={false}/><R.XAxis type="number" hide/><R.YAxis type="category" dataKey="name" tick={ct.axisTickSm} width={72} tickFormatter={v=>(v&&String(v).length>12?String(v).slice(0,11)+"…":v)} axisLine={false} tickLine={false}/><R.Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={ct.tooltipStyle}/><R.Bar dataKey="amt" radius={[0,4,4,0]}>{catSorted.slice(0,5).map((_,i)=><R.Cell key={i} fill={chartColor(i)}/>)}</R.Bar></R.BarChart></R.ResponsiveContainer>)}/></ChartPanel>}
 
       {/* 6-month spending trend */}
       {(()=>{
@@ -156,36 +158,19 @@ export default function InsightsView({expenses,income,bills,debts,budgetGoals,sa
         const maxVal=Math.max(...months.map(m=>m.total))||1;
         const avgSpend=months.filter(m=>m.total>0).reduce((s,m)=>s+m.total,0)/Math.max(1,months.filter(m=>m.total>0).length);
         return(
-          <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div>
-                <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>6-Month Trend</div>
-                <div style={{fontSize:12,color:C.textLight,marginTop:2}}>Avg: {fmt(avgSpend)}/mo</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:11,color:thisTotal>avgSpend?C.red:C.green,fontWeight:700,background:thisTotal>avgSpend?C.redBg:C.greenBg,borderRadius:99,padding:"2px 8px"}}>
-                  {thisTotal>avgSpend?"↑ "+((thisTotal-avgSpend)/avgSpend*100).toFixed(0)+"% above avg":"↓ "+((avgSpend-thisTotal)/avgSpend*100).toFixed(0)+"% below avg"}
-                </div>
-              </div>
-            </div>
-            <RechartsReady minHeight={160} render={R=>(
-            <div className="fv-chart-wrap">
-            <R.ResponsiveContainer width="100%" height={160}>
-              <R.BarChart data={months} margin={{left:0,right:4,top:4,bottom:4}} barSize={22}>
-                <R.XAxis dataKey="month" tick={{fill:C.textLight,fontSize:11}} axisLine={false} tickLine={false}/>
-                <R.YAxis tick={{fill:C.textLight,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>"$"+(v>=1000?(v/1000).toFixed(0)+"k":v)} width={40}/>
-                <R.Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12}}/>
-                <R.Bar dataKey="total" radius={[5,5,0,0]}>{months.map((m,i)=><R.Cell key={i} fill={m.isCurrent?C.accent:m.total>avgSpend?C.red+"88":C.accent+"55"}/>)}</R.Bar>
+          <ChartPanel title="6-month trend" subtitle={`Avg ${fmt(avgSpend)}/mo · ${thisTotal>avgSpend?"above":"below"} average this month`}>
+            <RechartsReady minHeight={168} render={R=>(
+            <R.ResponsiveContainer width="100%" height={168}>
+              <R.BarChart data={months} margin={ct.marginWide} barSize={20}>
+                <R.CartesianGrid stroke={ct.gridStroke} strokeDasharray="3 3" vertical={false}/>
+                <R.XAxis dataKey="month" tick={ct.axisTick} axisLine={false} tickLine={false}/>
+                <R.YAxis tick={ct.axisTickSm} axisLine={false} tickLine={false} tickFormatter={ct.formatYAxis} width={44}/>
+                <R.Tooltip formatter={v=>[fmt(v),"Spent"]} contentStyle={ct.tooltipStyle}/>
+                <R.Bar dataKey="total" radius={ct.barRadius}>{months.map((m,i)=><R.Cell key={i} fill={m.isCurrent?C.accent:m.total>avgSpend?C.negative+"99":C.border}/>)}</R.Bar>
               </R.BarChart>
             </R.ResponsiveContainer>
-            </div>
             )}/>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8,fontSize:11,color:C.textLight,justifyContent:"center",rowGap:6}}>
-              <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.accent}}/> Current</div>
-              <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.red+"88"}}/> Above average</div>
-              <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:C.accent+"55"}}/> Below average</div>
-            </div>
-          </div>
+          </ChartPanel>
         );
       })()}
 
@@ -211,7 +196,7 @@ export default function InsightsView({expenses,income,bills,debts,budgetGoals,sa
                 const isTop=total===Math.max(...dow.map(d=>d.total));
                 return(
                   <div key={day} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                    <div style={{width:"100%",height:h,background:isTop?`linear-gradient(180deg,${C.accent},${C.purple})`:C.accentBg,borderRadius:"4px 4px 0 0",transition:"height .4s"}}/>
+                    <div style={{width:"100%",height:h,background:isTop?C.accent:C.borderLight,borderRadius:"3px 3px 0 0",transition:"height .35s ease"}}/>
                     <div style={{fontSize:9,color:isTop?C.accent:C.textLight,fontWeight:isTop?700:400,lineHeight:1.2,textAlign:"center"}}>{day}</div>
                     <div style={{fontSize:8,color:C.textFaint,fontWeight:500}}>{count>0?fmt(avg).replace(".00",""):"—"}</div>
                   </div>

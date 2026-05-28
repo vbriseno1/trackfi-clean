@@ -26,7 +26,7 @@ export default function CategoryDrillView({category,expenses,income,onBack}){
         <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>{category}</div>
       </div>
       {/* Header stats */}
-      <div style={{background:`linear-gradient(135deg,${C.navy},${C.accent})`,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
+      <div className="fv-hero-panel" style={{marginBottom:14}}>
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>This Month</div>
         <div style={{fontFamily:MF,fontSize:36,fontWeight:900,color:"#fff",letterSpacing:-1,marginBottom:4}}>{fmt(thisTotal)}</div>
         <div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Avg {fmt(avgMonthly)}/mo · {allExps.length} total transactions</div>

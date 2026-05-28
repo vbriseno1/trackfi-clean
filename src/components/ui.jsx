@@ -7,7 +7,7 @@
  */
 import React, { useState, useRef, useEffect } from "react";
 import { X, Plus, Trash2, DollarSign } from "lucide-react";
-import { C, MF } from "../theme.js";
+import { C, MF, UI } from "../theme.js";
 
 /** Shared input style used by FI/FS so focus + error states match exactly. */
 export const iS = (focused, err) => ({
@@ -103,7 +103,7 @@ export function Modal({ title, icon: Icon, onClose, onSubmit, submitLabel = "Sav
           overflowX: "hidden",
           padding: "0 0 max(40px, env(safe-area-inset-bottom))",
           animation: "slideUp .26s cubic-bezier(.22,1,.36,1)",
-          boxShadow: "0 -4px 60px rgba(10,22,40,.22)",
+          boxShadow: "0 -8px 40px rgba(15,23,42,.12)",
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && e.target.tagName === "INPUT" && !e.shiftKey && onSubmit) {
@@ -137,7 +137,7 @@ export function Modal({ title, icon: Icon, onClose, onSubmit, submitLabel = "Sav
             <button
               className="ba"
               onClick={onSubmit}
-              style={{ width: "100%", background: `linear-gradient(135deg,${accent},${accent}dd)`, border: "none", borderRadius: 14, padding: "16px 0", color: "#fff", fontWeight: 800, fontSize: 16, cursor: "pointer", marginTop: 16, boxShadow: `0 4px 20px ${accent}40`, letterSpacing: 0.4 }}
+              style={{ width: "100%", background: accent, border: "none", borderRadius: UI.radius, padding: "14px 0", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", marginTop: 16, boxShadow: `0 2px 8px ${accent}30` }}
             >
               {submitLabel}
             </button>
@@ -153,7 +153,7 @@ export function BarProg({ pct, color = C.accent, h = 5 }) {
   const p = Math.min(100, Math.max(0, pct));
   return (
     <div style={{ height: h, background: C.borderLight, borderRadius: 99, overflow: "hidden" }}>
-      <div style={{ height: "100%", width: `${p}%`, background: `linear-gradient(90deg,${color},${color}cc)`, borderRadius: 99, transition: "width .6s cubic-bezier(.22,1,.36,1)" }} />
+      <div style={{ height: "100%", width: `${p}%`, background: color, borderRadius: 99, transition: "width .5s cubic-bezier(.22,1,.36,1)" }} />
     </div>
   );
 }
@@ -163,16 +163,16 @@ export function SH({ title, sub, onAdd, addLabel = "Add", right }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, gap: 10, minWidth: 0 }}>
       <div style={{ display: "flex", gap: 10, alignItems: "flex-start", minWidth: 0, flex: 1 }}>
-        <div style={{ width: 3, height: sub ? 38 : 26, background: `linear-gradient(180deg,${C.accent},${C.purple}88)`, borderRadius: 99, marginTop: 2, flexShrink: 0 }} />
+        <div style={{ width: 3, height: sub ? 38 : 26, background: C.accent, borderRadius: 99, marginTop: 2, flexShrink: 0 }} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: MF, fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: -0.4, lineHeight: 1.2, overflowWrap: "anywhere" }}>{title}</div>
-          {sub && <div style={{ fontSize: 12, color: C.textLight, marginTop: 3, fontWeight: 500, overflowWrap: "anywhere" }}>{sub}</div>}
+          <div className="fv-page-title" style={{ overflowWrap: "anywhere" }}>{title}</div>
+          {sub && <div className="fv-page-sub" style={{ overflowWrap: "anywhere" }}>{sub}</div>}
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flexShrink: 0, marginTop: 2 }}>
         {right}
         {onAdd && (
-          <button className="ba" onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 5, background: C.accent, border: "none", borderRadius: 10, padding: "8px 16px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: `0 2px 8px ${C.accent}40`, letterSpacing: 0.2 }}>
+          <button className="ba" onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 5, background: C.accent, border: "none", borderRadius: 8, padding: "8px 14px", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
             <Plus size={12} />
             {addLabel}
           </button>
@@ -186,12 +186,12 @@ export function SH({ title, sub, onAdd, addLabel = "Add", right }) {
 export function Empty({ text, icon: Icon = DollarSign, cta, onCta }) {
   return (
     <div style={{ textAlign: "center", padding: "52px 24px", animation: "fadeUp .3s ease" }}>
-      <div style={{ width: 64, height: 64, borderRadius: 20, background: `linear-gradient(135deg,${C.accentBg},${C.purpleBg})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", boxShadow: `0 4px 16px ${C.accent}18` }}>
-        <Icon size={26} color={C.accent} />
+      <div style={{ width: 56, height: 56, borderRadius: 12, background: C.surfaceAlt, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+        <Icon size={22} color={C.textLight} strokeWidth={1.75} />
       </div>
       <div style={{ fontSize: 14, color: C.textMid, maxWidth: 220, margin: "0 auto 0", lineHeight: 1.6, fontWeight: 500 }}>{text}</div>
       {cta && (
-        <button className="ba" onClick={onCta} style={{ marginTop: 16, background: C.accent, border: "none", borderRadius: 10, padding: "10px 20px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: `0 2px 8px ${C.accent}40` }}>
+        <button className="ba" onClick={onCta} style={{ marginTop: 16, background: C.accent, border: "none", borderRadius: 8, padding: "10px 18px", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
           {cta}
         </button>
       )}

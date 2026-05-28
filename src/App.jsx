@@ -1574,7 +1574,7 @@ function AppInner(){
         {pwaUpdateReady&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.accent,border:`1px solid ${C.accentMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>New version available — reload to get the latest fixes.</span><button type="button" className="ba" onClick={async()=>{try{const reg=await navigator.serviceWorker?.getRegistration?.();if(reg?.waiting){navigator.serviceWorker.addEventListener("controllerchange",()=>window.location.reload(),{once:true});reg.waiting.postMessage({type:"SKIP_WAITING"});setTimeout(()=>window.location.reload(),1500);return;}navigator.serviceWorker?.controller?.postMessage({type:"SKIP_WAITING"});}catch{}window.location.reload();}} style={{background:"rgba(255,255,255,.22)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Reload</button><button type="button" className="ba" onClick={()=>setPwaUpdateReady(false)} style={{background:"transparent",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Later</button></div>}
         {storageQuotaBlocked&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.amber,border:`1px solid ${C.amberMid}`,color:"#78350f",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Storage full — this browser can’t save more data. Export a backup, then free space or clear old data.</span><button type="button" className="ba" onClick={()=>navTo("export")} style={{background:"rgba(255,255,255,.35)",border:"1px solid rgba(120,53,15,.25)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Export</button><button type="button" className="ba" onClick={()=>{setStorageQuotaBlocked(false);resetLocalStorageQuotaWarned();}} style={{background:"transparent",border:"1px solid rgba(120,53,15,.35)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Dismiss</button></div>}
         {syncRecoverableError&&isOnline&&authSession?.user?.id&&isSupabaseConfigured()&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.red,border:`1px solid ${C.redMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Couldn’t refresh data from the cloud. You’re still using what’s on this device.</span><button type="button" className="ba" onClick={()=>{void loadFromSupabase(authSession);}} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Try again</button></div>}
-        {["spend","home","bills"].includes(tab)&&<button className="ba" type="button" aria-label={tab==="bills"?"Add bill":"Log expense"} onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},${C.purple})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 20px ${C.accent}50,0 2px 8px rgba(10,22,40,.15)`,zIndex:50,transition:"transform .2s,box-shadow .2s"}}><Plus size={22} color="#fff"/></button>}
+        {["spend","home","bills"].includes(tab)&&<button className="ba" type="button" aria-label={tab==="bills"?"Add bill":"Log expense"} onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(79,70,229,.35), 0 2px 6px rgba(15,23,42,.12)",zIndex:50}}><Plus size={22} color="#fff" strokeWidth={2.25}/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:16,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
 
         {tab==="home"&&(
@@ -1672,7 +1672,7 @@ function AppInner(){
               const CARDS=[
                 // ── CARD 1: THIS MONTH ──────────────────────────
                 {id:"month",render:()=>(
-                  <div onClick={()=>navTo("cashflow")} style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:20,padding:"20px 18px",cursor:"pointer"}}>
+                  <div onClick={()=>navTo("cashflow")} className="fv-hero-panel ba" style={{padding:"20px 18px",cursor:"pointer",marginBottom:0}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
                       <div>
                         <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>THIS MONTH</div>
@@ -1708,7 +1708,7 @@ function AppInner(){
                 )},
                 // ── CARD 2: NET WORTH ────────────────────────────
                 {id:"networth",render:()=>(
-                  <div onClick={()=>navTo("networthtrend")} style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:20,padding:"20px 18px",cursor:"pointer"}}>
+                  <div onClick={()=>navTo("networthtrend")} className="fv-hero-panel ba" style={{padding:"20px 18px",cursor:"pointer",marginBottom:0}}>
                     <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>NET WORTH</div>
                     <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontSize:38,fontWeight:900,color:nw_c>=0?C.greenMid:"#fca5a5",lineHeight:1,letterSpacing:-1,marginBottom:4}}>{fmt(nw_c)}</div>
                     {nwDelta_c!==null&&<div style={{fontSize:12,fontWeight:700,color:nwDelta_c>=0?C.greenMid:"#fca5a5",marginBottom:14}}>{nwDelta_c>=0?"▲":"▼"} {hidden?"***":fmt(Math.abs(nwDelta_c))} since last snapshot</div>}
@@ -1728,7 +1728,7 @@ function AppInner(){
                 )},
                 // ── CARD 3: MONEY FLOW ───────────────────────────
                 {id:"flow",render:()=>(
-                  <div onClick={()=>navTo("paycheck")} style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:20,padding:"20px 18px",cursor:"pointer"}}>
+                  <div onClick={()=>navTo("paycheck")} className="fv-hero-panel ba" style={{padding:"20px 18px",cursor:"pointer",marginBottom:0}}>
                     <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>MONEY FLOW</div>
                     <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontSize:38,fontWeight:900,color:cashflow>=0?C.greenMid:"#fca5a5",lineHeight:1,letterSpacing:-1,marginBottom:4}}>{cashflow>=0?"+":""}{fmt(cashflow)}</div>
                     <div style={{fontSize:12,color:"rgba(255,255,255,.5)",marginBottom:14}}>{payFreq==="Biweekly"?"biweekly":"per "+payFreq.toLowerCase()} paycheck · {savingsRate.toFixed(1)}% saved</div>
@@ -1745,7 +1745,7 @@ function AppInner(){
                 )},
                 // ── CARD 4: GOALS & DEBT ─────────────────────────
                 {id:"goals",render:()=>(
-                  <div style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,borderRadius:20,padding:"20px 18px"}}>
+                  <div className="fv-hero-panel" style={{padding:"20px 18px",marginBottom:0}}>
                     <div style={{fontSize:10,fontWeight:700,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>GOALS & DEBT</div>
                     {savingsGoals.length>0&&<div style={{marginBottom:16}} onClick={()=>navTo("savings")}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
