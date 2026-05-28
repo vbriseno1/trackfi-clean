@@ -89,6 +89,12 @@ import {
   DEMO_MODEL_VERSION, DEMO_IDCHECK_PRIMARY, DEMO_IDCHECK_JOINT, DEMO_IDSAVINGS, DEMO_CC_DEBT_ID,
 } from "./lib/demoData.js";
 import {
+  buildCashAccountsFromOnboarding,
+  householdFromUseCase,
+  incomeFromOnboarding,
+  settingsPatchFromOnboarding,
+} from "./lib/onboardingApply.js";
+import {
   iS, FI, FS, Modal, BarProg, SH, Empty, SwipeRow, ConfirmDialog,
 } from "./components/ui.jsx";
 import { PINLock, PINSetup } from "./components/PinLock.jsx";
@@ -594,6 +600,43 @@ function AppInner(){
   const[toast,setToast]=useState(null);
   const showToast=(msg,type='success',action=null)=>{setToast({msg,type,action});const dur=type==='error'?4000:type==='info'?3000:action?4000:2500;setTimeout(()=>setToast(t=>t?.msg===msg?null:t),dur);};
   const showUndoToast=(msg,undoFn)=>showToast(msg,"error",{label:"Undo",fn:undoFn});
+
+  function applyOnboardingComplete(d){
+    if(d.name)setGreetName(d.name);
+    setAppName("Trackfi");
+    if(d.profCategory)setProfCategory(d.profCategory);
+    if(d.profSub)setProfSub(d.profSub);
+    const income=incomeFromOnboarding(d.income||{});
+    setIncome(income);
+    const cashAccounts=buildCashAccountsFromOnboarding(d.accounts||{});
+    if(d.accounts||cashAccounts.length){
+      const acc=d.accounts||{};
+      setAccounts(p=>({
+        ...p,
+        checking:"",
+        savings:"",
+        cushion:acc.cushion??p.cushion??"",
+        investments:acc.investments??p.investments??"",
+        cashAccounts:cashAccounts.length?cashAccounts:p.cashAccounts,
+      }));
+    }
+    const checkingAcc=cashAccounts.find(a=>a.kind==="checking");
+    const savingsAcc=cashAccounts.find(a=>a.kind==="savings");
+    setSettings(s=>({
+      ...settingsPatchFromOnboarding(income,s),
+      ...(checkingAcc?{defaultCheckingAccountId:String(checkingAcc.id)}:{}),
+      ...(savingsAcc?{defaultSavingsAccountId:String(savingsAcc.id)}:{}),
+    }));
+    setHousehold(householdFromUseCase(d.useCase,d.name));
+    try{localStorage.setItem("fv_onboarded","1");localStorage.removeItem("fv_pending_name");}catch{}
+    ss("fv6:onboarded",true);
+    setOnboarded(true);
+  }
+
+  function handleTryDemoFresh(){
+    handleSkip();
+    loadDemo();
+  }
   const showToastRef=useRef(showToast);
   showToastRef.current=showToast;
 
@@ -1382,6 +1425,8 @@ function AppInner(){
     try{localStorage.setItem("fv_onboarded","1");localStorage.setItem("fv_demo","1");}catch{}
     ss("fv6:onboarded",true);
     setIsDemoMode(true);setOnboarded(true);
+    setDemoBannerVisible(true);
+    showToast("Sample data loaded — tap Exit demo on Home when you're done","info");
   }
   useEffect(()=>{window._loadDemo=loadDemo;return()=>{delete window._loadDemo;};},[]);
   // Dev-only: stress-test Spending + safe-to-spend with thousands of rows (console: __trackfiStress.add(5000))
@@ -1588,25 +1633,9 @@ function AppInner(){
       </div>
     );
   }
-  if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip}/>;
+  if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip} onTryDemo={handleTryDemoFresh}/>;
   if(!ready)return(<div className="fv-auth-shell"><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:20}}>Trackfi</div><div style={{width:36,height:36,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading your data...</div></div></div>);
-  if(!onboarded&&ready)return(<><style>{CSS}</style><OnboardingWizard onComplete={async d=>{
-    if(d.name)setGreetName(d.name);
-    setAppName("Trackfi");
-    if(d.profCategory)setProfCategory(d.profCategory);if(d.profSub)setProfSub(d.profSub);
-    if(d.income)setIncome({primary:"",other:"",trading:"",rental:"",dividends:"",freelance:"",payFrequency:"Biweekly",lastPayDate:"",...d.income});if(d.accounts)setAccounts(p=>({...p,...d.accounts}));
-    // Apply household mode based on use-case selection
-    if(d.useCase==="couple"){setHousehold(h=>({...h,enabled:true,name:(d.name?d.name.split(" ")[0]+"'s Household":"Our Household"),members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10B981"}]}));}
-    else if(d.useCase==="roommates"){setHousehold(h=>({...h,enabled:true,name:"Shared Household",members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"roommate",name:"Roommate",emoji:"🏠",color:"#D97706"}]}));}
-    else if(d.useCase==="family"){setHousehold(h=>({...h,enabled:true,name:(d.name?d.name.split(" ")[0]+"'s Family":"Our Family"),members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"},{id:"partner",name:"Partner",emoji:"😄",color:"#10B981"}]}));}
-    else{setHousehold({enabled:false,name:"My Finances",members:[{id:"me",name:d.name?d.name.split(" ")[0]:"Me",emoji:"😊",color:"#6366F1"}]});} // "personal" — single user, no partner member
-
-    const hasTrading=parseFloat(d.income?.trading||0)>0;
-    setSettings(p=>({...p,showTrading:hasTrading,showHealth:true,showSavings:true,showForecast:true}));
-    try{localStorage.setItem("fv_onboarded","1");localStorage.removeItem("fv_pending_name");}catch{}
-    ss("fv6:onboarded",true);
-    setOnboarded(true);
-  }}/></>);
+  if(!onboarded&&ready)return(<><style>{CSS}</style><OnboardingWizard onComplete={applyOnboardingComplete} onTryDemo={()=>{loadDemo();}}/></>);
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
 
   return(
@@ -1628,9 +1657,12 @@ function AppInner(){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
               <div>
                 <div style={{fontFamily:MF,fontSize:22,fontWeight:800,color:C.text,letterSpacing:-.3}}>
-                  {new Date().getHours()<12?"Good morning":new Date().getHours()<17?"Good afternoon":"Good evening"}{greetName?" "+greetName.split(" ")[0]:""} {getProfession(profCategory).icon}
+                  {new Date().getHours()<12?"Good morning":new Date().getHours()<17?"Good afternoon":"Good evening"}{greetName?" "+greetName.split(" ")[0]:""}
                 </div>
-                <div style={{fontSize:12,color:C.textLight,marginTop:2}}>{new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</div>
+                <div style={{fontSize:12,color:C.textLight,marginTop:2}}>
+                  {new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
+                  {profSub?` · ${getProfSub(profCategory,profSub).label}`:""}
+                </div>
               </div>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
                 {(()=>{
@@ -1653,8 +1685,8 @@ function AppInner(){
             {isDemoMode&&expenses.length>0&&(
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,width:"fit-content"}}>
                 {demoBannerVisible&&(
-                  <div style={{display:"flex",alignItems:"center",gap:4,background:"rgba(217,119,6,.08)",border:"1px solid rgba(217,119,6,.2)",borderRadius:99,padding:"3px 8px",animation:"fadeIn .3s ease"}}>
-                    <span style={{fontSize:9}}>🧪</span>
+                  <div style={{display:"flex",alignItems:"center",gap:5,background:"rgba(217,119,6,.08)",border:"1px solid rgba(217,119,6,.2)",borderRadius:99,padding:"4px 10px 4px 8px",animation:"fadeIn .3s ease"}}>
+                    <Sparkles size={11} color={C.amber} strokeWidth={2.25}/>
                     <span style={{fontSize:9,fontWeight:600,color:C.amber,letterSpacing:.1}}>Demo mode</span>
                     <button onClick={()=>setDemoBannerVisible(false)}
                       style={{background:"none",border:"none",cursor:"pointer",color:C.amber,padding:"0 2px",fontSize:10,lineHeight:1,opacity:.6,marginLeft:2}}>×</button>
@@ -1669,8 +1701,9 @@ function AppInner(){
             {!isDemoMode&&(
               <div style={{marginBottom:14,textAlign:"center"}}>
                 <button type="button" className="ba" onClick={requestLoadDemo}
-                  style={{background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:99,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,color:C.textMid}}>
-                  🧪 Try sample data
+                  style={{display:"inline-flex",alignItems:"center",gap:6,background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:99,padding:"6px 14px",cursor:"pointer",fontSize:12,fontWeight:600,color:C.textMid}}>
+                  <Sparkles size={14} color={C.accent} strokeWidth={2}/>
+                  Try sample data
                 </button>
                 <div style={{fontSize:10,color:C.textFaint,marginTop:6,lineHeight:1.4}}>Explore the app with a full year of demo transactions</div>
               </div>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Settings as SettingsIcon, Bell, Lock, User, LogOut, ChevronRight, Download, Upload, Trash2, RotateCcw, X, Plus, Database, RefreshCw, ToggleLeft, ToggleRight } from "lucide-react";
+import { Settings as SettingsIcon, Bell, Lock, User, LogOut, ChevronRight, Download, Upload, Trash2, RotateCcw, X, Plus, Database, RefreshCw, ToggleLeft, ToggleRight, Sparkles } from "lucide-react";
 import { C, MF } from "../theme.js";
 import { fmt } from "../lib/moneyFormat.js";
 import { FS } from "../components/ui.jsx";
@@ -211,7 +211,7 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
         <button className="ba" onClick={backupExport} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export JSON</button>
         <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)setPendingImport(f);e.target.value="";}}/></label>
       </div>
-      {onLoadDemo&&<button type="button" className="ba" onClick={onLoadDemo} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:10,padding:"11px 0",color:C.amber,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}>🧪 Load sample (demo) data</button>}
+      {onLoadDemo&&<button type="button" className="ba" onClick={onLoadDemo} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:10,padding:"11px 0",color:C.amber,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}><Sparkles size={16} strokeWidth={2}/>Load sample data</button>}
       {pendingImport&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
         <div style={{fontSize:13,fontWeight:700,color:C.amber,marginBottom:4}}>⚠️ Replace all current data with "{pendingImport.name}"?</div>
         <div style={{fontSize:12,color:C.textMid,marginBottom:10}}>Trackfi validates the whole file before changing anything. If it is malformed, your current data stays untouched. Export a backup first if needed.</div>

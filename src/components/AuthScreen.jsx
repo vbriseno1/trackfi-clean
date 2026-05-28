@@ -12,7 +12,7 @@
  *   can greet the user even before their profile syncs.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { Mail, Wallet } from "lucide-react";
+import { Mail, Wallet, Sparkles } from "lucide-react";
 import { C, MF } from "../theme.js";
 import { CSS } from "../styles.js";
 import { signIn, signUp, supaFetch, isSupabaseConfigured } from "../lib/supabase.js";
@@ -219,9 +219,15 @@ export default function AuthScreen({ onAuth, onSkip }) {
         </div>
         {err&&<div style={{background:err.includes("found")||err.includes("sent")?C.accentBg:C.redBg,border:`1px solid ${err.includes("found")||err.includes("sent")?C.accentMid:C.redMid}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:err.includes("found")||err.includes("sent")?C.accent:C.red,marginBottom:14,lineHeight:1.5}}>{err}</div>}
         <button type="button" className="fv-btn-primary ba" onClick={submit} disabled={loading||cooldown>0||!email.trim()||!pass.trim()} style={{justifyContent:"center",marginBottom:14,fontFamily:MF}}>{loading?"Just a sec...":cooldown>0?`Wait ${cooldown}s...`:(mode==="login"?"Sign in":"Create account")}</button>
-        {onSkip&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}>
-          <button onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,fontWeight:600,cursor:"pointer",padding:"6px 0"}}>Try without account →</button>
-          <div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data stays on your device</div>
+        {(onTryDemo||onSkip)&&<div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,textAlign:"center"}}>
+          {onTryDemo&&<button type="button" className="ba" onClick={onTryDemo} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:12,padding:"10px 14px",fontSize:13,fontWeight:700,color:C.accent,cursor:"pointer",marginBottom:12}}>
+            <Sparkles size={16} strokeWidth={2}/>
+            Explore sample data
+          </button>}
+          {onSkip&&<>
+            <button type="button" className="ba" onClick={onSkip} style={{background:"none",border:"none",color:C.textLight,fontSize:13,fontWeight:600,cursor:"pointer",padding:"6px 0"}}>Try without account</button>
+            <div style={{fontSize:11,color:C.textFaint,marginTop:4}}>Data stays on your device</div>
+          </>}
         </div>}
       </div>
     </div>
