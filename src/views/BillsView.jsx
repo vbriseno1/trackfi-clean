@@ -200,7 +200,7 @@ export default function BillsView({
   }
 
   return (
-    <div className="fu">
+    <div className="fu fv-view-root">
       {notifSupported() && notifPerm === "default" && bills.length > 0 && (
         <div
           style={{

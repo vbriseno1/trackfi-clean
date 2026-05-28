@@ -20,7 +20,7 @@ export default function CategoryDrillView({category,expenses,income,onBack}){
   const [selectedMonth,setSelectedMonth]=useState(null);
   const displayExps=selectedMonth?months.find(m=>m.ms===selectedMonth)?.exps||[]:allExps.slice(0,20);
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
         <button onClick={onBack} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontWeight:600,fontSize:13,color:C.textMid}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>Insights</button>
         <div className="fv-page-title" style={{fontSize:18}}>{category}</div>
@@ -30,7 +30,7 @@ export default function CategoryDrillView({category,expenses,income,onBack}){
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>This Month</div>
         <div style={{fontFamily:MF,fontSize:36,fontWeight:900,color:"#fff",letterSpacing:-1,marginBottom:4}}>{fmt(thisTotal)}</div>
         <div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Avg {fmt(avgMonthly)}/mo · {allExps.length} total transactions</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:14}}>
+        <div className="fv-grid-3" style={{marginTop:14}}>
           {[["Avg/visit",fmt(allExps.length?allExps.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)/allExps.length:0)],
             ["This month",String(months[5].count)+" visits"],
             ["vs avg",avgMonthly>0?((thisTotal-avgMonthly)/avgMonthly*100).toFixed(0)+"%":"—"]].map(([l,v])=>(

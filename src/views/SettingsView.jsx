@@ -22,9 +22,9 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
   const[acctMsg,setAcctMsg]=useState("");const[acctLoading,setAcctLoading]=useState(false);
   const[pendingImport,setPendingImport]=useState(null);
 
-  const Tog=(k,l,d,ic)=>(<div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>{ic}</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>{l}</div><div style={{fontSize:12,color:C.textLight}}>{d}</div></div></div><button onClick={()=>setSettings(p=>({...p,[k]:!p[k]}))} style={{background:"none",border:"none",cursor:"pointer",color:settings[k]?C.accent:C.borderLight,padding:0,flexShrink:0}}>{settings[k]?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>);
+  const Tog=(k,l,d,ic)=>(<div key={k} className="fv-toggle-row"><div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}><span style={{fontSize:20,flexShrink:0}}>{ic}</span><div style={{minWidth:0}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{l}</div><div style={{fontSize:12,color:C.textLight,lineHeight:1.4}}>{d}</div></div></div><button type="button" className="ba" onClick={()=>setSettings(p=>({...p,[k]:!p[k]}))} style={{background:"none",border:"none",cursor:"pointer",color:settings[k]?C.accent:C.borderLight,padding:8,flexShrink:0,minWidth:44,minHeight:44,display:"flex",alignItems:"center",justifyContent:"center"}} aria-label={`Toggle ${l}`}>{settings[k]?<ToggleRight size={28}/>:<ToggleLeft size={28}/>}</button></div>);
 
-  return(<div className="fu">
+  return(<div className="fu fv-view-root">
 
     {/* ── Header ─────────────────────────────────── */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -36,12 +36,12 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
     </div>}
 
     {/* ── 1. PROFILE ─────────────────────────────── */}
-    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+    <div className="fv-settings-card">
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
         <User size={18} color={C.accent} strokeWidth={2}/>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Profile</div>
       </div>
-      <div style={{display:"flex",gap:8,marginBottom:14}}>
+      <div className="fv-settings-split">
         <div style={{flex:1}}>
           <div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Display Name</div>
           <input value={greetName||""} onChange={e=>setGreetName(e.target.value)} placeholder="Your name" style={{width:"100%",background:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",color:C.text,fontSize:14,outline:"none"}}/>
@@ -62,8 +62,8 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
     </div>
 
     {/* ── 2. MONEY SETUP ─────────────────────────── */}
-    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16}}>
+    <div className="fv-settings-card">
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,flexWrap:"wrap"}}>
         <span style={{fontSize:18}}>💰</span>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Money Setup</div>
         <div style={{marginLeft:"auto",fontSize:11,color:C.green,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><div style={{width:6,height:6,borderRadius:"50%",background:C.green}}/>Auto-saved</div>
@@ -93,9 +93,9 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
         const subCount=isLiquid?liquidFieldSubCount(accounts,a.k):0;
         const shown=isLiquid?liquidFieldDisplay(accounts,a.k):(accounts[a.k]||"");
         return(
-        <div key={a.k} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
-          <div style={{flex:1,fontSize:13,color:C.textMid,minWidth:120}}>{a.l}{subCount>1&&<span style={{display:"block",fontSize:10,color:C.textLight,marginTop:2}}>Total — edit rows below</span>}</div>
-          <input type="number" placeholder={a.ph} value={shown} readOnly={subCount>1} onChange={e=>{if(subCount>1)return;const v=e.target.value;setAccounts(p=>isLiquid?applyLiquidFieldEdit(p,a.k,v):{...p,[a.k]:v});}} onBlur={e=>{if(subCount>1)return;if(e.target.value)showToast&&showToast("✓ Balance saved");}} style={{width:120,background:C.surfaceAlt,border:`1.5px solid ${parseFloat(shown||0)>0?C.accent:C.border}`,borderRadius:10,padding:"8px 10px",fontSize:14,fontFamily:MF,fontWeight:700,color:C.text,outline:"none",textAlign:"right",transition:"border-color .15s",...(subCount>1?{opacity:.85,cursor:"default"}:{})}}/>
+        <div key={a.k} className="fv-field-row">
+          <div className="fv-field-label" style={{color:C.textMid}}>{a.l}{subCount>1&&<span style={{display:"block",fontSize:10,color:C.textLight,marginTop:2}}>Total — edit rows below</span>}</div>
+          <input type="number" inputMode="decimal" className="fv-num-input" placeholder={a.ph} value={shown} readOnly={subCount>1} onChange={e=>{if(subCount>1)return;const v=e.target.value;setAccounts(p=>isLiquid?applyLiquidFieldEdit(p,a.k,v):{...p,[a.k]:v});}} onBlur={e=>{if(subCount>1)return;if(e.target.value)showToast&&showToast("✓ Balance saved");}} style={{background:C.surfaceAlt,border:`1.5px solid ${parseFloat(shown||0)>0?C.accent:C.border}`,color:C.text,transition:"border-color .15s",...(subCount>1?{opacity:.85,cursor:"default"}:{})}}/>
         </div>
       );})}
       <CashAccountsBlock accounts={accounts} setAccounts={setAccounts} showToast={showToast} variant="settings"/>
@@ -112,7 +112,7 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
     </div>
 
     {/* ── 3. APPEARANCE ──────────────────────────── */}
-    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+    <div className="fv-settings-card">
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
         <span style={{fontSize:18}}>🎨</span>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Appearance & Security</div>
@@ -134,21 +134,21 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
     </div>
 
     {/* ── 4. FEATURES ────────────────────────────── */}
-    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+    <div className="fv-settings-card">
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
         <span style={{fontSize:18}}>🔧</span>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Features</div>
       </div>
       {Tog("showTrading","Futures Trading","Track P&L, win rate, equity curve","📈")}
       {/* Household mode toggle in settings */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:`1px solid ${C.border}`}}><div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>🏠</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>Household / Shared Mode</div><div style={{fontSize:12,color:C.textLight}}>Split expenses with a partner or roommate</div></div></div><button onClick={()=>{navTo&&navTo("household");}} style={{background:household?.enabled?C.accentBg:C.surfaceAlt,border:`1.5px solid ${household?.enabled?C.accent:C.border}`,borderRadius:99,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:12,color:household?.enabled?C.accent:C.textMid}}>{household?.enabled?"On — View →":"Set Up →"}</button></div>
+      <div className="fv-toggle-row" style={{flexWrap:"wrap",rowGap:10}}><div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:"1 1 200px"}}><span style={{fontSize:20}}>🏠</span><div><div style={{fontSize:14,fontWeight:600,color:C.text}}>Household / Shared Mode</div><div style={{fontSize:12,color:C.textLight}}>Split expenses with a partner or roommate</div></div></div><button type="button" className="ba" onClick={()=>{navTo&&navTo("household");}} style={{background:household?.enabled?C.accentBg:C.surfaceAlt,border:`1.5px solid ${household?.enabled?C.accent:C.border}`,borderRadius:99,padding:"10px 16px",cursor:"pointer",fontWeight:700,fontSize:12,color:household?.enabled?C.accent:C.textMid,minHeight:44,flexShrink:0}}>{household?.enabled?"On — View →":"Set Up →"}</button></div>
       {Tog("showHealth","Health Score","A–F grade on your finances","🏆")}
       {Tog("showSavings","Savings Goals","Goal rings with projected dates","🎯")}
       {Tog("showForecast","Month Forecast","Burn rate + spending projection","🔮")}
     </div>
 
     {/* ── Cloud & device ─────────────────────────── */}
-    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+    <div className="fv-settings-card">
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
         <span style={{fontSize:18}}>☁️</span>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Cloud & device</div>
@@ -205,15 +205,15 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
     </div>
 
     {/* ── 5. DATA ────────────────────────────────── */}
-    <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,marginBottom:12}}>
+    <div className="fv-settings-card">
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
         <span style={{fontSize:18}}>📦</span>
         <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Data</div>
       </div>
       <div style={{fontSize:12,color:C.textLight,marginBottom:8,lineHeight:1.45}}>Includes transactions, bills, debts, goals, household & settle-up history, recurring, notifications, net worth chart data, categories, and preferences — use for moving phones or sharing a restore file with a partner (same account).</div>
-      <div style={{display:"flex",gap:8,marginBottom:10}}>
-        <button className="ba" onClick={backupExport} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"11px 0",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export JSON</button>
-        <label className="ba" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"11px 0",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)setPendingImport(f);e.target.value="";}}/></label>
+      <div className="fv-settings-actions" style={{marginBottom:10}}>
+        <button type="button" className="ba" onClick={backupExport} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:"12px 14px",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}><Download size={14}/>Export JSON</button>
+        <label className="ba" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}><Database size={14}/>Import<input type="file" accept=".json" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)setPendingImport(f);e.target.value="";}}/></label>
       </div>
       {onLoadDemo&&<button type="button" className="ba" onClick={onLoadDemo} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:10,padding:"11px 0",color:C.amber,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:10}}><Sparkles size={16} strokeWidth={2}/>Load sample data</button>}
       {pendingImport&&<div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
@@ -234,13 +234,13 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
         return(
           <div style={{marginBottom:8}}>
             {/* Account actions row */}
-            <div style={{display:"flex",gap:8,marginBottom:8}}>
-              <button className="ba" onClick={()=>{setShowEmailChange(e=>!e);setShowPwChange(false);setAcctMsg("");}}
-                style={{flex:1,padding:"10px 0",borderRadius:12,border:`1.5px solid ${C.accentMid}`,background:showEmailChange?C.accentBg:"transparent",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+            <div className="fv-settings-actions" style={{marginBottom:8}}>
+              <button type="button" className="ba" onClick={()=>{setShowEmailChange(e=>!e);setShowPwChange(false);setAcctMsg("");}}
+                style={{padding:"12px 14px",borderRadius:12,border:`1.5px solid ${C.accentMid}`,background:showEmailChange?C.accentBg:"transparent",color:C.accent,fontWeight:700,fontSize:13,cursor:"pointer"}}>
                 ✉️ Change Email
               </button>
-              <button className="ba" onClick={()=>{setShowPwChange(p=>!p);setShowEmailChange(false);setAcctMsg("");}}
-                style={{flex:1,padding:"10px 0",borderRadius:12,border:`1.5px solid ${C.border}`,background:showPwChange?C.surfaceAlt:"transparent",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+              <button type="button" className="ba" onClick={()=>{setShowPwChange(p=>!p);setShowEmailChange(false);setAcctMsg("");}}
+                style={{padding:"12px 14px",borderRadius:12,border:`1.5px solid ${C.border}`,background:showPwChange?C.surfaceAlt:"transparent",color:C.textMid,fontWeight:700,fontSize:13,cursor:"pointer"}}>
                 🔑 Change Password
               </button>
             </div>

@@ -27,7 +27,7 @@ export default function InsightsView({expenses,income,bills,debts,budgetGoals,sa
   const dailyAvg=thisTotal/Math.max(1,now.getDate());
   const projectedMonth=dailyAvg*new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
         <div className="fv-page-title">Spending Insights</div>
 
@@ -224,7 +224,7 @@ export default function InsightsView({expenses,income,bills,debts,budgetGoals,sa
         return(
           <div style={{background:C.surface,borderRadius:18,padding:18,marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)"}}>
             <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:14}}>Spending Velocity</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10,marginBottom:16}}>
+            <div className="insights-hero-grid" style={{marginBottom:16}}>
               {[
                 ["Daily Rate",fmt(dailyRate)+"/day",dailyRate>thisTotal/daysInMonth*1.2?C.red:C.green],
                 ["Projected",fmt(projected),projected>ti?C.red:projected>ti*.8?C.amber:C.green],

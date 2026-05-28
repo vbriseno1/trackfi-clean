@@ -1796,7 +1796,7 @@ function AppInner(){
                     <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontSize:38,fontWeight:900,color:nw_c>=0?C.greenMid:"#fca5a5",lineHeight:1,letterSpacing:-1,marginBottom:4}}>{fmt(nw_c)}</div>
                     {nwDelta_c!==null&&<div style={{fontSize:12,fontWeight:700,color:nwDelta_c>=0?C.greenMid:"#fca5a5",marginBottom:14}}>{nwDelta_c>=0?"▲":"▼"} {hidden?"***":fmt(Math.abs(nwDelta_c))} since last snapshot</div>}
                     {!nwDelta_c&&<div style={{marginBottom:14}}/>}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                    <div className="fv-grid-2" style={{marginBottom:12}}>
                       {[["Assets",fmt(totalAssets),C.greenMid],["Debts",fmt(totalDebt),"#fca5a5"],["Liquid",fmt(totalCheckingBalance(accounts)+totalSavingsBalance(accounts)+(parseFloat(accounts.cushion||0))),C.accentMid],["Retirement",fmt((parseFloat(accounts.k401||0))+(parseFloat(accounts.roth_ira||0))+(parseFloat(accounts.hsa||0))),C.teal]].map(([l,v,c])=>(
                         <div key={l} style={{background:"rgba(255,255,255,.07)",borderRadius:10,padding:"8px 10px"}}>
                           <div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l}</div>
@@ -1902,7 +1902,7 @@ function AppInner(){
                 {label:"Next Bill",val:nextBill?fmt(nextBill.amount):"—",color:nextBill&&dueIn(nextBill.dueDate)<=3?C.red:C.amber,sub:nextBill?nextBill.name+" · "+dueIn(nextBill.dueDate)+"d":"all clear",tap:()=>navTo("bills")},
                 {label:"Subscriptions",val:subCount>0?fmt(subTotal)+"/mo":"—",color:C.textMid,sub:subCount>0?subCount+" detected":"none found",tap:()=>navTo("subscriptions")},
               ];
-              return(<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:14}}>
+              return(<div className="fv-grid-4" style={{marginBottom:14}}>
                 {pulseItems.map(p=>(
                   <div key={p.label} onClick={p.tap} className="fv-card ba" style={{padding:"10px 6px",textAlign:"center",cursor:"pointer",marginBottom:0}}>
                     <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontWeight:800,fontSize:13,color:p.color,lineHeight:1.1,marginBottom:3}}>{p.val}</div>
@@ -1993,7 +1993,7 @@ function AppInner(){
                     <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text}}>Quick Actions</div>
                     <button onClick={()=>setModal("quickactions")} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:C.textLight,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><Settings size={12}/>Edit</button>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                  <div className="fv-grid-4">
                     {active.slice(0,8).map(q=>{const Ico=QA_ICON[q.id]||Plus;return(<button key={q.id} type="button" className="ba" onClick={q.a} style={{background:q.bg,borderRadius:14,padding:"14px 6px 12px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:7,border:"none",boxShadow:"0 1px 3px rgba(15,23,42,.06)"}}><Ico size={20} color={q.c} strokeWidth={2}/><span style={{fontSize:10,fontWeight:700,color:q.c,lineHeight:1.3,textAlign:"center"}}>{q.l}</span></button>);})}
                   </div>
                 </div>
@@ -2111,7 +2111,7 @@ function AppInner(){
           </div>
         )}
 
-        {tab==="chat"&&<div style={{height:"calc(100dvh - 150px)",maxHeight:"calc(100dvh - 150px)",display:"flex",flexDirection:"column",minHeight:0,paddingBottom:4}}>
+        {tab==="chat"&&<div className="fv-chat-panel" style={{paddingBottom:4}}>
           <div style={{marginBottom:10}}>
             <div className="fv-page-title" style={{fontSize:18}}>AI logger</div>
             <div style={{fontSize:13,color:C.textLight,marginTop:1,marginBottom:10}}>Paid-from aware — "lunch 12", "coffee 6 on card", "split spending", "rent 1200 due 28th"</div>
@@ -2161,7 +2161,7 @@ function AppInner(){
             <div className="fv-page-title" style={{fontSize:18,marginBottom:2}}>More</div>
             <div className="fv-page-sub" style={{marginBottom:16}}>All your financial tools</div>
             {/* Featured shortcuts grid */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:20}}>
+            <div className="fv-more-shortcuts">
               {[
                 {id:"health",l:"Health",c:C.red,bg:C.redBg},
                 {id:"paycheck",l:"Paycheck",c:C.positive,bg:C.greenBg},
@@ -2173,7 +2173,7 @@ function AppInner(){
                 {id:"search",l:"Search",c:C.textMid,bg:C.surfaceAlt},
                 {id:"household",l:"Household",c:C.accent,bg:C.accentBg},
               ].map(({id,l,c,bg})=>{const Ico=MORE_ICON[id]||ChevronRight;return(
-                <button key={id} type="button" onClick={()=>navTo(id)} className="ba" style={{background:bg,borderRadius:14,padding:"12px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,border:"none",cursor:"pointer",boxShadow:"0 1px 2px rgba(15,23,42,.05)"}}>
+                <button key={id} type="button" onClick={()=>navTo(id)} className="ba fv-more-shortcut" style={{background:bg,boxShadow:"0 1px 2px rgba(15,23,42,.05)"}}>
                   <Ico size={20} color={c} strokeWidth={2}/>
                   <span style={{fontSize:10,fontWeight:700,color:c,lineHeight:1.2,textAlign:"center"}}>{l}</span>
                 </button>
@@ -2181,13 +2181,13 @@ function AppInner(){
             </div>
             {GROUPS.map(sec=>(
               <div key={sec.key} style={{marginBottom:22}}>
-                <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:10}}><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text}}>{sec.label}</div><div style={{fontSize:11,color:C.textLight}}>{sec.desc}</div></div>
+                <div className="fv-section-head"><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text}}>{sec.label}</div><div className="fv-section-desc">{sec.desc}</div></div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {sec.items.map(t=>{const badge=t.id==="notifs"&&unread>0?unread:null;return(
-                    <button key={t.id} type="button" className="ba fv-card" onClick={()=>navTo(t.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",borderRadius:12,cursor:"pointer",textAlign:"left",width:"100%",marginBottom:0}}>
+                    <button key={t.id} type="button" className="ba fv-card fv-menu-row" onClick={()=>navTo(t.id)} style={{marginBottom:0}}>
                       <div style={{width:36,height:36,background:badge?C.redBg:C.accentBg,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}><t.icon size={17} color={badge?C.red:C.accent}/>{badge&&<div style={{position:"absolute",top:-4,right:-4,width:16,height:16,background:C.red,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff",border:"2px solid #fff"}}>{badge>9?"9+":badge}</div>}</div>
-                      <span style={{fontSize:14,fontWeight:600,color:C.text,flex:1}}>{t.label}</span>
-                      <ChevronRight size={15} color={C.textLight}/>
+                      <span className="fv-menu-label" style={{color:C.text}}>{t.label}</span>
+                      <ChevronRight size={15} color={C.textLight} style={{flexShrink:0}}/>
                     </button>
                   );})}
                 </div>
@@ -2206,7 +2206,7 @@ function AppInner(){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><div><div className="fv-page-title" style={{fontSize:18}}>Accounts & income</div></div><div style={{fontSize:12,color:C.positive,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><div style={{width:7,height:7,borderRadius:"50%",background:C.positive}}/>Auto-saved</div></div>
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
               {[{k:"checking",l:"Checking",c:C.navy},{k:"savings",l:"Savings",c:C.positive},{k:"cushion",l:"Cushion / Emergency",c:C.accent}].map(a=>{const Ico=ACCT_ICON[a.k]||Wallet;const subCount=liquidFieldSubCount(accounts,a.k);const shown=liquidFieldDisplay(accounts,a.k);return(
-                <div key={a.k} className="fv-section-card" style={{padding:18,display:"flex",flexWrap:"wrap",alignItems:"center",gap:12,rowGap:10,minWidth:0,boxSizing:"border-box",maxWidth:"100%"}}>
+                <div key={a.k} className="fv-section-card fv-acct-card" style={{padding:18}}>
                   <div className="fv-icon-tile" style={{background:a.c+"15"}}><Ico size={22} color={a.c} strokeWidth={2}/></div>
                   <div style={{flex:"1 1 120px",minWidth:0,maxWidth:"100%"}}>
                     <div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div>
@@ -2242,7 +2242,7 @@ function AppInner(){
                 {k:"hsa",l:"HSA",c:C.purple,desc:"Health savings account"},
                 {k:"crypto",l:"Crypto",c:C.amber,desc:"Cryptocurrency portfolio"},
               ].map(a=>{const Ico=ACCT_ICON[a.k]||LineChart;return(
-                <div key={a.k} className="fv-card" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:14,marginBottom:0}}>
+                <div key={a.k} className="fv-card fv-acct-card" style={{padding:"14px 16px",marginBottom:0}}>
                   <div className="fv-icon-tile" style={{background:a.c+"15"}}><Ico size={20} color={a.c} strokeWidth={2}/></div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div>
@@ -2260,7 +2260,7 @@ function AppInner(){
                 {k:"investments",l:"Other Investments",c:C.positive,desc:"Index funds, ETFs, etc."},
                 {k:"vehicles",l:"Vehicles",c:C.purple,desc:"Cars, motorcycles, etc."},
               ].map(a=>{const Ico=ACCT_ICON[a.k]||Home;return(
-                <div key={a.k} className="fv-card" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:14,marginBottom:0}}>
+                <div key={a.k} className="fv-card fv-acct-card" style={{padding:"14px 16px",marginBottom:0}}>
                   <div className="fv-icon-tile" style={{background:a.c+"15"}}><Ico size={20} color={a.c} strokeWidth={2}/></div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div>
@@ -2388,7 +2388,7 @@ function AppInner(){
             <div className="fv-page-title" style={{fontSize:22,textAlign:"center"}}>{monthlySummary.month} recap</div>
             <div style={{fontSize:13,color:C.textLight,marginTop:4}}>Here's how last month went</div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          <div className="fv-sheet-grid-2" style={{marginBottom:16}}>
             {[
               ["Total Spent",fmt(monthlySummary.total),monthlySummary.prevTotal>0&&monthlySummary.total>monthlySummary.prevTotal?C.red:C.green],
               ["Transactions",String(monthlySummary.txnCount),C.accent],
@@ -2409,13 +2409,13 @@ function AppInner(){
           <button type="button" className="fv-btn-primary ba" onClick={()=>setMonthlySummary(null)} style={{justifyContent:"center",fontFamily:MF}}>Done</button>
         </div>
       </div>}
-      {toast&&<div role="status" aria-live={toast.type==="error"?"assertive":"polite"} aria-atomic="true" style={{position:"fixed",bottom:88,left:"50%",transform:"translateX(-50%)",zIndex:200,background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 18px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:10,maxWidth:340,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}} onClick={()=>setToast(null)}>
+      {toast&&<div role="status" className="fv-toast" aria-live={toast.type==="error"?"assertive":"polite"} aria-atomic="true" style={{background:toast.type==="success"?C.green:toast.type==="error"?C.red:C.navy,color:"#fff",borderRadius:14,padding:"12px 18px",fontSize:13,fontWeight:600,boxShadow:"0 8px 32px rgba(10,22,40,.25),0 2px 8px rgba(10,22,40,.15)",display:"flex",alignItems:"center",gap:10,animation:"slideUp .22s cubic-bezier(.22,1,.36,1)",backdropFilter:"blur(8px)",letterSpacing:.1,cursor:"pointer"}} onClick={()=>setToast(null)}>
         <span>{toast.type==="success"?"✓":toast.type==="error"?"✗":"·"} {toast.msg}</span>
         {toast.action&&<button onClick={e=>{e.stopPropagation();toast.action.fn();setToast(null);}} style={{background:"rgba(255,255,255,.22)",border:"none",borderRadius:8,padding:"3px 10px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer",flexShrink:0,marginLeft:4}}>{toast.action.label}</button>}
       </div>}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:"min(640px, 100vw)",boxSizing:"border-box",background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px max(8px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right))",zIndex:100,boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)",overflowX:"hidden"}}>
+      <div className="fv-bottom-nav" style={{background:"rgba(255,255,255,.88)",backdropFilter:"blur(32px)",WebkitBackdropFilter:"blur(32px)",borderTop:`1px solid rgba(226,229,238,.5)`,display:"flex",padding:"10px max(8px, env(safe-area-inset-left)) max(14px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right))",boxShadow:"0 -1px 0 rgba(10,22,40,.04),0 -12px 40px rgba(10,22,40,.07)",overflowX:"hidden"}}>
         {NAV.map(n=>{const active=n.id==="more"?isMoreTab||tab==="more":tab===n.id;return(
-          <button key={n.id} className="ba" onClick={()=>navTo(n.id)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:active?"rgba(99,102,241,.08)":"transparent",border:"none",cursor:"pointer",color:active?C.accent:C.textFaint,position:"relative",borderRadius:12,padding:"4px 12px 6px",transition:"all .18s"}}>
+          <button key={n.id} type="button" className="ba fv-nav-btn" onClick={()=>navTo(n.id)} style={{background:active?"rgba(99,102,241,.08)":"transparent",color:active?C.accent:C.textFaint,position:"relative",transition:"all .18s"}}>
             {n.id==="chat"?(
               <div className="fv-chat-fab">
                 <n.icon size={18} color="#fff" strokeWidth={2.2}/>
@@ -2423,7 +2423,7 @@ function AppInner(){
             ):(
               <div style={{position:"relative"}}><n.icon size={21} strokeWidth={active?2.4:1.6}/>{n.badge&&n.badge>0&&<div style={{position:"absolute",top:-4,right:-6,width:16,height:16,background:C.red,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff",border:"2px solid #fff"}}>{n.badge>9?"9+":n.badge}</div>}</div>
             )}
-            <span style={{fontSize:10,fontWeight:active?700:500}}>{n.label}</span>
+            <span className="fv-nav-label" style={{fontWeight:active?700:500}}>{n.label}</span>
           </button>
         );})}
       </div>
@@ -2519,7 +2519,7 @@ function AppInner(){
         const QA_ALL=[{id:"expense",l:"Log Expense"},{id:"receipt",l:"Add Photo"},{id:"bill",l:"Add Bill"},{id:"debt",l:"Add Debt"},{id:"simulator",l:"Payoff Sim"},{id:"budget",l:"Envelopes"},{id:"shift",l:"Log Shift"},{id:"trade",l:"Log Trade"},{id:"savings",l:"Add Goal"},{id:"networth",l:"Net Worth"},{id:"insights",l:"Insights"},{id:"paycheck",l:"Paycheck"},{id:"health",l:"Health"},{id:"bills_nav",l:"Bills"},{id:"calendar_nav",l:"Calendar"},{id:"recurring_nav",l:"Recurring"}];
         const active=settings.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];
         const toggle=id=>setSettings(p=>{const cur=p.quickActions||["expense","bill","paycheck","debt","health","budget","savings","insights"];const next=cur.includes(id)?cur.filter(x=>x!==id):cur.length<8?[...cur,id]:cur;return{...p,quickActions:next};});
-        return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div style={{background:C.surface,borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480,maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}><div className="fv-page-title" style={{fontSize:18,marginBottom:4}}>Customize quick actions</div><div className="fv-page-sub" style={{marginBottom:18}}>Choose up to 8 actions</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);const Ico=QA_ICON[q.id]||Plus;return(<button key={q.id} type="button" className="ba" onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:C.surface,cursor:"pointer",textAlign:"left"}}><Ico size={18} color={on?C.accent:C.textMid} strokeWidth={2}/><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button type="button" className="fv-btn-primary ba" onClick={()=>setModal(null)} style={{justifyContent:"center",fontFamily:MF}}>Done</button></div></div>);
+        return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}><div className="fv-sheet" style={{background:C.surface,padding:"28px 20px",width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}><div className="fv-page-title" style={{fontSize:18,marginBottom:4}}>Customize quick actions</div><div className="fv-page-sub" style={{marginBottom:18}}>Choose up to 8 actions</div><div className="fv-sheet-grid-2" style={{marginBottom:20}}>{QA_ALL.map(q=>{const on=active.includes(q.id);const Ico=QA_ICON[q.id]||Plus;return(<button key={q.id} type="button" className="ba" onClick={()=>toggle(q.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:14,border:`2px solid ${on?C.accent:C.border}`,background:on?C.accentBg:C.surface,cursor:"pointer",textAlign:"left"}}><Ico size={18} color={on?C.accent:C.textMid} strokeWidth={2}/><span style={{fontSize:13,fontWeight:700,color:on?C.accent:C.text}}>{q.l}</span>{on&&<Check size={14} color={C.accent} style={{marginLeft:"auto",flexShrink:0}}/>}</button>);})}</div><button type="button" className="fv-btn-primary ba" onClick={()=>setModal(null)} style={{justifyContent:"center",fontFamily:MF}}>Done</button></div></div>);
       })()}
     </div>
     </TrackfiRechartsProvider>

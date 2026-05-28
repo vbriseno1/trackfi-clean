@@ -145,7 +145,7 @@ export default function AuthScreen({ onAuth, onSkip, onTryDemo }) {
           Supabase isn’t configured in this build — use <strong>Try without account</strong> for local-only mode, or set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY and rebuild.
         </div>
       )}
-      <div style={{background:"#fff",borderRadius:28,width:"100%",maxWidth:400,padding:"40px 32px",textAlign:"center",boxShadow:"0 32px 80px rgba(0,0,0,.35)"}}>
+      <div className="fv-auth-inner" style={{background:"#fff",borderRadius:28,width:"100%",padding:"40px 32px",textAlign:"center",boxShadow:"0 32px 80px rgba(0,0,0,.35)"}}>
         <div style={{width:80,height:80,borderRadius:"50%",background:C.accentBg,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px"}}><Mail size={36} color={C.accent} strokeWidth={1.75}/></div>
         <div style={{fontFamily:MF,fontSize:24,fontWeight:900,color:C.navy,marginBottom:8,letterSpacing:-.5}}>Check your inbox</div>
         <div style={{fontSize:14,color:C.textLight,marginBottom:6,lineHeight:1.6}}>Confirmation link sent to</div>
@@ -188,7 +188,7 @@ export default function AuthScreen({ onAuth, onSkip, onTryDemo }) {
           <div key={f} style={{background:"rgba(255,255,255,.1)",borderRadius:99,padding:"5px 12px",fontSize:11,color:"rgba(255,255,255,.8)",fontWeight:600,backdropFilter:"blur(8px)"}}>{f}</div>
         ))}
       </div>}
-      <div style={{background:"rgba(255,255,255,.97)",backdropFilter:"blur(20px)",borderRadius:24,width:"100%",maxWidth:400,padding:"28px 28px 24px",boxShadow:"0 32px 80px rgba(0,0,0,.3)",zIndex:1}}>
+      <div className="fv-auth-inner" style={{background:"rgba(255,255,255,.97)",backdropFilter:"blur(20px)",borderRadius:24,width:"100%",padding:"28px 28px 24px",boxShadow:"0 32px 80px rgba(0,0,0,.3)",zIndex:1}}>
         <div style={{display:"flex",background:"#f0f2f8",borderRadius:12,padding:3,marginBottom:22}}>
           {[["login","Sign In"],["signup","Create Account"]].map(([m,l])=>(
             <button key={m} onClick={()=>{setMode(m);setErr("");setPass("");setName("");}} style={{flex:1,padding:"9px 0",borderRadius:10,border:"none",background:mode===m?"#fff":"transparent",color:mode===m?C.accent:C.textMid,fontWeight:mode===m?800:600,fontSize:13,cursor:"pointer",boxShadow:mode===m?"0 2px 8px rgba(0,0,0,.08)":"none",transition:"all .15s"}}>{l}</button>

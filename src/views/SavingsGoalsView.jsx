@@ -76,7 +76,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
   const ICONS=["🎯","🏠","🚗","✈️","💍","📱","🎓","🐕","💪","🌴","🏖️","💰"];
   const COLORS=[C.accent,C.green,C.purple,C.amber,C.red,C.teal,C.purple];
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:12,padding:4,marginBottom:16}}>
         {[["rings","Rings"],["list","List"],["earn","Earn"]].map(([id,l])=>(<button key={id} type="button" className="ba" onClick={()=>setView(id)} style={{flex:1,padding:"8px 0",borderRadius:8,border:"none",background:view===id?C.surface:"transparent",color:view===id?C.accent:C.textLight,fontWeight:view===id?700:500,fontSize:13,cursor:"pointer",boxShadow:view===id?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{l}</button>))}
       </div>
@@ -149,7 +149,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
         );
       })()}
       {goals.length===0&&<div className="fv-card" style={{textAlign:"center",padding:"40px 20px",marginBottom:16}}><Target size={32} color={C.textLight} style={{margin:"0 auto 12px"}}/><div style={{fontFamily:MF,fontSize:16,fontWeight:700,color:C.text,marginBottom:8}}>No savings goals yet</div><div style={{fontSize:13,color:C.textLight,marginBottom:20}}>Set a goal and watch your ring fill up</div><button onClick={()=>setShowAdd(true)} style={{padding:"12px 24px",borderRadius:14,background:C.accent,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}}>Add First Goal</button></div>}
-      {view==="rings"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+      {view==="rings"&&<div className="fv-grid-2" style={{marginBottom:16}}>
         {goals.map(g=><div key={g.id} style={{position:"relative"}}><GoalRingInner goal={{...g,saved:parseFloat(g.saved||0),target:parseFloat(g.target||0),monthly:parseFloat(g.monthly||0)}}/><button onClick={()=>{setGoals(p=>p.filter(x=>x.id!==g.id));showToast&&showToast("Goal removed","error");}} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,.06)",border:"none",borderRadius:"50%",width:24,height:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={12} color={C.textLight}/></button></div>)}
       </div>}
       {view==="list"&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>

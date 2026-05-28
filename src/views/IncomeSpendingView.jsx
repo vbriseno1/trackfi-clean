@@ -20,7 +20,7 @@ export default function IncomeSpendingView({expenses,income,trades,bills=[]}){
     return{month:FULL_MOS[d.getMonth()].slice(0,3),income:parseFloat(inc.toFixed(0)),spending:parseFloat(sp.toFixed(0)),saved:parseFloat(Math.max(0,inc-sp).toFixed(0))};
   }),[expenses,income,trades,months]);
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       {(()=>{
         const sources=[{l:"Primary",v:parseFloat(income.primary||0)},{l:"Trading",v:parseFloat(income.trading||0)},{l:"Freelance",v:parseFloat(income.freelance||0)},{l:"Rental",v:parseFloat(income.rental||0)},{l:"Dividends",v:parseFloat(income.dividends||0)},{l:"Other",v:parseFloat(income.other||0)}].filter(s=>s.v>0);
         const total=sources.reduce((s,x)=>s+x.v,0);

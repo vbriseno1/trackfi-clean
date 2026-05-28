@@ -60,7 +60,7 @@ export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,s
     return(<text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" style={{fontSize:11,fontWeight:700,pointerEvents:"none"}}>{(pieData[index].value/totalDebt*100).toFixed(0)}%</text>);
   };
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div style={{marginBottom:16}}>
         <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",gap:10,minWidth:0}}>
           <div style={{minWidth:0,flex:"1 1 min(200px, 100%)"}}>
@@ -73,7 +73,7 @@ export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,s
             <button type="button" className="ba" onClick={()=>(onAddDebt||(()=>setModal("debt")))()} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}><Plus size={13}/>Add Debt</button>
           </div>
         </div>
-        {debts.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,marginTop:14}}><div style={{background:C.redBg,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:0}}><div style={{fontSize:10,color:C.red,marginBottom:2,fontWeight:600,letterSpacing:.5}}>REMAINING</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.red}}>{fmt(totalDebt)}</div></div><div style={{background:C.greenBg,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:0}}><div style={{fontSize:10,color:C.green,marginBottom:2,fontWeight:600,letterSpacing:.5}}>PAID DOWN</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.green}}>{fmt(totalPaidDown)}</div></div><div style={{background:C.accentBg,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:0}}><div style={{fontSize:10,color:C.accent,marginBottom:2,fontWeight:600,letterSpacing:.5}}>PROGRESS</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.accent}}>{overallPct}%</div></div></div>}
+        {debts.length>0&&<div className="fv-grid-3" style={{marginTop:14}}><div style={{background:C.redBg,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:0}}><div style={{fontSize:10,color:C.red,marginBottom:2,fontWeight:600,letterSpacing:.5}}>REMAINING</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.red}}>{fmt(totalDebt)}</div></div><div style={{background:C.greenBg,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:0}}><div style={{fontSize:10,color:C.green,marginBottom:2,fontWeight:600,letterSpacing:.5}}>PAID DOWN</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.green}}>{fmt(totalPaidDown)}</div></div><div style={{background:C.accentBg,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:0}}><div style={{fontSize:10,color:C.accent,marginBottom:2,fontWeight:600,letterSpacing:.5}}>PROGRESS</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.accent}}>{overallPct}%</div></div></div>}
       </div>
       {debts.length===0&&<Empty text="No debts tracked. Add one to start your payoff plan!" icon={CreditCard}/>}
       {debts.length>0&&<>
@@ -123,7 +123,7 @@ export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,s
                 </div>
                 {isLoanDebt(d)&&(parseFloat(d.loanAccruedInterest)||0)>0.001&&bal>0&&(()=>{const c=parseFloat(d.loanAccruedInterest)||0,t=bal+c;return(<div style={{marginBottom:10}}><div style={{height:8,borderRadius:99,overflow:"hidden",display:"flex",marginBottom:6}}><div style={{width:(100*bal/t).toFixed(1)+"%",background:C.red,transition:"width .3s"}}/><div style={{flex:1,minWidth:0,background:C.amber,opacity:.85}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.textLight}}><span>Principal</span><span>Accrued interest</span></div></div>);})()}
                 {orig>bal&&<><BarProg pct={pct} color={selectedDebt.color} h={7}/><div style={{display:"flex",justifyContent:"space-between",marginTop:4,marginBottom:10,fontSize:12,color:C.textLight}}><span>{pct.toFixed(0)}% paid off</span><span>of {fmt(orig)}</span></div></>}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                <div className="fv-grid-2" style={{marginBottom:12}}>
                   {(isCreditCardDebt(d)
                     ?[["Payoff",proj.payoffDate],["Time left",proj.months<600?proj.months+" months":"Too long"],["Total Int.",proj.totalInterest<999999?fmt(proj.totalInterest):"—"],["APR",(d.rate||"0")+"%"]]
                     :[["Payoff",proj.payoffDate],["Time left",proj.months<600?proj.months+" months":"Too long"],["Total Int.",proj.totalInterest<999999?fmt(proj.totalInterest):"Reduce payment"],["Mo. Interest","~\u2248 "+fmt((parseFloat(d.rate)||0)/100/12*debtOwedForBreakdown(d))]]
@@ -159,7 +159,7 @@ export default function DebtView({debts,setDebts,setBills,setModal,setEditItem,s
               <div className="fv-stat-label" style={{color:"rgba(255,255,255,.55)",marginBottom:4}}>Debt-free projection</div>
               <div style={{fontFamily:MF,fontSize:30,fontWeight:800,color:C.greenMid,marginBottom:2,letterSpacing:-.5}}>{stuck?"Increase payments":dfDate.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</div>
               <div style={{fontSize:13,color:"rgba(255,255,255,.5)",marginBottom:16}}>{stuck?"Payments may not cover interest on one or more debts":`${timeStr} · APR÷12 estimate · minimums on all, roll freed cash to ${stratLabel}`}</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,marginBottom:16}}>
+              <div className="fv-grid-3" style={{marginBottom:16}}>
                 {[["Total Owed",fmt(totalBal),"#fca5a5"],["Min/mo",fmt(totalMin),"rgba(255,255,255,.8)"],["Total Interest",!stuck?fmt(baseSim.totalInterest):"—","rgba(255,255,255,.6)"]].map(([l,v,c])=>(
                   <div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}>
                     <div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2,textTransform:"uppercase"}}>{l}</div>

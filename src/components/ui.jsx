@@ -89,6 +89,7 @@ export function Modal({ title, icon: Icon, onClose, onSubmit, submitLabel = "Sav
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
+        className="fv-sheet"
         style={{
           background: C.surface,
           borderRadius: "24px 24px 0 0",

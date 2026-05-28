@@ -13,7 +13,7 @@ export default function SubsView({detectedSubs,expenses,showToast,dismissed,setD
   const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
   const maxCat=cats[0]?.[1]||1;
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div className="fv-page-title" style={{marginBottom:4}}>Subscriptions</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div style={{fontSize:13,color:C.textLight}}>Auto-detected from your expenses</div>
@@ -25,7 +25,7 @@ export default function SubsView({detectedSubs,expenses,showToast,dismissed,setD
         <div style={{background:C.navy,borderRadius:18,padding:20,marginBottom:14,color:'#fff'}}>
           <div style={{fontSize:11,fontWeight:600,color:'rgba(255,255,255,.5)',textTransform:'uppercase',letterSpacing:.5,marginBottom:4}}>Monthly Subscriptions</div>
           <div style={{fontFamily:MF,fontSize:32,fontWeight:800,color:'#fff',marginBottom:2}}>{fmt(totalMo)}<span style={{fontSize:14,fontWeight:500,color:'rgba(255,255,255,.5)'}}>/mo</span></div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginTop:12}}>
+          <div className="fv-grid-3" style={{marginTop:12}}>
             {[['Annual',fmt(totalMo*12),C.amberMid],['Per Day',fmt(totalMo/30.4),C.accentMid],['Count',String(active.length)+'  subs',C.greenMid]].map(([l,v,c])=>(
               <div key={l} style={{background:'rgba(255,255,255,.08)',borderRadius:10,padding:'9px 8px'}}>
                 <div style={{fontSize:9,color:'rgba(255,255,255,.4)',fontWeight:600,marginBottom:2}}>{l.toUpperCase()}</div>

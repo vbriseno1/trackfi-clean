@@ -27,7 +27,7 @@ export default function CalendarView({expenses,bills,calColors,setCalColors,setE
   const maxW=Math.max(...weekBars.map(w=>w.amt),1);
 
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       {/* header */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
         <button onClick={()=>setViewDate(new Date(yr,mo-1,1))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:'6px 12px',cursor:'pointer',fontWeight:700,color:C.text}}>‹</button>
@@ -38,7 +38,7 @@ export default function CalendarView({expenses,bills,calColors,setCalColors,setE
         <button onClick={()=>setViewDate(new Date(yr,mo+1,1))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:'6px 12px',cursor:'pointer',fontWeight:700,color:C.text}}>›</button>
       </div>
       {/* summary stats */}
-      {monthTotal>0&&<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:12}}>
+      {monthTotal>0&&<div className="fv-grid-3" style={{marginBottom:12}}>
         {(()=>{const _now2=new Date();const _isCurrentMo=yr===_now2.getFullYear()&&mo===_now2.getMonth();const _divisor=_isCurrentMo?Math.max(1,_now2.getDate()):dim;return[['Total',fmt(monthTotal),C.red],['Per Day',fmt(monthTotal/_divisor),C.textMid],['Transactions',String(monthExp.length),C.accent]];})().map(([l,v,c])=>(
           <div key={l} style={{background:C.surfaceAlt,borderRadius:10,padding:'8px',textAlign:'center'}}>
             <div style={{fontSize:9,color:C.textLight,fontWeight:600,marginBottom:2}}>{l}</div>

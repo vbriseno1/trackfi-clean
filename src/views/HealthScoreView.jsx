@@ -35,7 +35,7 @@ export default function HealthScoreView({income,expenses,debts,accounts,bills,tr
   const circ=2*Math.PI*38;
   const dash=circ*(overall/10);
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div className="fv-page-title" style={{marginBottom:16}}>Financial health</div>
       <div className="fv-hero-panel" style={{padding:24,marginBottom:16,display:"flex",alignItems:"center",gap:20}}>
         <div style={{position:'relative',width:100,height:100,flexShrink:0}}>

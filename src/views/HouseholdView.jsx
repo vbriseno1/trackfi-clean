@@ -62,7 +62,7 @@ export default function HouseholdView({household,setHousehold,expenses,bills=[],
   const TABS=[{id:"split",label:"Split"},{id:"settle",label:"Settle Up"},{id:"budget",label:"Budget"},{id:"members",label:"Members"}];
 
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div>
@@ -85,7 +85,7 @@ export default function HouseholdView({household,setHousehold,expenses,bills=[],
       {tab==="split"&&(
         <div>
           {/* This month summary cards */}
-          <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.max(1,household.members.length)},minmax(0,1fr))`,gap:10,marginBottom:16}}>
+          <div className="fv-member-grid" style={{gridTemplateColumns:`repeat(${Math.max(1,household.members.length)},minmax(0,1fr))`}}>
             {memberStats.map(m=>(
               <div key={m.id} style={{background:C.surface,borderRadius:16,padding:"14px 12px",textAlign:"center",boxShadow:"0 1px 4px rgba(10,22,40,.07)",minWidth:0}}>
                 <div style={{fontSize:24,marginBottom:4}}>{m.emoji}</div>

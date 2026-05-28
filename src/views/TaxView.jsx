@@ -14,14 +14,14 @@ export default function TaxView({expenses,income,trades,shifts,appName}){
   const totalExp=Object.values(catMap).reduce((s,v)=>s+v,0);
   function exportCSV(){const hdr=["Date","Name","Category","Amount"];const rowData=expenses.filter(e=>e.date?.startsWith(String(yr))).map(e=>[e.date,e.name.replace(/,/g," "),e.category,parseFloat(e.amount).toFixed(2)]);const csv=[hdr,...rowData].map(r=>r.join(",")).join("\r\n");const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=(appName||"trackfi")+"-ytd-"+yr+".csv";a.click();URL.revokeObjectURL(u);}
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
         <div className="fv-page-title" style={{fontSize:18}}>Tax summary {yr}</div>
         <button onClick={exportCSV} style={{display:"flex",alignItems:"center",gap:5,background:C.green,border:"none",borderRadius:10,padding:"8px 12px",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}><Download size={13}/>CSV</button>
       </div>
       <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>Year-to-date overview for tax preparation</div>
       <div style={{background:C.navy,borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div className="fv-grid-2">
           {[["Annual Income",fmt(annualIncome),C.greenMid],["YTD Expenses",fmt(totalExp),C.redMid],["Trading P&L",(tradePnl>=0?"+":"")+fmt(tradePnl),tradePnl>=0?C.greenMid:C.redMid],["Shift Earnings",fmt(shiftEarnings),C.accentMid]].map(([l,v,c])=><div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:3}}>{l.toUpperCase()}</div><div style={{fontFamily:MF,fontSize:16,fontWeight:800,color:c}}>{v}</div></div>)}
         </div>
       </div>
@@ -38,7 +38,7 @@ export default function TaxView({expenses,income,trades,shifts,appName}){
             <div style={{fontSize:12,fontWeight:600,color:C.textLight}}>Estimated Tax Liability</div>
             <div style={{background:C.amberBg,border:`1px solid ${C.amberMid}`,borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700,color:C.amber}}>~{Math.round(bracket*100)}% bracket</div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+          <div className="fv-grid-3" style={{marginBottom:12}}>
             <div style={{background:C.redBg,borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:10,color:C.red,fontWeight:600,marginBottom:2}}>ANNUAL EST.</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.red}}>{fmt(estTax)}</div></div>
             <div style={{background:C.amberBg,borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:10,color:C.amber,fontWeight:600,marginBottom:2}}>QUARTERLY</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.amber}}>{fmt(estTax/4)}</div></div>
             <div style={{background:C.greenBg,borderRadius:10,padding:"10px",textAlign:"center"}}><div style={{fontSize:10,color:C.green,fontWeight:600,marginBottom:2}}>EFFECTIVE</div><div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.green}}>{Math.round(bracket*100)}%</div></div>

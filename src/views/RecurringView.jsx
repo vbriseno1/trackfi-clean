@@ -84,7 +84,7 @@ export default function RecurringView({expenses,setExpenses,categories,showToast
   const totalMonthly=active.reduce((s,r)=>{const amt=parseFloat(r.amount||0);if(r.frequency==="Weekly")return s+amt*(52/12);if(r.frequency==="Bi-weekly")return s+amt*(26/12);if(r.frequency==="Monthly")return s+amt;if(r.frequency==="Quarterly")return s+amt/3;if(r.frequency==="Annual")return s+amt/12;return s+amt;},0);
   const dueSoon=recurrings.filter(r=>r.active!==false&&r.nextDate&&Math.ceil((new Date(r.nextDate)-new Date(todayStr()))/86400000)<=7);
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div><div className="fv-page-title" style={{fontSize:18}}>Recurring expenses</div><div className="fv-page-sub">{active.length} active · auto-logged when due</div></div>
         <button onClick={()=>setShowAdd(true)} style={{background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>Add</button>

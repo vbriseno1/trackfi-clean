@@ -40,7 +40,7 @@ function SelectCard({ selected, onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className="ba"
+      className="ba fv-onb-select-card"
       style={{
         display: "flex",
         alignItems: "center",
@@ -48,6 +48,7 @@ function SelectCard({ selected, onClick, children }) {
         padding: "14px 16px",
         borderRadius: 16,
         width: "100%",
+        minHeight: 56,
         border: `2px solid ${selected ? C.accent : C.border}`,
         background: selected ? C.accentBg : "#fff",
         cursor: "pointer",
@@ -178,14 +179,15 @@ export default function OnboardingWizard({ onComplete, onTryDemo }) {
                 <button
                   key={p.id}
                   type="button"
-                  className="ba"
+                  className="ba fv-onb-chip"
                   onClick={() => setD((x) => ({ ...x, profCategory: p.id, profSub: p.subs[0].id }))}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 7,
-                    padding: "8px 14px",
+                    padding: "10px 14px",
                     borderRadius: 99,
+                    minHeight: 44,
                     border: `1.5px solid ${d.profCategory === p.id ? C.accent : C.border}`,
                     background: d.profCategory === p.id ? C.accentBg : "#fff",
                     cursor: "pointer",
@@ -378,31 +380,32 @@ export default function OnboardingWizard({ onComplete, onTryDemo }) {
           </p>
           <div style={{ fontSize: 12, color: C.accent, fontWeight: 600, marginBottom: 4 }}>Cash accounts</div>
           {ACCOUNT_ROWS.map((a) => (
-            <div key={a.k} className="fv-card" style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", boxShadow: "none" }}>
+            <div key={a.k} className="fv-card fv-onb-balance-row" style={{ boxShadow: "none" }}>
               <div className="fv-icon-tile" style={{ flexShrink: 0 }}>
                 <a.Icon size={18} color={C.accent} strokeWidth={2} />
               </div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: "1 1 120px", minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{a.l}</div>
                 {a.req && <div style={{ fontSize: 10, color: C.accent, fontWeight: 600 }}>Powers safe-to-spend</div>}
               </div>
               <input
                 type="number"
+                inputMode="decimal"
                 placeholder={a.ph}
                 value={d.accounts?.[a.k] || ""}
                 onChange={(e) => setD((p) => ({ ...p, accounts: { ...(p.accounts || {}), [a.k]: e.target.value } }))}
                 style={{
-                  width: 110,
                   background: "#fff",
                   border: `1.5px solid ${parseFloat(d.accounts?.[a.k] || 0) > 0 ? C.accent : C.border}`,
                   borderRadius: 10,
-                  padding: "8px 10px",
-                  fontSize: 15,
+                  padding: "10px 12px",
+                  fontSize: 16,
                   fontFamily: MF,
                   fontWeight: 700,
                   color: C.text,
                   outline: "none",
                   textAlign: "right",
+                  boxSizing: "border-box",
                 }}
               />
             </div>
@@ -431,26 +434,14 @@ export default function OnboardingWizard({ onComplete, onTryDemo }) {
 
   return (
     <div
-      className="fv-auth-shell"
+      className="fv-auth-shell fv-onb-shell"
       style={{
         minHeight: "100dvh",
         padding:
           "max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left))",
       }}
     >
-      <div
-        style={{
-          background: C.surface,
-          borderRadius: 24,
-          width: "100%",
-          maxWidth: 500,
-          boxShadow: "0 20px 60px rgba(0,0,0,.25)",
-          overflow: "hidden",
-          maxHeight: "min(90dvh, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px))",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
+      <div className="fv-onb-card" style={{ background: C.surface }}>
         {step > 0 && (
           <div style={{ height: 4, background: C.borderLight, flexShrink: 0 }}>
             <div
@@ -464,7 +455,7 @@ export default function OnboardingWizard({ onComplete, onTryDemo }) {
             />
           </div>
         )}
-        <div style={{ padding: "22px clamp(14px, 4vw, 24px) 28px", overflowY: "auto", WebkitOverflowScrolling: "touch", flex: 1, minHeight: 0 }}>
+        <div className="fv-onb-scroll">
           {step > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <button type="button" className="ba" onClick={() => setStep((s) => s - 1)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 12px", fontSize: 12, color: C.textMid, cursor: "pointer" }}>

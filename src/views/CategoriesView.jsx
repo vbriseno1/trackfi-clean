@@ -31,7 +31,7 @@ export default function CategoriesView({categories,setCategories,expenses,setExp
   ];
   const customCats=categories.filter(c=>!DEFAULT_IDS.includes(c.id));
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div>
           <div className="fv-page-title" style={{fontSize:18}}>Categories</div>

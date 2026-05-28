@@ -29,7 +29,7 @@ export default function TrendView({balHist,accounts,expenses,onNavigate}){
   const fD=s=>{if(!s)return"";const d=new Date(s+"T00:00:00");return FULL_MOS[d.getMonth()]+" "+d.getDate();};
   const hasData=chartData.length>1;
   return(
-    <div className="fu">
+    <div className="fu fv-view-root">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
         <div>
           <div className="fv-page-title">Balance trend</div>
@@ -40,7 +40,7 @@ export default function TrendView({balHist,accounts,expenses,onNavigate}){
       <div className="fv-hero-panel" style={{marginBottom:16}}>
         <div style={{fontSize:11,fontWeight:600,color:"rgba(255,255,255,.5)",textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>{mode==="spending"?"Total Spent":"Current Balance"} - {range}</div>
         <div style={{fontFamily:MF,fontSize:36,fontWeight:800,color:"#fff",lineHeight:1,marginBottom:12}}>{fmt(cur)}</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+        <div className="fv-grid-4">
           {[["Change",(isUp?"+":"")+fmt(change),isUp?C.greenMid:C.redMid],["Change %",(isUp?"+":"")+changePct+"%",isUp?C.greenMid:C.redMid],["High",fmt(high),C.accentMid],["Low",fmt(low),C.amberMid]].map(([l,v,c])=>(
             <div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:10,padding:"9px 8px"}}>
               <div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2}}>{l}</div>

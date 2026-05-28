@@ -30,14 +30,14 @@ export default function FinancialPhysicalView({income,expenses,debts,accounts,bi
   if(sr<5&&ti>0)priorities.push({Icon:TrendingDown,c:C.amber,t:"Boost savings rate",d:"Currently "+sr.toFixed(1)+"% — target 15-20%"});
   if(efMo<3)priorities.push({Icon:PiggyBank,c:C.amber,t:"Grow emergency fund",d:efMo.toFixed(1)+" months saved — target 3-6"});
   if(mi>100)priorities.push({Icon:Zap,c:C.accent,t:"Tackle interest costs",d:"~\u2248 "+fmt(mi)+"/mo at APR\u00f712 on listed debts"});
-  return(<div className="fu">
+  return(<div className="fu fv-view-root">
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
       <div className="fv-page-title" style={{fontSize:18}}>Financial physical</div>
       <div className="fv-page-sub">Dave Ramsey framework</div>
     </div>
     <div className="fv-hero-panel" style={{marginBottom:16}}>
       <div className="fv-stat-label" style={{color:"rgba(255,255,255,.55)",marginBottom:4}}>Financial vitals</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+      <div className="fv-grid-2" style={{marginBottom:10}}>
         {[["Net Worth",fmt(nw),nw>=0?C.greenMid:C.redMid,"Your assets minus all debts"],["Emergency Fund",efMo.toFixed(1)+" months",efMo>=6?C.greenMid:efMo>=3?C.amberMid:C.redMid,"Target: 3-6 months"],["Savings Rate",sr.toFixed(1)+"%",sr>=15?C.greenMid:sr>=5?C.amberMid:C.redMid,"Target: 15-20%"],["Debt-to-Income",dti.toFixed(1)+"%",dti<=28?C.greenMid:dti<=36?C.amberMid:C.redMid,"Target: under 28%"]].map(([l,v,c,tip])=>(
           <div key={l} style={{background:"rgba(255,255,255,.08)",borderRadius:12,padding:"12px 12px"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:3,textTransform:"uppercase"}}>{l}</div>
@@ -46,7 +46,7 @@ export default function FinancialPhysicalView({income,expenses,debts,accounts,bi
           </div>
         ))}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+      <div className="fv-grid-3">
         {[["Monthly In",fmt(ti),C.greenMid],["Monthly Out",fmt(mAvg),C.redMid],["Net Cash",fmt(ti-mAvg),(ti-mAvg)>=0?C.greenMid:C.redMid]].map(([l,v,c])=>(
           <div key={l} style={{background:"rgba(255,255,255,.06)",borderRadius:10,padding:"9px 8px",textAlign:"center"}}>
             <div style={{fontSize:9,color:"rgba(255,255,255,.4)",fontWeight:600,marginBottom:2,textTransform:"uppercase"}}>{l}</div>
