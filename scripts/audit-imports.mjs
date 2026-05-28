@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const FILES = [
-  ...fs.readdirSync('src/views').map((f) => path.join('src/views', f)),
+  ...fs.readdirSync('src/views').filter((f) => f.endsWith('.jsx')).map((f) => path.join('src/views', f)),
   'src/components/CashAccountsBlock.jsx',
   'src/components/ExpenseRow.jsx',
   'src/components/GoalRing.jsx',

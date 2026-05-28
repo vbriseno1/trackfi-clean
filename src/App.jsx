@@ -57,6 +57,7 @@ import {
   liquidFieldSubCount,
   applyLiquidFieldEdit,
   normalizeAccountsForPersistence,
+  mergeAccountsState,
 } from "./lib/cashAccounts.js";
 import {
   C, PIE_COLORS, DEBT_PALETTE, isValidHexColor, debtDisplayColor,
@@ -123,7 +124,6 @@ import { TrackfiRechartsProvider, RechartsReady } from "./components/RechartsBri
 import CalendarView from "./views/CalendarView.jsx";
 import { CashAccountsBlock } from "./components/CashAccountsBlock.jsx";
 import CategoriesView from "./views/CategoriesView.jsx";
-import CategoryDrillView from "./views/CategoryDrillView.jsx";
 import DashSettingsView from "./views/DashSettingsView.jsx";
 import DebtView from "./views/DebtView.jsx";
 import { ExpenseRow } from "./components/ExpenseRow.jsx";
@@ -619,8 +619,8 @@ function AppInner(){
     const household=householdFromUseCase(d.useCase,d.name);
     let accountsNext=null;
     setAccounts(p=>{
-      accountsNext=accountsFromOnboarding(d.accounts||{},p);
-      void ss("fv6:accounts",normalizeAccountsForPersistence(accountsNext));
+      accountsNext=mergeAccountsState(p,accountsFromOnboarding(d.accounts||{},p));
+      void ss("fv6:accounts",accountsNext);
       return accountsNext;
     });
     setIncome(income);
@@ -1384,7 +1384,7 @@ function AppInner(){
     const _lpd=new Date();_lpd.setDate(_lpd.getDate()-11);
     const lastPayDate=_lpd.getFullYear()+"-"+String(_lpd.getMonth()+1).padStart(2,"0")+"-"+String(_lpd.getDate()).padStart(2,"0");
     // Legacy checking/savings empty when cashAccounts drive totals (matches real multi-account users)
-    setAccounts({checking:"",savings:"",cushion:"1800",credit_card:"0",investments:"8400",
+    setAccounts(normalizeAccountsForPersistence({checking:"",savings:"",cushion:"1800",credit_card:"0",investments:"8400",
       k401:"28500",roth_ira:"12000",brokerage:"8400",crypto:"1800",hsa:"3200",
       property:"0",vehicles:"12000",
       cashAccounts:[
@@ -1392,7 +1392,7 @@ function AppInner(){
         {id:DEMO_IDCHECK_JOINT,name:"Joint Bills",kind:"checking",balance:"1180"},
         {id:DEMO_IDSAVINGS,name:"High-Yield Savings",kind:"savings",balance:"11400"},
       ],
-    });
+    }));
     // Income: biweekly RN paycheck + freelance + lastPayDate for safe-to-spend / payday UI
     setIncome({primary:"4200",other:"300",trading:"",rental:"",dividends:"",freelance:"500",
       payFrequency:"Biweekly",lastPayDate});
@@ -1497,7 +1497,7 @@ function AppInner(){
         exportedAt:new Date().toISOString(),
         version:"3.2",
         ...(typeof window!=="undefined"&&window.__trackfiDemoInfo?.modelVersion?{demoModelVersion:window.__trackfiDemoInfo.modelVersion}:{}),
-        appName,greetName,onboarded,accounts,income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,
+        appName,greetName,onboarded,accounts:normalizeAccountsForPersistence(accounts),income,expenses,bills,debts,trades,shifts,savingsGoals,budgetGoals,
         categories,settings,calColors,dashConfig,household,recurrings,settlements,hhBudgets,nwGoal,subDismissed,
         profCategory,profSub,tradingAccount,accountRates,balHist,notifs,
         merchantCats:typeof window!=="undefined"?window._merchantCats:void 0
@@ -1527,7 +1527,7 @@ function AppInner(){
         return false;
       }
       const d=parsed.data;
-      if(d.accounts)setAccounts(p=>normalizeAccountsForPersistence({...p,...d.accounts}));
+      if(d.accounts)setAccounts(p=>mergeAccountsState(p,d.accounts));
       if(d.income)setIncome(p=>({...p,...d.income}));
       if(Array.isArray(d.expenses))setExpenses(d.expenses);
       if(Array.isArray(d.bills))setBills(d.bills);

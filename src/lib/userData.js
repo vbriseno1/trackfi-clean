@@ -16,7 +16,7 @@ import {
   DEF_CATS,
   DEF_CALCOLORS,
 } from "./defaults.js";
-import { normalizeAccountsForPersistence } from "./cashAccounts.js";
+import { mergeAccountsState } from "./cashAccounts.js";
 
 export function applyUserDataSnapshot(map, H, { bootDefaults = false, cloudPull = false } = {}) {
   const setArr = (key, setter) => {
@@ -56,13 +56,7 @@ export function applyUserDataSnapshot(map, H, { bootDefaults = false, cloudPull 
   if (cloudPull) {
     try {
       if (map.accounts != null && typeof map.accounts === "object") {
-        const a = map.accounts;
-        H.setAccounts(
-          normalizeAccountsForPersistence({
-            ...a,
-            cashAccounts: Array.isArray(a.cashAccounts) ? a.cashAccounts.map((c) => ({ ...c })) : [],
-          })
-        );
+        H.setAccounts((prev) => mergeAccountsState(prev, map.accounts));
       }
     } catch {}
     try { if (map.income != null && typeof map.income === "object") H.setIncome({ ...map.income }); } catch {}
@@ -77,14 +71,22 @@ export function applyUserDataSnapshot(map, H, { bootDefaults = false, cloudPull 
     } catch {}
     try { if (map.accountRates != null && typeof map.accountRates === "object") H.setAccountRates({ ...map.accountRates }); } catch {}
   } else if (bootDefaults) {
-    try { if (map.accounts != null && typeof map.accounts === "object") H.setAccounts((prev) => ({ ...DEF_ACCOUNTS, ...prev, ...map.accounts })); } catch {}
+    try {
+      if (map.accounts != null && typeof map.accounts === "object") {
+        H.setAccounts((prev) => mergeAccountsState({ ...DEF_ACCOUNTS, ...prev }, map.accounts));
+      }
+    } catch {}
     try { if (map.income != null && typeof map.income === "object") H.setIncome((prev) => ({ ...DEF_INCOME, ...prev, ...map.income })); } catch {}
     try { apply("settings", H.setSettings, true); } catch {}
     try { apply("calColors", H.setCalColors, true); } catch {}
     try { apply("dashConfig", H.setDashConfig, true); } catch {}
     try { apply("household", H.setHousehold, true); } catch {}
   } else {
-    try { apply("accounts", H.setAccounts, true); } catch {}
+    try {
+      if (map.accounts != null && typeof map.accounts === "object") {
+        H.setAccounts((prev) => mergeAccountsState(prev, map.accounts));
+      }
+    } catch {}
     try { apply("income", H.setIncome, true); } catch {}
     try { apply("settings", H.setSettings, true); } catch {}
     try { apply("calColors", H.setCalColors, true); } catch {}

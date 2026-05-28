@@ -79,6 +79,15 @@ export function normalizeAccountsForPersistence(accounts) {
   return out;
 }
 
+/** Merge a partial accounts patch into previous state and mirror liquid totals. */
+export function mergeAccountsState(prev, patch) {
+  const merged = { ...prev, ...patch };
+  if (patch && Array.isArray(patch.cashAccounts)) {
+    merged.cashAccounts = patch.cashAccounts.map((c) => ({ ...c }));
+  }
+  return normalizeAccountsForPersistence(merged);
+}
+
 /** Rows for asset breakdown UIs (Net Worth, exports). */
 export function liquidAssetBreakdownRows(accounts) {
   return [

@@ -9,6 +9,7 @@ import {
   liquidFieldDisplay,
   normalizeAccountsForPersistence,
   liquidAssetBreakdownRows,
+  mergeAccountsState,
 } from './cashAccounts.js'
 
 describe('cashAccounts', () => {
@@ -72,6 +73,16 @@ describe('cashAccounts', () => {
     expect(norm.checking).toBe('4280')
     expect(norm.savings).toBe('11400')
     expect(liquidFieldDisplay(norm, 'checking')).toBe('4280')
+  })
+
+  it('mergeAccountsState preserves onboarding legacy balances', () => {
+    const next = mergeAccountsState(
+      { checking: '', savings: '', cashAccounts: [] },
+      { checking: '2500', savings: '5000', cushion: '1000' }
+    )
+    expect(next.checking).toBe('2500')
+    expect(next.savings).toBe('5000')
+    expect(next.cushion).toBe('1000')
   })
 
   it('liquidAssetBreakdownRows includes checking total from cashAccounts', () => {

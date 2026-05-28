@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { applyUserDataSnapshot, buildAuthoritativeCloudMap } from "./userData.js";
 import { DEF_SETTINGS, DEF_ACCOUNTS, DEF_CATS } from "./defaults.js";
 import { buildFullDemoSyncMap, makeSnapshotHandlers } from "./demoSyncFixture.js";
+import { liquidFieldDisplay } from "./cashAccounts.js";
 
 describe("buildAuthoritativeCloudMap", () => {
   it("fills every sync slice when server returns only expenses", () => {
@@ -104,6 +105,28 @@ describe("applyUserDataSnapshot cloudPull", () => {
     expect(state.settings.defaultExpensePaidFrom).toBe("checking");
   });
 
+  it("mirrors checking/savings legacy fields when cloud accounts use cashAccounts only", () => {
+    const { H, state } = makeSnapshotHandlers();
+    applyUserDataSnapshot(
+      {
+        accounts: {
+          checking: "",
+          savings: "",
+          cushion: "500",
+          cashAccounts: [
+            { id: 1, kind: "checking", balance: "2000" },
+            { id: 2, kind: "savings", balance: "8000" },
+          ],
+        },
+      },
+      H,
+      { cloudPull: true }
+    );
+    expect(state.accounts.checking).toBe("2000");
+    expect(state.accounts.savings).toBe("8000");
+    expect(liquidFieldDisplay(state.accounts, "checking")).toBe("2000");
+  });
+
   it("sets onboarded from cloud and localStorage flag", () => {
     const { H, state } = makeSnapshotHandlers();
     applyUserDataSnapshot({ onboarded: true }, H, { cloudPull: true });
@@ -113,6 +136,20 @@ describe("applyUserDataSnapshot cloudPull", () => {
 });
 
 describe("applyUserDataSnapshot bootDefaults", () => {
+  it("mirrors liquid totals when boot merges cashAccounts patch", () => {
+    const { H, state } = makeSnapshotHandlers();
+    applyUserDataSnapshot(
+      {
+        accounts: {
+          cashAccounts: [{ id: 9, kind: "checking", name: "Main", balance: "1500" }],
+        },
+      },
+      H,
+      { bootDefaults: true }
+    );
+    expect(state.accounts.checking).toBe("1500");
+  });
+
   it("merges demo income into defaults without dropping payFrequency", () => {
     const { H, state } = makeSnapshotHandlers();
     applyUserDataSnapshot({ income: { primary: "4200", lastPayDate: "2026-05-01" } }, H, { bootDefaults: true });

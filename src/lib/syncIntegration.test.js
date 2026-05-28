@@ -44,6 +44,17 @@ describe("sync roundtrip (demo data → ss → sg)", () => {
     }
   });
 
+  it("normalized accounts in backup export include legacy checking/savings totals", async () => {
+    const { normalizeAccountsForPersistence } = await import("./cashAccounts.js");
+    const demo = buildFullDemoSyncMap();
+    const backup = syncMapToBackupExport({
+      ...demo,
+      accounts: normalizeAccountsForPersistence(demo.accounts),
+    });
+    expect(parseFloat(backup.accounts.checking)).toBeGreaterThan(4000);
+    expect(parseFloat(backup.accounts.savings)).toBeGreaterThan(10000);
+  });
+
   it("demo backup export validates and maps back to sync keys", () => {
     const demo = buildFullDemoSyncMap();
     const backup = syncMapToBackupExport(demo);
