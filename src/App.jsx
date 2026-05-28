@@ -133,6 +133,7 @@ import SearchView from "./views/SearchView.jsx";
 import SettingsView from "./views/SettingsView.jsx";
 import ShiftView from "./views/ShiftView.jsx";
 import SpendingView from "./views/SpendingView.jsx";
+import BillsView from "./views/BillsView.jsx";
 import StatementView from "./views/StatementView.jsx";
 import SubsView from "./views/SubsView.jsx";
 import TaxView from "./views/TaxView.jsx";
