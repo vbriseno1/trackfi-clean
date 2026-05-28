@@ -103,6 +103,36 @@ export async function supaFetch(path, opts = {}) {
   }
 }
 
+/** Prefer `updated_at` for versioned sync; fall back if the column isn't exposed (avoids hard sync failure). */
+export async function supaFetchUserDataRows(uid) {
+  const q = encodeURIComponent(uid);
+  const primary = await supaFetch(
+    `/rest/v1/user_data?user_id=eq.${q}&select=key,value,updated_at`
+  );
+  if (!primary.error && Array.isArray(primary.data)) return primary;
+  return supaFetch(`/rest/v1/user_data?user_id=eq.${q}&select=key,value`);
+}
+
+/** Bounded refresh-token POST so a stuck Supabase /auth endpoint cannot hang the app indefinitely. */
+export async function trackfiAuthRefreshFetch(refreshToken) {
+  if (!SUPA_URL || !SUPA_KEY || !refreshToken) return null;
+  const canAbort = typeof AbortController !== "undefined";
+  const ac = canAbort ? new AbortController() : null;
+  const tid = ac ? setTimeout(() => ac.abort(), 12000) : null;
+  try {
+    return await fetch(SUPA_URL + "/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPA_KEY },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+      ...(ac ? { signal: ac.signal } : {}),
+    });
+  } catch {
+    return null;
+  } finally {
+    if (tid) clearTimeout(tid);
+  }
+}
+
 export async function signUp(email, password) {
   if (!SUPA_URL || !SUPA_KEY) return { error: { message: "Supabase is not configured (set VITE_SUPABASE_* in .env)" } };
   try {
