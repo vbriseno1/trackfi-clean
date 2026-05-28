@@ -32,7 +32,7 @@ export default function TrendView({balHist,accounts,expenses,onNavigate}){
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
         <div>
-          <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Balance Trend</div>
+          <div className="fv-page-title">Balance trend</div>
           <div style={{fontSize:13,color:C.textLight,marginTop:1}}>Track how your money moves over time</div>
         </div>
         <button className="ba" onClick={()=>onNavigate("accounts")} style={{display:"flex",alignItems:"center",gap:5,background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><Plus size={13}/>Update</button>

@@ -76,6 +76,9 @@ button{-webkit-tap-highlight-color:transparent}
 }
 .fv-chart-wrap{width:100%;max-width:100%;min-width:0;box-sizing:border-box;overflow-x:auto;-webkit-overflow-scrolling:touch}
 .fv-card{background:#fff;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 8px rgba(15,23,42,.04)}
+.fv-section-card{background:#fff;border:1px solid #E2E8F0;border-radius:16px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 1px 8px rgba(15,23,42,.04)}
+.fv-icon-tile{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fv-icon-tile-sm{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .fv-btn-primary{display:flex;align-items:center;gap:12px;width:100%;padding:14px 18px;border-radius:12px;border:none;background:#4F46E5;color:#fff;font-family:'Manrope',sans-serif;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 2px 8px rgba(79,70,229,.25);text-align:left}
 .fv-btn-primary:disabled{background:#E2E8F0;color:#94A3B8;cursor:default;box-shadow:none}
 .fv-btn-success{background:#047857;box-shadow:0 2px 8px rgba(4,120,87,.22)}

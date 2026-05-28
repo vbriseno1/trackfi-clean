@@ -23,7 +23,7 @@ export default function CategoryDrillView({category,expenses,income,onBack}){
     <div className="fu">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
         <button onClick={onBack} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"7px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontWeight:600,fontSize:13,color:C.textMid}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>Insights</button>
-        <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>{category}</div>
+        <div className="fv-page-title" style={{fontSize:18}}>{category}</div>
       </div>
       {/* Header stats */}
       <div className="fv-hero-panel" style={{marginBottom:14}}>

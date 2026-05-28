@@ -34,7 +34,7 @@ export default function CategoriesView({categories,setCategories,expenses,setExp
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div>
-          <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Categories</div>
+          <div className="fv-page-title" style={{fontSize:18}}>Categories</div>
           <div style={{fontSize:13,color:C.textLight}}>{categories.length} categories · {customCats.length} custom</div>
         </div>
         <button onClick={()=>setShowAdd(true)} style={{background:C.accent,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><Plus size={13}/>Add</button>

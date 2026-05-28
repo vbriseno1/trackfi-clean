@@ -21,7 +21,7 @@ export default function SearchView({expenses,bills,debts,trades,categories,setEd
   },[dq,filter,expenses,bills,debts,trades]);
   return(
     <div className="fu">
-      <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:4,letterSpacing:-.3}}>Search</div>
+      <div className="fv-page-title" style={{marginBottom:4}}>Search</div>
       <div style={{fontSize:13,color:C.textLight,marginBottom:14}}>Search across all your financial data</div>
       <div style={{position:"relative",marginBottom:12}}>
         <Search size={16} color={C.textLight} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>

@@ -66,7 +66,7 @@ export default function HouseholdView({household,setHousehold,expenses,bills=[],
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div>
-          <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text}}>{household.name||"Household"}</div>
+          <div className="fv-page-title">{household.name||"Household"}</div>
           <div style={{fontSize:13,color:C.textLight,marginTop:2}}>{household.members.length} member{household.members.length!==1?"s":""} · {household.enabled?"Active":"Disabled"}</div>
         </div>
         <button onClick={()=>setHousehold(h=>({...h,enabled:!h.enabled}))} style={{background:household.enabled?C.accentBg:C.bg,border:`1.5px solid ${household.enabled?C.accent:C.border}`,borderRadius:99,padding:"7px 16px",cursor:"pointer",fontWeight:700,fontSize:13,color:household.enabled?C.accent:C.textMid}}>

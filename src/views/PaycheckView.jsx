@@ -63,7 +63,7 @@ export default function PaycheckView({bills,income,setIncome,expenses,accounts,b
   return(
     <div className="fu">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,flexWrap:"wrap",gap:8}}>
-        <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3}}>Paycheck Planner</div>
+        <div className="fv-page-title">Paycheck planner</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
           {parseFloat(income.primary||0)>0&&income.lastPayDate&&typeof onRecordPaycheck==="function"&&(
             <button type="button" className="ba" onClick={onRecordPaycheck} style={{display:"flex",alignItems:"center",gap:5,background:C.green,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:600,fontSize:13,cursor:"pointer"}}><DollarSign size={14}/>Record paycheck</button>

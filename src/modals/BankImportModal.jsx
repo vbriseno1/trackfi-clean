@@ -58,7 +58,7 @@ export default function BankImportModal({categories,expenses,setExpenses,househo
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{background:C.greenBg,borderRadius:12,padding:"9px 10px",display:"flex"}}><FileText size={20} color={C.green}/></div>
             <div>
-              <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,letterSpacing:-.3}}>Bank Import</div>
+              <div className="fv-page-title" style={{fontSize:18}}>Bank import</div>
               <div style={{fontSize:12,color:C.textLight,marginTop:1}}>Paste CSV from your bank's website</div>
             </div>
           </div>
@@ -159,7 +159,7 @@ export default function BankImportModal({categories,expenses,setExpenses,househo
           {step==="done"&&(
             <div style={{textAlign:"center",padding:"40px 20px"}}>
               <div style={{fontSize:48,marginBottom:12}}>✅</div>
-              <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,marginBottom:8}}>Import Complete!</div>
+              <div className="fv-page-title" style={{marginBottom:8}}>Import complete</div>
               <div style={{fontSize:14,color:C.textLight,marginBottom:24}}>Your transactions are now in Trackfi.</div>
               <button onClick={onClose} style={{background:C.accent,border:"none",borderRadius:14,padding:"14px 32px",color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Done</button>
             </div>

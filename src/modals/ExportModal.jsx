@@ -428,7 +428,7 @@ export default function ExportModal({expenses,bills,debts,accounts,income,saving
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{background:C.accentBg,borderRadius:12,padding:"9px 10px",display:"flex"}}><Download size={20} color={C.accent}/></div>
             <div>
-              <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,letterSpacing:-.3}}>Export Center</div>
+              <div className="fv-page-title" style={{fontSize:18}}>Export center</div>
               <div style={{fontSize:12,color:C.textLight,marginTop:1}}>Professional branded documents</div>
             </div>
           </div>

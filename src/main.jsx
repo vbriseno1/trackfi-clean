@@ -103,7 +103,7 @@ function SentryShellFallback () {
             padding: '12px 16px',
             borderRadius: 10,
             border: 'none',
-            background: 'linear-gradient(135deg,#6366f1,#0d9488)',
+            background: '#4F46E5',
             color: '#fff',
             fontWeight: 700,
             fontSize: 15,

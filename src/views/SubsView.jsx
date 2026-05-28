@@ -14,7 +14,7 @@ export default function SubsView({detectedSubs,expenses,showToast,dismissed,setD
   const maxCat=cats[0]?.[1]||1;
   return(
     <div className="fu">
-      <div style={{fontFamily:MF,fontSize:20,fontWeight:800,color:C.text,letterSpacing:-.3,marginBottom:4}}>Subscriptions</div>
+      <div className="fv-page-title" style={{marginBottom:4}}>Subscriptions</div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div style={{fontSize:13,color:C.textLight}}>Auto-detected from your expenses</div>
         {dismissed.length>0&&<button onClick={()=>setDismissed([])} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:C.accent,fontWeight:600,padding:0}}>Restore {dismissed.length} hidden</button>}

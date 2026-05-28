@@ -6,7 +6,8 @@ import { LayoutDashboard, Wallet, CalendarClock, CreditCard, Target, PiggyBank,
   Check, Sparkles, Bell, Settings, Activity, ToggleLeft, ToggleRight,
   ChevronRight, BarChart2, Menu, Calendar, Eye, EyeOff, HelpCircle, Search,
   Zap, FileText, Download, Clock, Moon, Sun, Lock,
-  Filter, Database, RefreshCw, ChevronDown, Package, Heart } from "lucide-react";
+  Filter, Database, RefreshCw, ChevronDown, Package, Heart, AlertTriangle,
+  Lightbulb, Building2, Shield, Landmark, LineChart, Bitcoin, Home, Car, Sprout } from "lucide-react";
 import {
   SUPA_URL,
   SUPA_KEY,
@@ -151,6 +152,32 @@ const QA_ICON = {
   bills_nav: CalendarClock,
   calendar_nav: Calendar,
   recurring_nav: RefreshCw,
+};
+
+const MORE_ICON = {
+  health: Heart,
+  paycheck: Wallet,
+  networthtrend: TrendingUp,
+  insights: BarChart2,
+  debt: CreditCard,
+  savings: Target,
+  calendar: Calendar,
+  search: Search,
+  household: Home,
+};
+
+const ACCT_ICON = {
+  checking: Building2,
+  savings: PiggyBank,
+  cushion: Shield,
+  k401: Landmark,
+  roth_ira: Sprout,
+  brokerage: LineChart,
+  hsa: Activity,
+  crypto: Bitcoin,
+  property: Home,
+  investments: TrendingUp,
+  vehicles: Car,
 };
 
 function AppInner(){
@@ -1838,7 +1865,7 @@ function AppInner(){
               ];
               return(<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:14}}>
                 {pulseItems.map(p=>(
-                  <div key={p.label} onClick={p.tap} style={{background:C.surface,borderRadius:12,padding:"10px 6px",textAlign:"center",cursor:"pointer",boxShadow:"0 1px 3px rgba(10,22,40,.05)"}}>
+                  <div key={p.label} onClick={p.tap} className="fv-card ba" style={{padding:"10px 6px",textAlign:"center",cursor:"pointer",marginBottom:0}}>
                     <div className={hidden?"blurred":"unblurred"} style={{fontFamily:MF,fontWeight:800,fontSize:13,color:p.color,lineHeight:1.1,marginBottom:3}}>{p.val}</div>
                     <div style={{fontSize:9,color:C.textLight,fontWeight:600,textTransform:"uppercase",letterSpacing:.3,marginBottom:2}}>{p.label}</div>
                     <div style={{fontSize:9,color:C.textFaint,lineHeight:1.3}}>{p.sub}</div>
@@ -1947,14 +1974,14 @@ function AppInner(){
               const _pct=totalIncome>0?Math.min(100,(_mtd/totalIncome)*100):0;
               const _projPct=totalIncome>0?Math.min(100,(_proj/totalIncome)*100):0;
               return(
-                <div style={{background:C.surface,borderRadius:16,padding:"14px 16px",marginBottom:14,boxShadow:"0 1px 3px rgba(10,22,40,.06)"}}>
+                <div className="fv-card" style={{padding:"14px 16px",marginBottom:14}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                     <div>
-                      <div style={{fontSize:10,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Month Forecast</div>
-                      <div style={{fontFamily:MF,fontWeight:800,fontSize:17,color:_onTrack?C.text:C.red}}>{fmt(_proj)} projected</div>
+                      <div className="fv-stat-label" style={{marginBottom:2}}>Month forecast</div>
+                      <div style={{fontFamily:MF,fontWeight:800,fontSize:17,color:_onTrack?C.text:C.negative}}>{fmt(_proj)} projected</div>
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:_onTrack?C.green:C.red}}>{_onTrack?"On track ✓":"Over budget"}</div>
+                      <div style={{fontSize:11,fontWeight:700,color:_onTrack?C.positive:C.negative}}>{_onTrack?"On track":"Over budget"}</div>
                       <div style={{fontFamily:MF,fontWeight:700,fontSize:12,color:_onTrack?C.green:C.red,marginTop:1}}>{_onTrack&&totalIncome>0?fmt(totalIncome-_proj)+" left":!_onTrack?"+"+fmt(_proj-totalIncome):" "}</div>
                     </div>
                   </div>
@@ -2047,7 +2074,7 @@ function AppInner(){
 
         {tab==="chat"&&<div style={{height:"calc(100dvh - 150px)",maxHeight:"calc(100dvh - 150px)",display:"flex",flexDirection:"column",minHeight:0,paddingBottom:4}}>
           <div style={{marginBottom:10}}>
-            <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>AI Logger</div>
+            <div className="fv-page-title" style={{fontSize:18}}>AI logger</div>
             <div style={{fontSize:13,color:C.textLight,marginTop:1,marginBottom:10}}>Paid-from aware — "lunch 12", "coffee 6 on card", "split spending", "rent 1200 due 28th"</div>
             {/* Smart prompt chips */}
             <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
@@ -2092,32 +2119,33 @@ function AppInner(){
                 <button onClick={()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:8,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>Sign In</button>
               </div>
             )}
-            <div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text,marginBottom:2}}>More</div>
-            <div style={{fontSize:13,color:C.textLight,marginBottom:16}}>All your financial tools</div>
+            <div className="fv-page-title" style={{fontSize:18,marginBottom:2}}>More</div>
+            <div className="fv-page-sub" style={{marginBottom:16}}>All your financial tools</div>
             {/* Featured shortcuts grid */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:20}}>
               {[
-                {id:"health",ic:"❤️",l:"Health",c:C.red,bg:C.redBg},
-                {id:"paycheck",ic:"💰",l:"Paycheck",c:C.green,bg:C.greenBg},
-                {id:"networthtrend",ic:"📈",l:"Net Worth",c:C.accent,bg:C.accentBg},
-                {id:"insights",ic:"📊",l:"Insights",c:C.purple,bg:C.purpleBg},
-                {id:"debt",ic:"💳",l:"Debt",c:C.red,bg:C.redBg},
-                {id:"savings",ic:"🎯",l:"Goals",c:C.teal,bg:"rgba(13,148,136,.1)"},
-                {id:"calendar",ic:"📅",l:"Calendar",c:C.amber,bg:C.amberBg},
-                {id:"search",ic:"🔍",l:"Search",c:C.textMid,bg:C.surfaceAlt},{id:"household",ic:"🏠",l:"Household",c:C.accent,bg:C.accentBg},{id:"savings",ic:"💰",l:"HYSA Goal",c:C.green,bg:C.greenBg},
-              ].map(({id,ic,l,c,bg})=>(
-                <button key={id} onClick={()=>navTo(id)} className="ba" style={{background:bg,borderRadius:14,padding:"12px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,border:"none",cursor:"pointer"}}>
-                  <span style={{fontSize:20}}>{ic}</span>
+                {id:"health",l:"Health",c:C.red,bg:C.redBg},
+                {id:"paycheck",l:"Paycheck",c:C.positive,bg:C.greenBg},
+                {id:"networthtrend",l:"Net worth",c:C.accent,bg:C.accentBg},
+                {id:"insights",l:"Insights",c:C.purple,bg:C.purpleBg},
+                {id:"debt",l:"Debt",c:C.negative,bg:C.redBg},
+                {id:"savings",l:"Goals",c:C.teal,bg:"rgba(13,148,136,.1)"},
+                {id:"calendar",l:"Calendar",c:C.amber,bg:C.amberBg},
+                {id:"search",l:"Search",c:C.textMid,bg:C.surfaceAlt},
+                {id:"household",l:"Household",c:C.accent,bg:C.accentBg},
+              ].map(({id,l,c,bg})=>{const Ico=MORE_ICON[id]||ChevronRight;return(
+                <button key={id} type="button" onClick={()=>navTo(id)} className="ba" style={{background:bg,borderRadius:14,padding:"12px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:5,border:"none",cursor:"pointer",boxShadow:"0 1px 2px rgba(15,23,42,.05)"}}>
+                  <Ico size={20} color={c} strokeWidth={2}/>
                   <span style={{fontSize:10,fontWeight:700,color:c,lineHeight:1.2,textAlign:"center"}}>{l}</span>
                 </button>
-              ))}
+              );})}
             </div>
             {GROUPS.map(sec=>(
               <div key={sec.key} style={{marginBottom:22}}>
                 <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:10}}><div style={{fontFamily:MF,fontWeight:700,fontSize:13,color:C.text}}>{sec.label}</div><div style={{fontSize:11,color:C.textLight}}>{sec.desc}</div></div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {sec.items.map(t=>{const badge=t.id==="notifs"&&unread>0?unread:null;return(
-                    <button key={t.id} className="ba" onClick={()=>navTo(t.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",background:C.surface,borderRadius:12,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",cursor:"pointer",textAlign:"left",width:"100%"}}>
+                    <button key={t.id} type="button" className="ba fv-card" onClick={()=>navTo(t.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 14px",borderRadius:12,cursor:"pointer",textAlign:"left",width:"100%",marginBottom:0}}>
                       <div style={{width:36,height:36,background:badge?C.redBg:C.accentBg,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}><t.icon size={17} color={badge?C.red:C.accent}/>{badge&&<div style={{position:"absolute",top:-4,right:-4,width:16,height:16,background:C.red,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#fff",border:"2px solid #fff"}}>{badge>9?"9+":badge}</div>}</div>
                       <span style={{fontSize:14,fontWeight:600,color:C.text,flex:1}}>{t.label}</span>
                       <ChevronRight size={15} color={C.textLight}/>
@@ -2136,15 +2164,15 @@ function AppInner(){
 
         {tab==="accounts"&&(
           <div className="fu">
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Accounts & Income</div><div style={{fontSize:12,color:C.green,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><div style={{width:7,height:7,borderRadius:"50%",background:C.green}}/>Auto-saved</div></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}><div><div className="fv-page-title" style={{fontSize:18}}>Accounts & income</div></div><div style={{fontSize:12,color:C.positive,fontWeight:600,display:"flex",alignItems:"center",gap:4}}><div style={{width:7,height:7,borderRadius:"50%",background:C.positive}}/>Auto-saved</div></div>
             <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-              {[{k:"checking",l:"Checking",ic:"🏦",c:C.navy},{k:"savings",l:"Savings",ic:"💰",c:C.green},{k:"cushion",l:"Cushion / Emergency",ic:"🛡️",c:C.accent}].map(a=>(
-                <div key={a.k} style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18,display:"flex",flexWrap:"wrap",alignItems:"center",gap:12,rowGap:10,minWidth:0,boxSizing:"border-box",maxWidth:"100%"}}>
-                  <div style={{width:44,height:44,borderRadius:12,background:a.c+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{a.ic}</div>
+              {[{k:"checking",l:"Checking",c:C.navy},{k:"savings",l:"Savings",c:C.positive},{k:"cushion",l:"Cushion / Emergency",c:C.accent}].map(a=>{const Ico=ACCT_ICON[a.k]||Wallet;return(
+                <div key={a.k} className="fv-section-card" style={{padding:18,display:"flex",flexWrap:"wrap",alignItems:"center",gap:12,rowGap:10,minWidth:0,boxSizing:"border-box",maxWidth:"100%"}}>
+                  <div className="fv-icon-tile" style={{background:a.c+"15"}}><Ico size={22} color={a.c} strokeWidth={2}/></div>
                   <div style={{flex:"1 1 120px",minWidth:0,maxWidth:"100%"}}><div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div></div>
                   <input type="number" min="0" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>{const v=e.target.value;if(v===""||parseFloat(v)>=0)setAccounts(p=>({...p,[a.k]:v}));}} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{flex:"1 1 120px",width:130,maxWidth:"100%",minWidth:0,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:18,fontFamily:MF,fontWeight:800,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none",boxSizing:"border-box"}}/>
                 </div>
-              ))}
+              );})}
             </div>
             <CashAccountsBlock accounts={accounts} setAccounts={setAccounts} showToast={showToast} variant="accounts" onOpenSettings={()=>navTo("settings")}/>
             {/* HYSA opportunity tip */}
@@ -2155,7 +2183,7 @@ function AppInner(){
               return(
                 <div onClick={()=>{}} style={{background:C.greenBg,border:`1px solid ${C.greenMid}`,borderRadius:14,padding:"12px 16px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
-                    <div style={{fontSize:13,fontWeight:700,color:C.green,marginBottom:2}}>⚡ HYSA Opportunity</div>
+                    <div style={{fontSize:13,fontWeight:700,color:C.green,marginBottom:2}}>HYSA opportunity</div>
                     <div style={{fontSize:12,color:C.green,opacity:.8}}>Your {fmt(liq)} could earn {fmt(extraPerYr)}/yr more</div>
                   </div>
                   <div style={{fontFamily:MF,fontWeight:800,fontSize:14,color:C.green}}>{fmt(extraPerYr/12)}/mo</div>
@@ -2166,39 +2194,39 @@ function AppInner(){
             <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10,marginTop:4}}>Investments & Retirement</div>
             <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
               {[
-                {k:"k401",l:"401(k)",ic:"🏢",c:C.accent,desc:"Pre-tax employer retirement"},
-                {k:"roth_ira",l:"Roth IRA",ic:"🌱",c:C.green,desc:"Post-tax retirement"},
-                {k:"brokerage",l:"Brokerage",ic:"📊",c:C.teal,desc:"Taxable investment account"},
-                {k:"hsa",l:"HSA",ic:"🏥",c:C.purple,desc:"Health savings account"},
-                {k:"crypto",l:"Crypto",ic:"₿",c:C.amber,desc:"Cryptocurrency portfolio"},
-              ].map(a=>(
-                <div key={a.k} style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",display:"flex",alignItems:"center",gap:14}}>
-                  <div style={{width:44,height:44,borderRadius:12,background:a.c+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{a.ic}</div>
+                {k:"k401",l:"401(k)",c:C.accent,desc:"Pre-tax employer retirement"},
+                {k:"roth_ira",l:"Roth IRA",c:C.positive,desc:"Post-tax retirement"},
+                {k:"brokerage",l:"Brokerage",c:C.teal,desc:"Taxable investment account"},
+                {k:"hsa",l:"HSA",c:C.purple,desc:"Health savings account"},
+                {k:"crypto",l:"Crypto",c:C.amber,desc:"Cryptocurrency portfolio"},
+              ].map(a=>{const Ico=ACCT_ICON[a.k]||LineChart;return(
+                <div key={a.k} className="fv-card" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:14,marginBottom:0}}>
+                  <div className="fv-icon-tile" style={{background:a.c+"15"}}><Ico size={20} color={a.c} strokeWidth={2}/></div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div>
                     <div style={{fontSize:11,color:C.textLight}}>{a.desc}</div>
                   </div>
-                  <input type="number" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>setAccounts(p=>({...p,[a.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{width:120,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:16,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none"}}/>
+                  <input type="number" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>setAccounts(p=>({...p,[a.k]:e.target.value}))} onBlur={e=>{if(e.target.value)showToast(a.l+" saved");}} style={{width:120,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:16,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none"}}/>
                 </div>
-              ))}
+              );})}
             </div>
             {/* Real Estate & Assets */}
             <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:10}}>Real Estate & Assets</div>
             <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
               {[
-                {k:"property",l:"Property / Real Estate",ic:"🏠",c:C.amber,desc:"Home value or equity"},
-                {k:"investments",l:"Other Investments",ic:"📈",c:C.green,desc:"Index funds, ETFs, etc."},
-                {k:"vehicles",l:"Vehicles",ic:"🚗",c:C.purple,desc:"Cars, motorcycles, etc."},
-              ].map(a=>(
-                <div key={a.k} style={{background:C.surface,borderRadius:16,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:"14px 16px",display:"flex",alignItems:"center",gap:14}}>
-                  <div style={{width:44,height:44,borderRadius:12,background:a.c+"15",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{a.ic}</div>
+                {k:"property",l:"Property / Real Estate",c:C.amber,desc:"Home value or equity"},
+                {k:"investments",l:"Other Investments",c:C.positive,desc:"Index funds, ETFs, etc."},
+                {k:"vehicles",l:"Vehicles",c:C.purple,desc:"Cars, motorcycles, etc."},
+              ].map(a=>{const Ico=ACCT_ICON[a.k]||Home;return(
+                <div key={a.k} className="fv-card" style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:14,marginBottom:0}}>
+                  <div className="fv-icon-tile" style={{background:a.c+"15"}}><Ico size={20} color={a.c} strokeWidth={2}/></div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:14,fontWeight:600,color:C.text}}>{a.l}</div>
                     <div style={{fontSize:11,color:C.textLight}}>{a.desc}</div>
                   </div>
-                  <input type="number" min="0" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>{const v=e.target.value;if(v===""||parseFloat(v)>=0)setAccounts(p=>({...p,[a.k]:v}));}} onBlur={e=>{if(e.target.value)showToast("✓ "+a.l+" saved");}} style={{width:120,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:16,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none"}}/>
+                  <input type="number" min="0" placeholder="0.00" value={accounts[a.k]||""} onChange={e=>{const v=e.target.value;if(v===""||parseFloat(v)>=0)setAccounts(p=>({...p,[a.k]:v}));}} onBlur={e=>{if(e.target.value)showToast(a.l+" saved");}} style={{width:120,background:hidden?C.bg:C.surfaceAlt,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:16,fontFamily:MF,fontWeight:700,color:a.c,outline:"none",textAlign:"right",filter:hidden?"blur(8px)":"none"}}/>
                 </div>
-              ))}
+              );})}
             </div>
             <div style={{background:C.surface,borderRadius:18,boxShadow:"0 1px 3px rgba(10,22,40,.06),0 2px 8px rgba(10,22,40,.04)",padding:18}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -2252,7 +2280,7 @@ function AppInner(){
         {tab==="notifs"&&(
           <div className="fu">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <div><div style={{fontFamily:MF,fontSize:18,fontWeight:800,color:C.text}}>Notifications</div><div style={{fontSize:13,color:C.textLight}}>{notifs.filter(n=>!n.read).length} unread</div></div>
+              <div><div className="fv-page-title" style={{fontSize:18}}>Notifications</div><div className="fv-page-sub">{notifs.filter(n=>!n.read).length} unread</div></div>
               <div style={{display:"flex",gap:8}}>{notifs.some(n=>!n.read)&&<button className="ba" onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.textMid,cursor:"pointer"}}>Mark all read</button>}{notifs.length>0&&<button className="ba" onClick={()=>{setNotifs([]);}} style={{background:C.redBg,border:`1px solid ${C.redMid}`,borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,color:C.red,cursor:"pointer"}}>Clear</button>}</div>
             </div>
             {/* Push notification permission banner */}
@@ -2306,7 +2334,7 @@ function AppInner(){
               <div style={{height:6}}/>
             </div>
             {notifs.length===0&&<Empty text="All clear — alerts will show here" icon={Bell}/>}
-            {notifs.map(n=>{const S={danger:{bg:C.redBg,br:C.redMid,c:C.red,ic:"🚨"},warning:{bg:C.amberBg,br:C.amberMid,c:C.amber,ic:"⚠️"},success:{bg:C.greenBg,br:C.greenMid,c:C.green,ic:"✅"},info:{bg:C.accentBg,br:C.accentMid,c:C.accent,ic:"💡"}}[n.type]||{bg:C.bg,br:C.border,c:C.text,ic:"🔔"};const ago=Date.now()-n.time;const ta=ago<60000?"just now":ago<3600000?Math.floor(ago/60000)+"m ago":ago<86400000?Math.floor(ago/3600000)+"h ago":Math.floor(ago/86400000)+"d ago";return(<div key={n.id} style={{background:n.read?C.surface:S.bg,border:`1.5px solid ${n.read?C.border:S.br}`,borderRadius:14,padding:"13px 14px",marginBottom:8}}><div style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{fontSize:20,flexShrink:0}}>{S.ic}</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:n.read?C.textMid:S.c}}>{n.title}</div><div style={{fontSize:12,color:C.textLight,marginTop:3,lineHeight:1.4}}>{n.body}</div><div style={{fontSize:11,color:C.textLight,marginTop:4}}>{ta}</div></div>{!n.read&&<div style={{width:8,height:8,borderRadius:"50%",background:S.c,flexShrink:0,marginTop:4}}/>}</div><div style={{display:"flex",gap:7,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}><button className="ba" onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))} style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 0",color:C.textMid,fontWeight:600,fontSize:12,cursor:"pointer"}}>Dismiss</button><button className="ba" onClick={()=>setNotifs(p=>p.filter(x=>x.id!==n.id))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",color:C.textLight,cursor:"pointer",display:"flex",alignItems:"center"}}><X size={13}/></button></div></div>);})}
+            {notifs.map(n=>{const S={danger:{bg:C.redBg,br:C.redMid,c:C.red,Icon:AlertCircle},warning:{bg:C.amberBg,br:C.amberMid,c:C.amber,Icon:AlertTriangle},success:{bg:C.greenBg,br:C.greenMid,c:C.positive,Icon:CheckCircle2},info:{bg:C.accentBg,br:C.accentMid,c:C.accent,Icon:Lightbulb}}[n.type]||{bg:C.bg,br:C.border,c:C.text,Icon:Bell};const NIcon=S.Icon;const ago=Date.now()-n.time;const ta=ago<60000?"just now":ago<3600000?Math.floor(ago/60000)+"m ago":ago<86400000?Math.floor(ago/3600000)+"h ago":Math.floor(ago/86400000)+"d ago";return(<div key={n.id} className="fv-card" style={{background:n.read?C.surface:S.bg,border:`1.5px solid ${n.read?C.border:S.br}`,padding:"13px 14px",marginBottom:8}}><div style={{display:"flex",gap:10,alignItems:"flex-start"}}><div className="fv-icon-tile-sm" style={{background:S.c+"14"}}><NIcon size={18} color={S.c} strokeWidth={2}/></div><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:n.read?C.textMid:S.c}}>{n.title}</div><div style={{fontSize:12,color:C.textLight,marginTop:3,lineHeight:1.4}}>{n.body}</div><div style={{fontSize:11,color:C.textLight,marginTop:4}}>{ta}</div></div>{!n.read&&<div style={{width:8,height:8,borderRadius:"50%",background:S.c,flexShrink:0,marginTop:4}}/>}</div><div style={{display:"flex",gap:7,marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}><button className="ba" onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))} style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 0",color:C.textMid,fontWeight:600,fontSize:12,cursor:"pointer"}}>Dismiss</button><button className="ba" onClick={()=>setNotifs(p=>p.filter(x=>x.id!==n.id))} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",color:C.textLight,cursor:"pointer",display:"flex",alignItems:"center"}}><X size={13}/></button></div></div>);})}
           </div>
         )}
       </div>
@@ -2314,8 +2342,8 @@ function AppInner(){
       {monthlySummary&&<div style={{position:"fixed",inset:0,background:"rgba(10,22,40,.7)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setMonthlySummary(null)}>
         <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:400,padding:28,boxShadow:"0 32px 80px rgba(0,0,0,.3)"}} onClick={e=>e.stopPropagation()}>
           <div style={{textAlign:"center",marginBottom:20}}>
-            <div style={{fontSize:32,marginBottom:8}}>📊</div>
-            <div style={{fontFamily:MF,fontSize:22,fontWeight:900,color:C.navy,letterSpacing:-.5}}>{monthlySummary.month} Recap</div>
+            <div style={{width:56,height:56,borderRadius:14,background:C.accentBg,border:`1px solid ${C.accentMid}`,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}><BarChart2 size={28} color={C.accent} strokeWidth={2}/></div>
+            <div className="fv-page-title" style={{fontSize:22,textAlign:"center"}}>{monthlySummary.month} recap</div>
             <div style={{fontSize:13,color:C.textLight,marginTop:4}}>Here's how last month went</div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
@@ -2333,8 +2361,8 @@ function AppInner(){
           </div>
           {monthlySummary.prevTotal>0&&<div style={{background:monthlySummary.total>monthlySummary.prevTotal?C.redBg:C.greenBg,border:`1px solid ${monthlySummary.total>monthlySummary.prevTotal?C.redMid:C.greenMid}`,borderRadius:12,padding:"10px 14px",marginBottom:16,fontSize:13,color:monthlySummary.total>monthlySummary.prevTotal?C.red:C.green,fontWeight:500}}>
             {monthlySummary.total>monthlySummary.prevTotal
-              ?"⚠️ You spent "+fmt(monthlySummary.total-monthlySummary.prevTotal)+" more than the month before"
-              :"✅ You spent "+fmt(monthlySummary.prevTotal-monthlySummary.total)+" less than the month before"}
+              ?"You spent "+fmt(monthlySummary.total-monthlySummary.prevTotal)+" more than the month before"
+              :"You spent "+fmt(monthlySummary.prevTotal-monthlySummary.total)+" less than the month before"}
           </div>}
           <button type="button" className="fv-btn-primary ba" onClick={()=>setMonthlySummary(null)} style={{justifyContent:"center",fontFamily:MF}}>Done</button>
         </div>
