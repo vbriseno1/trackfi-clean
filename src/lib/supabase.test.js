@@ -270,7 +270,23 @@ describe('supabase helpers', () => {
     vi.resetModules()
     const { flushPendingSync } = await import('./supabase.js')
     const r = await flushPendingSync()
-    expect(r).toEqual({ conflict: false, error: false, skipped: false })
+    expect(r).toEqual({ conflict: false, error: false, skipped: false, failedKeys: [] })
+  })
+
+  it('getUploadSyncStatus reports pending debounced keys', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem(
+      'fv_session',
+      JSON.stringify({ user: { id: 'user1234567890' }, access_token: 'tok' })
+    )
+    vi.resetModules()
+    const { ss, getUploadSyncStatus } = await import('./supabase.js')
+    await ss('fv6:expenses', [{ id: 1 }])
+    const st = getUploadSyncStatus()
+    expect(st.pendingCount).toBeGreaterThan(0)
+    expect(st.hasUploadProblem).toBe(false)
   })
 
   it('cancelPendingDebouncedSync clears without throwing', async () => {

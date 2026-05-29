@@ -22,17 +22,17 @@ import {
   sg,
   ss,
   flushPendingSync,
-  cancelPendingDebouncedSync,
   isTrackfiDemoMode,
   clearScopedUserDataCache,
   SCOPED_USER_DATA_KEYS,
-  applyPulledUserDataRows,
   clearUserDataRowVersions,
   setUploadConflictHandler,
   setLocalStorageQuotaHandler,
   resetLocalStorageQuotaWarned,
   isSupabaseConfigured,
   setLastSyncUiBumpHandler,
+  setUploadStatusHandler,
+  getUploadSyncStatus,
   supaFetchUserDataRows,
   trackfiAuthRefreshFetch,
 } from "./lib/supabase.js";
@@ -90,13 +90,17 @@ import {
   computeSafeToSpend, advancePaydayIso, getLatestScheduledPaydayOnOrBefore,
   paycheckPeriodNeedsHandling,
 } from "./lib/safeToSpend.js";
-import { applyUserDataSnapshot, buildAuthoritativeCloudMap } from "./lib/userData.js";
 import {
-  resolveEmptyCloudAction,
+  applyCloudPullResult,
+  applyLocalBootSnapshot,
+  buildBootMapFromLocal,
+  resolveEmptyCloudPullAction,
   EMPTY_CLOUD_ACTION,
-  applyOnboardingFlagsFromSnapshot,
-  shouldMarkOnboardedFromSnapshot,
-} from "./lib/syncPolicy.js";
+  hydrateReactFromScopedLocal,
+  readScopeBulkMap,
+} from "./lib/cloudHydration.js";
+import { SYNC_PHASE, setSyncPhase, isSyncReady, resetSyncLifecycle } from "./lib/syncLifecycle.js";
+import { shouldPersistFinanceSlice } from "./lib/financePersistence.js";
 import { parseMsg, chatMatchBill, chatPickExpenseDate, chatIsStatsQuery } from "./lib/parseMsg.js";
 import { hashPIN } from "./lib/pinHash.js";
 import {
@@ -333,10 +337,21 @@ function AppInner(){
     }).catch(()=>setAuthLoading(false));
     return()=>clearTimeout(authTimeout);
   },[]);
+  function snapshotHandlers(){
+    return{
+      setExpenses,setBills,setDebts,setBGoals,setSGoals,setCats,setTrades,
+      setBalHist,setShifts,setRecurrings,setNotifs,setSettlements,setHhBudgets,
+      setNwGoal,setSubDismissed,setAccounts,setIncome,setSettings,setCalColors,
+      setDashConfig,setHousehold,setTradingAccount,setAppName,setGreetName,
+      setProfCategory,setProfSub,setAccountRates,setOnboarded,
+    };
+  }
   function handleAuth(sess){
     const priorSession=(()=>{try{return JSON.parse(localStorage.getItem("fv_session")||"null");}catch{return null;}})();
     const priorScope=(()=>{try{return getScope();}catch{return "";}})();
     setAuthSession(sess);
+    setSkipAuth(false);
+    try{localStorage.removeItem("fv_skip_auth");}catch{}
     try{localStorage.setItem("fv_session",JSON.stringify(sess));}catch{}
     let migratedLocal=false;
     // Migrate device-scoped "Try without account" data into the signed-in scope.
@@ -386,6 +401,7 @@ function AppInner(){
     const gen=++remotePullGenRef.current;
     const exec=(async()=>{
       try{
+        setSyncPhase(SYNC_PHASE.PULLING);
         await flushPendingSync();
         if(gen!==remotePullGenRef.current)return;
         await new Promise(r=>setTimeout(r,50));
@@ -398,50 +414,22 @@ function AppInner(){
           if(!background)showToast("Sync failed — check your connection","error");
           return;
         }
-        cancelPendingDebouncedSync();
         if(res.data.length===0){
-          applyPulledUserDataRows([]);
-          const emptyAction=opts.preserveLocalOnEmpty===true
-            ?EMPTY_CLOUD_ACTION.HYDRATE_LOCAL
-            :resolveEmptyCloudAction();
+          const emptyAction=resolveEmptyCloudPullAction({preserveLocalOnEmpty:opts.preserveLocalOnEmpty===true});
           if(emptyAction===EMPTY_CLOUD_ACTION.HYDRATE_LOCAL){
-            cloudLoadedRef.current=true;
+            await hydrateReactFromScopedLocal({handlers:snapshotHandlers(),setDarkMode,uid});
+            setSyncPhase(SYNC_PHASE.READY);
           }else{
-            resetUserState({clearOnboarding:true,cloudLoadedRefTarget:true});
+            resetUserState({clearOnboarding:true,syncPhaseReady:true});
           }
           setSyncRecoverableError(false);
           try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
           setCloudSyncMetaBump(b=>b+1);
           return;
         }
-        applyPulledUserDataRows(res.data);
-        const map={};
-        res.data.forEach(row=>{map[row.key]=row.value;});
-        const fullMap=buildAuthoritativeCloudMap(map);
+        applyCloudPullResult({rows:res.data,uid,handlers:snapshotHandlers(),setDarkMode});
         setSyncRecoverableError(false);
-        applyUserDataSnapshot(fullMap,{
-          setExpenses,setBills,setDebts,setBGoals,setSGoals,setCats,setTrades,
-          setBalHist,setShifts,setRecurrings,setNotifs,setSettlements,setHhBudgets,
-          setNwGoal,setSubDismissed,setAccounts,setIncome,setSettings,setCalColors,
-          setDashConfig,setHousehold,setTradingAccount,setAppName,setGreetName,
-          setProfCategory,setProfSub,setAccountRates,setOnboarded,
-        },{cloudPull:true});
-        const pulledSettings=fullMap.settings;
-        if(
-          pulledSettings&&
-          typeof pulledSettings==="object"&&
-          Object.prototype.hasOwnProperty.call(pulledSettings,"darkMode")&&
-          typeof pulledSettings.darkMode==="boolean"
-        ){
-          setDarkMode(pulledSettings.darkMode);
-        }
-        cloudLoadedRef.current=true;
-        applyOnboardingFlagsFromSnapshot(fullMap,setOnboarded);
-        const scope="fv6_"+uid.slice(0,8)+":";
-        for(const key of SCOPED_USER_DATA_KEYS){
-          if(!Object.prototype.hasOwnProperty.call(fullMap,key))continue;
-          try{localStorage.setItem(scope+key,JSON.stringify(fullMap[key]));}catch{}
-        }
+        setSyncPhase(SYNC_PHASE.READY);
         try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
         setCloudSyncMetaBump(b=>b+1);
       }catch(e){
@@ -450,7 +438,10 @@ function AppInner(){
         if(!background)showToast("Sync failed — check your connection","error");
       }finally{
         if(!background&&gen===remotePullGenRef.current)setSyncing(false);
-        if(gen===remotePullGenRef.current)setTimeout(()=>{void flushPendingSync();},0);
+        if(gen===remotePullGenRef.current){
+          if(!isSyncReady())setSyncPhase(SYNC_PHASE.READY);
+          setTimeout(()=>{void flushPendingSync();},0);
+        }
       }
     })();
     if(background){
@@ -498,7 +489,8 @@ function AppInner(){
       setOnboarded(false);
       try{localStorage.removeItem("fv_onboarded");}catch{}
     }
-    cloudLoadedRef.current=opts.cloudLoadedRefTarget===true;
+    if(opts.syncPhaseReady===true)setSyncPhase(SYNC_PHASE.READY);
+    else resetSyncLifecycle();
     clearUserDataRowVersions();
   }
   async function handleSignOut(){
@@ -535,9 +527,16 @@ function AppInner(){
   }
   const[ready,setReady]=useState(false);
   useEffect(()=>{readyRef.current=ready;},[ready]);
-  // True once we've successfully loaded at least one round of cloud data.
-  // Prevents empty boot state from overwriting real Supabase data on other devices.
-  const cloudLoadedRef=useRef(false);
+  const[uploadSyncBump,setUploadSyncBump]=useState(0);
+  useEffect(()=>{
+    setUploadStatusHandler(()=>setUploadSyncBump(b=>b+1));
+    setLastSyncUiBumpHandler(()=>setCloudSyncMetaBump(b=>b+1));
+    return()=>{
+      setUploadStatusHandler(null);
+      setLastSyncUiBumpHandler(null);
+    };
+  },[]);
+  const uploadSyncStatus=useMemo(()=>{void uploadSyncBump;return getUploadSyncStatus();},[uploadSyncBump]);
   /** Prevents the monthly recap modal from opening twice in one session / before localStorage writes. */
   const monthlyRecapShownRef=useRef(null);
   /** Increments on each loadFromSupabase call so stale responses never overwrite newer state. */
@@ -657,7 +656,7 @@ function AppInner(){
     try{localStorage.setItem("fv_onboarded","1");localStorage.removeItem("fv_pending_name");}catch{}
     ss("fv6:onboarded",true);
     setOnboarded(true);
-    cloudLoadedRef.current=true;
+    setSyncPhase(SYNC_PHASE.READY);
     void flushPendingSync();
   }
 
@@ -678,11 +677,6 @@ function AppInner(){
       );
     });
     return()=>setLocalStorageQuotaHandler(null);
-  },[]);
-
-  useEffect(()=>{
-    setLastSyncUiBumpHandler(()=>setCloudSyncMetaBump(b=>b+1));
-    return()=>setLastSyncUiBumpHandler(null);
   },[]);
 
   useEffect(()=>{
@@ -762,119 +756,40 @@ function AppInner(){
     const bootSafety=setTimeout(()=>{
       if(!bootDone){
         bootDone=true;
-        cloudLoadedRef.current=true;
+        setSyncPhase(SYNC_PHASE.READY);
         setReady(true);
       }
     },12000);
     (async()=>{
       try{
-        // Bulk fetch all keys in one query when logged in (1 read vs N).
-        // Demo mode: never hydrate from cloud (avoids replacing sample data + contaminating pulls).
+        resetSyncLifecycle();
         const uid_boot=_getUserId();
-        const _demoHydrateKeys=["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName","merchantCats","recurrings","settlements","hhBudgets","nwGoal","subDismissed","household","accountRates","onboarded"];
-        let _bulkMap={};
+        let bulkMap={};
         let cloudHydratedFromBulk=false;
         if(isTrackfiDemoMode()){
-          const scope=getScope();
-          for(const bare of _demoHydrateKeys){
-            try{
-              const raw=localStorage.getItem(scope+bare);
-              if(raw!==null)_bulkMap[bare]=JSON.parse(raw);
-            }catch{}
-          }
+          bulkMap=readScopeBulkMap(getScope());
         }else if(uid_boot){
           try{
             const bulk=await supaFetchUserDataRows(uid_boot);
             if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length===0){
-              applyPulledUserDataRows([]);
-              if(resolveEmptyCloudAction()===EMPTY_CLOUD_ACTION.WIPE_TO_DEFAULTS){
-                resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
+              if(resolveEmptyCloudPullAction()===EMPTY_CLOUD_ACTION.WIPE_TO_DEFAULTS){
+                resetUserState({clearOnboarding:true,syncPhaseReady:true});
                 return;
               }
-              // Empty cloud but local onboarding/data exists — hydrate from scoped storage below.
             }
             if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length>0){
-              applyPulledUserDataRows(bulk.data);
-              const raw={};
-              bulk.data.forEach(r=>{raw[r.key]=r.value;});
-              const fullMap=buildAuthoritativeCloudMap(raw);
-              applyUserDataSnapshot(fullMap,{
-                setExpenses,setBills,setDebts,setBGoals,setSGoals,setCats,setTrades,
-                setBalHist,setShifts,setRecurrings,setNotifs,setSettlements,setHhBudgets,
-                setNwGoal,setSubDismissed,setAccounts,setIncome,setSettings,setCalColors,
-                setDashConfig,setHousehold,setTradingAccount,setAppName,setGreetName,
-                setProfCategory,setProfSub,setAccountRates,setOnboarded,
-              },{cloudPull:true});
-              const bootSettings=fullMap.settings;
-              if(
-                bootSettings&&
-                typeof bootSettings==="object"&&
-                Object.prototype.hasOwnProperty.call(bootSettings,"darkMode")&&
-                typeof bootSettings.darkMode==="boolean"
-              )setDarkMode(bootSettings.darkMode);
-              const scope="fv6_"+uid_boot.slice(0,8)+":";
-              for(const key of SCOPED_USER_DATA_KEYS){
-                if(!Object.prototype.hasOwnProperty.call(fullMap,key))continue;
-                try{localStorage.setItem(scope+key,JSON.stringify(fullMap[key]));}catch{}
-              }
-              cloudLoadedRef.current=true;
+              applyCloudPullResult({rows:bulk.data,uid:uid_boot,handlers:snapshotHandlers(),setDarkMode});
               cloudHydratedFromBulk=true;
-              applyOnboardingFlagsFromSnapshot(fullMap,setOnboarded);
             }
           }catch{}
         }
         if(cloudHydratedFromBulk){
+          setSyncPhase(SYNC_PHASE.READY);
           return;
         }
-        async function _sg_boot(bare){
-          if(_bulkMap[bare]!==undefined)return _bulkMap[bare];
-          return sg("fv6:"+bare);
-        }
-        const keys=["fv6:accounts","fv6:income","fv6:expenses","fv6:bills","fv6:debts","fv6:bgoals","fv6:sgoals","fv6:cats","fv6:trades","fv6:taccount","fv6:settings","fv6:calColors","fv6:notifs","fv6:balHist","fv6:shifts","fv6:prof","fv6:profSub","fv6:dashConfig","fv6:appName","fv6:greetName","fv6:merchantCats","fv6:recurrings","fv6:settlements","fv6:hhBudgets","fv6:nwGoal","fv6:subDismissed"];
-        const vals=await Promise.all(keys.map(k=>_sg_boot(k.replace("fv6:",""))));
-        const bareKeys=["accounts","income","expenses","bills","debts","bgoals","sgoals","cats","trades","taccount","settings","calColors","notifs","balHist","shifts","prof","profSub","dashConfig","appName","greetName","merchantCats","recurrings","settlements","hhBudgets","nwGoal","subDismissed"];
-        const bootMap={};
-        bareKeys.forEach((k,i)=>{
-          const v=vals[i];
-          if(uid_boot&&(k in _bulkMap))bootMap[k]=_bulkMap[k];
-          else{if(v===undefined||v===null)return;bootMap[k]=v;}
-        });
-        try{
-          let hh=_bulkMap["household"];
-          if(hh===undefined){const h=await sg("fv6:household");if(h)hh=h;}
-          if(hh!=null&&typeof hh==="object")bootMap.household=hh;
-        }catch{}
-        try{
-          const ar=_bulkMap["accountRates"]!==undefined?_bulkMap["accountRates"]:(await sg("fv6:accountRates"));
-          if(ar&&typeof ar==="object")bootMap.accountRates=ar;
-        }catch{}
-        try{
-          if(shouldMarkOnboardedFromSnapshot(bootMap))bootMap.onboarded=true;
-          else{
-            const ob=_bulkMap["onboarded"]!==undefined?_bulkMap["onboarded"]:(await sg("fv6:onboarded"));
-            if(ob)bootMap.onboarded=ob;
-          }
-        }catch{}
-        applyUserDataSnapshot(bootMap,{
-          setExpenses,setBills,setDebts,setBGoals,setSGoals,setCats,setTrades,
-          setBalHist,setShifts,setRecurrings,setNotifs,setSettlements,setHhBudgets,
-          setNwGoal,setSubDismissed,setAccounts,setIncome,setSettings,setCalColors,
-          setDashConfig,setHousehold,setTradingAccount,setAppName,setGreetName,
-          setProfCategory,setProfSub,setAccountRates,setOnboarded,
-        },{bootDefaults:true});
-        applyOnboardingFlagsFromSnapshot(bootMap,setOnboarded);
-        const bootSettings = bootMap.settings;
-        if(
-          bootSettings &&
-          typeof bootSettings === "object" &&
-          Object.prototype.hasOwnProperty.call(bootSettings,"darkMode") &&
-          typeof bootSettings.darkMode === "boolean"
-        ){
-          setDarkMode(bootSettings.darkMode);
-        }
-        // After boot hydration: allow ss() effects. (Previously this only flipped for demo _bulkMap, which left
-        // browser-only and signed-in localStorage paths stuck with cloudLoadedRef=false — nothing persisted.)
-        cloudLoadedRef.current=true;
+        const bootMap=await buildBootMapFromLocal({uid:uid_boot,bulkMap});
+        applyLocalBootSnapshot({bootMap,handlers:snapshotHandlers(),setDarkMode});
+        setSyncPhase(SYNC_PHASE.READY);
       }catch(e){console.error("Load error",e);}
       finally{
         clearTimeout(bootSafety);
@@ -900,20 +815,20 @@ function AppInner(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[ready]);
 
-  useEffect(()=>{if(!ready)return;if(_getUserId()&&!cloudLoadedRef.current&&!accountsHasPositiveBalance(accounts))return;ss("fv6:accounts",normalizeAccountsForPersistence(accounts));const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,slice:"accounts",accountsHasBalance:accountsHasPositiveBalance(accounts),hasContent:true}))return;ss("fv6:accounts",normalizeAccountsForPersistence(accounts));const tod=todayStr();setBalHist(prev=>{const last=prev[prev.length-1];if(last?.date===tod)return prev;const ds=last?Math.floor((new Date(tod)-new Date(last.date+"T00:00:00"))/86400000):999;if(ds<6)return prev;const _bh={date:tod,checking:totalCheckingBalance(accounts),savings:totalSavingsBalance(accounts),cushion:parseFloat(accounts.cushion||0),investments:parseFloat(accounts.investments||0),k401:parseFloat(accounts.k401||0),roth_ira:parseFloat(accounts.roth_ira||0),brokerage:parseFloat(accounts.brokerage||0),crypto:parseFloat(accounts.crypto||0),hsa:parseFloat(accounts.hsa||0),property:parseFloat(accounts.property||0),vehicles:parseFloat(accounts.vehicles||0),trading:parseFloat(tradingAccount?.balance||0)};_bh.total=Object.values(_bh).filter(v=>typeof v==="number").reduce((s,v)=>s+v,0);_bh.totalDebt=sumDebtsPrincipalAndAccrued(debts)+legacyCreditCardOwed(accounts,debts);return[...prev,_bh].slice(-104);});},[accounts,debts,tradingAccount,ready]);
   // Batched persistence — grouped by change frequency to reduce effect overhead
-  useEffect(()=>{if(!ready)return;if(!balHist.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:balHist",balHist);},[balHist,ready]);
-  useEffect(()=>{if(!ready)return;if(!expenses.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:expenses",expenses);},[expenses,ready]);
-  useEffect(()=>{if(!ready)return;if(!bills.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:bills",bills);},[bills,ready]);
-  useEffect(()=>{if(!ready)return;if(!debts.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:debts",debts);},[debts,ready]);
-  useEffect(()=>{if(!ready)return;if(!trades.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:trades",trades);},[trades,ready]);
-  useEffect(()=>{if(!ready)return;if(!notifs.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:notifs",notifs);},[notifs,ready]);
-  useEffect(()=>{if(!ready)return;if(!shifts.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:shifts",shifts);},[shifts,ready]);
-  useEffect(()=>{if(!ready)return;if(!recurrings.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:recurrings",recurrings);},[recurrings,ready]);
-  useEffect(()=>{if(!ready)return;if(!settlements.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:settlements",settlements);},[settlements,ready]);
-  useEffect(()=>{if(!ready)return;if(!hhBudgets.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:hhBudgets",hhBudgets);},[hhBudgets,ready]);
-  useEffect(()=>{if(!ready)return;if(_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:nwGoal",nwGoal);},[nwGoal,ready]);
-  useEffect(()=>{if(!ready)return;if(!subDismissed.length&&_getUserId()&&!cloudLoadedRef.current)return;ss("fv6:subDismissed",subDismissed);},[subDismissed,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:balHist.length>0}))return;ss("fv6:balHist",balHist);},[balHist,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:expenses.length>0}))return;ss("fv6:expenses",expenses);},[expenses,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:bills.length>0}))return;ss("fv6:bills",bills);},[bills,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:debts.length>0}))return;ss("fv6:debts",debts);},[debts,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:trades.length>0}))return;ss("fv6:trades",trades);},[trades,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:notifs.length>0}))return;ss("fv6:notifs",notifs);},[notifs,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:shifts.length>0}))return;ss("fv6:shifts",shifts);},[shifts,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:recurrings.length>0}))return;ss("fv6:recurrings",recurrings);},[recurrings,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:settlements.length>0}))return;ss("fv6:settlements",settlements);},[settlements,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:hhBudgets.length>0}))return;ss("fv6:hhBudgets",hhBudgets);},[hhBudgets,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,slice:"nwGoal",hasContent:nwGoal!=null}))return;ss("fv6:nwGoal",nwGoal);},[nwGoal,ready]);
+  useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:subDismissed.length>0}))return;ss("fv6:subDismissed",subDismissed);},[subDismissed,ready]);
   // Settings & config — always persist locally when ready (don't wait for cloud pull)
   useEffect(()=>{
     if(!ready)return;
@@ -1446,7 +1361,7 @@ function AppInner(){
     if(d.onboarded===true){try{localStorage.setItem("fv_onboarded","1");}catch{}setOnboarded(true);ss("fv6:onboarded",true);}
     else if(d.onboarded===false){try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);ss("fv6:onboarded",false);}
     if(d.merchantCats)try{window._merchantCats=d.merchantCats;ss("fv6:merchantCats",d.merchantCats);}catch{}
-    cloudLoadedRef.current=true;
+    setSyncPhase(SYNC_PHASE.READY);
   }
   function capturePreDemoSnapshotIfNeeded(){
     try{
@@ -1511,6 +1426,7 @@ function AppInner(){
     ss("fv6:onboarded",true);
     setIsDemoMode(true);setOnboarded(true);
     setDemoBannerVisible(true);
+    setSyncPhase(SYNC_PHASE.READY);
     showToast("Sample data loaded — tap Exit demo on Home when you're done","info");
   }
   useEffect(()=>{window._loadDemo=loadDemo;return()=>{delete window._loadDemo;};},[]);
@@ -1559,7 +1475,7 @@ function AppInner(){
       setAppName("Trackfi");
       try{localStorage.removeItem(PRE_DEMO_SNAP_KEY);}catch{}
       if(preDemoSnap)applyDataBundle(preDemoSnap);
-      else cloudLoadedRef.current=true;
+      else setSyncPhase(SYNC_PHASE.READY);
       showToast(preDemoSnap?"Sample data cleared — your numbers are back":"Sample data cleared","info");
     }
     navTo("home");
@@ -1713,6 +1629,7 @@ function AppInner(){
         {!isOnline&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:"#1e293b",color:"#f1f5f9",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35}}>{authSession?.user?.id&&isSupabaseConfigured()?"📡 No internet — edits stay on this device and sync when you’re back online.":skipAuth?"📡 No internet — you can keep editing; everything stays in this browser.":"📡 No internet — you can keep editing on this device."}</div>}
         {pwaUpdateReady&&<div role="status" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.accent,border:`1px solid ${C.accentMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>New version available — reload to get the latest fixes.</span><button type="button" className="ba" onClick={async()=>{try{const reg=await navigator.serviceWorker?.getRegistration?.();if(reg?.waiting){navigator.serviceWorker.addEventListener("controllerchange",()=>window.location.reload(),{once:true});reg.waiting.postMessage({type:"SKIP_WAITING"});setTimeout(()=>window.location.reload(),1500);return;}navigator.serviceWorker?.controller?.postMessage({type:"SKIP_WAITING"});}catch{}window.location.reload();}} style={{background:"rgba(255,255,255,.22)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer"}}>Reload</button><button type="button" className="ba" onClick={()=>setPwaUpdateReady(false)} style={{background:"transparent",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Later</button></div>}
         {storageQuotaBlocked&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.amber,border:`1px solid ${C.amberMid}`,color:"#78350f",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Storage full — this browser can’t save more data. Export a backup, then free space or clear old data.</span><button type="button" className="ba" onClick={()=>navTo("export")} style={{background:"rgba(255,255,255,.35)",border:"1px solid rgba(120,53,15,.25)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Export</button><button type="button" className="ba" onClick={()=>{setStorageQuotaBlocked(false);resetLocalStorageQuotaWarned();}} style={{background:"transparent",border:"1px solid rgba(120,53,15,.35)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Dismiss</button></div>}
+        {uploadSyncStatus.hasUploadProblem&&isOnline&&authSession?.user?.id&&isSupabaseConfigured()&&!isTrackfiDemoMode()&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.amber,border:`1px solid ${C.amberMid}`,color:"#78350f",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Some changes may not have reached the cloud yet. They are saved on this device.</span><button type="button" className="ba" onClick={()=>{void flushPendingSync().then((o)=>{if(o?.error)showToast("Upload failed — check your connection","error");else showToast("✓ Upload retried","info");});}} style={{background:"rgba(255,255,255,.35)",border:"1px solid rgba(120,53,15,.25)",borderRadius:8,padding:"4px 12px",color:"#451a03",fontSize:12,fontWeight:700,cursor:"pointer"}}>Retry upload</button></div>}
         {syncRecoverableError&&isOnline&&authSession?.user?.id&&isSupabaseConfigured()&&<div role="alert" style={{position:"sticky",top:0,zIndex:35,marginBottom:12,background:C.red,border:`1px solid ${C.redMid}`,color:"#fff",fontSize:12,fontWeight:600,textAlign:"center",padding:"10px 12px",borderRadius:10,letterSpacing:.2,lineHeight:1.35,display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}><span>Couldn’t refresh data from the cloud. You’re still using what’s on this device.</span><button type="button" className="ba" onClick={()=>{void loadFromSupabase(authSession);}} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:8,padding:"4px 12px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Try again</button></div>}
         {["spend","home","bills"].includes(tab)&&<button className="ba" type="button" aria-label={tab==="bills"?"Add bill":"Log expense"} onClick={()=>tab==="bills"?om("bill"):om("expense")} style={{position:"fixed",right:"max(16px, env(safe-area-inset-right))",bottom:"max(90px, calc(78px + env(safe-area-inset-bottom)))",width:52,height:52,borderRadius:"50%",background:C.accent,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(79,70,229,.35), 0 2px 6px rgba(15,23,42,.12)",zIndex:50}}><Plus size={22} color="#fff" strokeWidth={2.25}/></button>}
         {canGoBack&&tab!=="home"&&<div style={{marginBottom:12}}><button className="ba" onClick={goBack} style={{display:"flex",alignItems:"center",gap:5,background:"transparent",border:"none",cursor:"pointer",color:C.accent,fontWeight:700,fontSize:16,padding:"4px 0"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>Back</button></div>}
@@ -2378,7 +2295,7 @@ function AppInner(){
         {tab==="household"&&<HouseholdView household={household} setHousehold={setHousehold} expenses={expenses} bills={bills} setBills={setBills} showToast={showToast} settlements={settlements} setSettlements={setSettlements} hhBudgets={hhBudgets} setHhBudgets={setHhBudgets}/>}
         {tab==="export"&&<div className="fu"><div className="fv-page-title" style={{marginBottom:4}}>Export Data</div><div className="fv-page-sub" style={{marginBottom:20}}>Download your financial data for spreadsheets, backups, or your accountant.</div><button type="button" className="fv-btn-primary ba" onClick={()=>setShowExport(true)} style={{marginBottom:12}}><Download size={22} color="white" style={{flexShrink:0}}/><div><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Export Center</div><div style={{fontSize:12,color:"rgba(255,255,255,.75)",fontWeight:500}}>5 export formats — expenses, net worth, debts, report</div></div></button></div>}
         {tab==="import"&&<div className="fu"><div className="fv-page-title" style={{marginBottom:4}}>Import Bank CSV</div><div className="fv-page-sub" style={{marginBottom:20}}>Paste or upload a CSV from your bank's website to bulk-import transactions.</div><button type="button" className="fv-btn-primary fv-btn-success ba" onClick={()=>setShowImport(true)} style={{marginBottom:16}}><FileText size={22} color="white" style={{flexShrink:0}}/><div><div style={{fontSize:16,fontWeight:800,color:"#fff"}}>Open Bank Import</div><div style={{fontSize:12,color:"rgba(255,255,255,.75)",fontWeight:500}}>Supports Chase, BofA, Wells Fargo, Capital One, Citi + any CSV</div></div></button><div className="fv-insight-card" style={{fontSize:13,color:C.textMid,lineHeight:1.6,cursor:"default"}}><strong style={{color:C.accent,fontWeight:700}}>Offline.</strong> Your bank data never leaves this device. Export CSV from your bank, paste here — format auto-detect and merchant categorization.</div></div>}
-        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This removes expenses, bills, debts, goals, household, recurring, notifications, chart history, categories, and settings from this device, and deletes synced cloud rows for this account. Your session stays signed in; PIN and other browser site data outside cleared keys are unchanged. Export JSON under Data first if you need a backup. This cannot be undone.",onConfirm:async()=>{const ok=await handleResetAllData();if(ok)setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast} onLoadDemo={isDemoMode?undefined:requestLoadDemo} cloudSyncBump={cloudSyncMetaBump} supabaseConfigured={isSupabaseConfigured()} skipAuthMode={skipAuth} signedInForSync={!!authSession?.user?.id} netOnline={isOnline} syncing={syncing} syncRecoverableError={syncRecoverableError}/>}
+        {tab==="settings"&&<SettingsView settings={settings} setSettings={setSettings} appName={appName} setAppName={setAppName} profCategory={profCategory} setProfCategory={setProfCategory} profSub={profSub} setProfSub={setProfSub} darkMode={darkMode} setDarkMode={setDarkMode} pinEnabled={pinEnabled} setPinEnabled={setPinEnabled} household={household} navTo={navTo} expenses={expenses} bills={bills} debts={debts} trades={trades} accounts={accounts} income={income} shifts={shifts} savingsGoals={savingsGoals} budgetGoals={budgetGoals} setBills={setBills} setDebts={setDebts} setTrades={setTrades} setShifts={setShifts} setSGoals={setSGoals} setBGoals={setBGoals} setAccounts={setAccounts} setIncome={setIncome} setExpenses={setExpenses} categories={categories} setCategories={setCats} greetName={greetName} setGreetName={setGreetName} backupExport={backupExport} backupImport={backupImport} onResetAllData={()=>setConfirm({title:"Reset All Data",message:"This removes expenses, bills, debts, goals, household, recurring, notifications, chart history, categories, and settings from this device, and deletes synced cloud rows for this account. Your session stays signed in; PIN and other browser site data outside cleared keys are unchanged. Export JSON under Data first if you need a backup. This cannot be undone.",onConfirm:async()=>{const ok=await handleResetAllData();if(ok)setConfirm(null);},danger:true})} onResetOnboarding={()=>{try{localStorage.removeItem("fv_onboarded");}catch{}setOnboarded(false);}} onSignOut={authSession?handleSignOut:null} onSignIn={!authSession&&skipAuth?()=>{localStorage.removeItem("fv_skip_auth");setSkipAuth(false);}:null} userEmail={authSession?.user?.email} showToast={showToast} onLoadDemo={isDemoMode?undefined:requestLoadDemo} cloudSyncBump={cloudSyncMetaBump} supabaseConfigured={isSupabaseConfigured()} skipAuthMode={skipAuth} signedInForSync={!!authSession?.user?.id} netOnline={isOnline} syncing={syncing} syncRecoverableError={syncRecoverableError} uploadPendingCount={uploadSyncStatus.pendingCount} uploadFailed={uploadSyncStatus.hasUploadProblem}/>}
 
         {tab==="notifs"&&(
           <div className="fu">

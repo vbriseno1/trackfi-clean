@@ -12,7 +12,7 @@ import { cashAccountsByKind, liquidFieldDisplay, liquidFieldSubCount, applyLiqui
 import { BILL_RESHOW_PRESETS, nearestBillReshowPreset } from "../lib/billsLogic.js";
 import { supaFetch } from "../lib/supabase.js";
 
-export default function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo,backupExport,backupImport,onLoadDemo,cloudSyncBump,supabaseConfigured,skipAuthMode,signedInForSync,netOnline,syncing=false,syncRecoverableError=false}){
+export default function SettingsView({settings,setSettings,appName,setAppName,greetName,setGreetName,onResetAllData,darkMode,setDarkMode,pinEnabled,setPinEnabled,profCategory,setProfCategory,profSub,setProfSub,expenses,bills,debts,trades,accounts,income,shifts,savingsGoals,budgetGoals,setBills,setDebts,setTrades,setShifts,setSGoals,setBGoals,setAccounts,setIncome,setExpenses,categories,setCategories,onResetOnboarding,onSignOut,onSignIn,userEmail,showToast,household,navTo,backupExport,backupImport,onLoadDemo,cloudSyncBump,supabaseConfigured,skipAuthMode,signedInForSync,netOnline,syncing=false,syncRecoverableError=false,uploadPendingCount=0,uploadFailed=false}){
   const[nm,setNm]=useState(appName||"");
   const[showPIN,setShowPIN]=useState(false);
   const[showEmailChange,setShowEmailChange]=useState(false);
@@ -167,6 +167,8 @@ export default function SettingsView({settings,setSettings,appName,setAppName,gr
           if(!signedInForSync)return{label:"Local save ready",detail:"Sign in to turn on cloud backup and cross-device sync.",color:C.textMid,bg:C.surfaceAlt,border:C.border};
           if(netOnline===false)return{label:"Offline - saved on this device",detail:"Edits are kept locally and will sync when your connection returns.",color:C.amber,bg:C.amberBg,border:C.amberMid};
           if(syncRecoverableError)return{label:"Cloud refresh failed",detail:"You are still using the copy saved on this device. Tap Try again from the red banner if it appears.",color:C.red,bg:C.redBg,border:C.redMid};
+          if(uploadFailed)return{label:"Cloud backup pending",detail:"Your latest edits are on this device. Use Retry upload from the amber banner on Home if it appears.",color:C.amber,bg:C.amberBg,border:C.amberMid};
+          if(uploadPendingCount>0)return{label:"Saving to cloud",detail:`${uploadPendingCount} change${uploadPendingCount===1?"":"s"} waiting to upload. Data is safe on this device.`,color:C.accent,bg:C.accentBg,border:C.accentMid};
           if(syncing)return{label:"Syncing with cloud",detail:"Checking your latest cloud copy now.",color:C.accent,bg:C.accentBg,border:C.accentMid};
           if(lastSyncLabel==="Not yet")return{label:"Cloud ready",detail:"You are signed in. Your next successful upload or refresh will show a timestamp here.",color:C.accent,bg:C.accentBg,border:C.accentMid};
           return{label:"Synced to cloud",detail:"Last successful cloud refresh: "+lastSyncLabel,color:C.green,bg:C.greenBg,border:C.greenMid};

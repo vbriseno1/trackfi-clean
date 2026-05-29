@@ -335,6 +335,38 @@ export function clearScopedUserDataCache() {
 }
 
 const _ssBuffer = {};
+const _failedUploadKeys = new Set();
+let _uploadStatusRevision = 0;
+/** @type {null | (() => void)} */
+let _uploadStatusHandler = null;
+
+function bumpUploadStatus() {
+  _uploadStatusRevision += 1;
+  try {
+    _uploadStatusHandler?.();
+  } catch {}
+}
+
+/** UI hook: pending debounced keys + keys that failed last flush. */
+export function setUploadStatusHandler(fn) {
+  _uploadStatusHandler = typeof fn === "function" ? fn : null;
+}
+
+export function getUploadSyncStatus() {
+  return {
+    revision: _uploadStatusRevision,
+    pendingCount: Object.keys(_ssBuffer).length,
+    failedKeys: [..._failedUploadKeys],
+    hasUploadProblem: _failedUploadKeys.size > 0,
+  };
+}
+
+export function clearFailedUploadKeys() {
+  if (_failedUploadKeys.size === 0) return;
+  _failedUploadKeys.clear();
+  bumpUploadStatus();
+}
+
 let _lsQuotaWarned = false;
 /** @type {null | (() => void)} */
 let _lsQuotaHandler = null;
@@ -416,11 +448,17 @@ async function _flushKey(uid, bare, v) {
           body: JSON.stringify({ value: v, updated_at: nextUpdatedAt }),
         }
       );
-      if (r.error) return { error: true };
+      if (r.error) {
+        _failedUploadKeys.add(bare);
+        bumpUploadStatus();
+        return { error: true };
+      }
       const raw = r.data;
       if (Array.isArray(raw)) {
         if (raw.length === 1 && raw[0]?.updated_at != null) {
           _lastKnownRowUpdatedAt[bare] = String(raw[0].updated_at);
+          _failedUploadKeys.delete(bare);
+          bumpUploadStatus();
           touchLastSyncTimestamp();
           return { ok: true };
         }
@@ -428,9 +466,13 @@ async function _flushKey(uid, bare, v) {
           scheduleConflictPull();
           return { conflict: true };
         }
+        _failedUploadKeys.add(bare);
+        bumpUploadStatus();
         return { error: true };
       }
       _lastKnownRowUpdatedAt[bare] = nextUpdatedAt;
+      _failedUploadKeys.delete(bare);
+      bumpUploadStatus();
       touchLastSyncTimestamp();
       return { ok: true };
     }
@@ -440,13 +482,21 @@ async function _flushKey(uid, bare, v) {
       headers: { Prefer: "resolution=merge-duplicates,return=representation" },
       body: JSON.stringify({ user_id: uid, key: bare, value: v, updated_at: nextUpdatedAt }),
     });
-    if (r2.error) return { error: true };
+    if (r2.error) {
+      _failedUploadKeys.add(bare);
+      bumpUploadStatus();
+      return { error: true };
+    }
     const rows2 = Array.isArray(r2.data) ? r2.data : [];
     if (rows2.length === 1 && rows2[0]?.updated_at != null) _lastKnownRowUpdatedAt[bare] = String(rows2[0].updated_at);
     else _lastKnownRowUpdatedAt[bare] = nextUpdatedAt;
+    _failedUploadKeys.delete(bare);
+    bumpUploadStatus();
     touchLastSyncTimestamp();
     return { ok: true };
   } catch {
+    _failedUploadKeys.add(bare);
+    bumpUploadStatus();
     return { error: true };
   }
 }
@@ -526,9 +576,11 @@ export async function ss(k, v) {
         if (val !== undefined) void _flushKey(uid, bare, val);
       } finally {
         if (_ssBuffer[bare] === buf) delete _ssBuffer[bare];
+        bumpUploadStatus();
       }
     }, 1500);
     _ssBuffer[bare] = buf;
+    bumpUploadStatus();
   }
 }
 
@@ -542,6 +594,7 @@ export function cancelPendingDebouncedSync() {
     if (buf?.timer) clearTimeout(buf.timer);
     delete _ssBuffer[bare];
   }
+  bumpUploadStatus();
 }
 
 export async function flushPendingSync() {
@@ -568,5 +621,11 @@ export async function flushPendingSync() {
     }
     delete _ssBuffer[bare];
   }
-  return { conflict, error, skipped: keys.length > 0 && !allowCloud };
+  bumpUploadStatus();
+  return {
+    conflict,
+    error,
+    skipped: keys.length > 0 && !allowCloud,
+    failedKeys: [..._failedUploadKeys],
+  };
 }
