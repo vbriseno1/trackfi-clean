@@ -44,33 +44,15 @@ export const C = {
   slate: "#64748B",
 };
 
-/** Categorical colors for spending / income breakdown charts. */
-export const PIE_COLORS = [
-  C.accent,
-  "#0EA5E9",
-  C.positive,
-  C.amber,
-  "#64748B",
-  C.purple,
-  C.teal,
-  C.negative,
-];
+import { CHOOSEABLE_COLORS, DEBT_COLOR_PALETTE, CHART_PASTEL_SERIES, PASTEL_COLORS } from "./lib/colorPalettes.js";
 
-/** Distinct colors for debt charts — professional set, no pastel duplicates. */
-export const DEBT_PALETTE = [
-  "#4F46E5",
-  "#0EA5E9",
-  "#059669",
-  "#D97706",
-  "#64748B",
-  "#7C3AED",
-  "#0D9488",
-  "#BE185D",
-  "#0369A1",
-  "#15803D",
-  "#C2410C",
-  "#475569",
-];
+export { CHOOSEABLE_COLORS, PASTEL_COLORS } from "./lib/colorPalettes.js";
+
+/** Categorical colors for spending / income breakdown charts. */
+export const PIE_COLORS = CHART_PASTEL_SERIES;
+
+/** User-selectable pastels for debt charts, loans, and edit modals. */
+export const DEBT_PALETTE = DEBT_COLOR_PALETTE;
 
 export function isValidHexColor(s) {
   return typeof s === "string" && /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(s.trim());

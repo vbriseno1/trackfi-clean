@@ -4,12 +4,15 @@ import { C, MF } from "../theme.js";
 import { fmt, todayStr } from "../lib/moneyFormat.js";
 import { Modal, FI, FS, BarProg } from "../components/ui.jsx";
 import { optimizedSettlementPairs } from "../lib/household.js";
+import { ColorSwatchPicker } from "../components/ColorSwatchPicker.jsx";
+import { CHOOSEABLE_COLORS } from "../lib/colorPalettes.js";
+
+const DEFAULT_MEMBER_COLOR = CHOOSEABLE_COLORS[0];
 
 export default function HouseholdView({household,setHousehold,expenses,bills=[],showToast,setBills,settlements,setSettlements,hhBudgets,setHhBudgets}){
   const[tab,setTab]=useState("split");// split | settle | budget | members
-  const[form,setForm]=useState({name:"",emoji:"😊",color:"#6366f1"});
+  const[form,setForm]=useState({name:"",emoji:"😊",color:DEFAULT_MEMBER_COLOR});
   const EMOJIS_HH=["😊","😄","🧑","👩","👨","🧔","👱","🧑‍💼","👩‍💼","🧑‍⚕️","👩‍⚕️","⭐","🌟","🏠"];
-  const COLORS_HH=["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#ec4899"];
 
   const memberLabel=m=>{
     const n=m?.name!=null?String(m.name).trim():"";
@@ -290,12 +293,12 @@ export default function HouseholdView({household,setHousehold,expenses,bills=[],
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
               {EMOJIS_HH.map(e=>(<button key={e} onClick={()=>setForm(f=>({...f,emoji:e}))} style={{fontSize:18,background:form.emoji===e?C.accentBg:"#fff",border:form.emoji===e?`2px solid ${C.accent}`:"2px solid transparent",borderRadius:8,padding:"3px 5px",cursor:"pointer"}}>{e}</button>))}
             </div>
-            <div style={{display:"flex",gap:8,marginBottom:8}}>
-              {COLORS_HH.map(c=>(<button key={c} onClick={()=>setForm(f=>({...f,color:c}))} style={{width:22,height:22,borderRadius:"50%",background:c,border:form.color===c?"3px solid "+C.text:"3px solid transparent",cursor:"pointer"}}/>))}
+            <div style={{marginBottom:8}}>
+              <ColorSwatchPicker label="Color" value={form.color} onChange={(c)=>setForm(f=>({...f,color:c}))} size={26} showCustom={false}/>
             </div>
             <div style={{display:"flex",gap:8}}>
               <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Partner, Roommate..." style={{flex:1,background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:14,color:C.text,outline:"none"}}/>
-              <button onClick={()=>{if(!form.name.trim())return;const id="member_"+Date.now();setHousehold(h=>({...h,members:[...h.members,{id,name:form.name.trim(),emoji:form.emoji,color:form.color}]}));setForm({name:"",emoji:"😊",color:"#6366f1"});showToast("✓ "+form.name+" added");}} style={{background:C.accent,border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Add</button>
+              <button onClick={()=>{if(!form.name.trim())return;const id="member_"+Date.now();setHousehold(h=>({...h,members:[...h.members,{id,name:form.name.trim(),emoji:form.emoji,color:form.color}]}));setForm({name:"",emoji:"😊",color:DEFAULT_MEMBER_COLOR});showToast("✓ "+form.name+" added");}} style={{background:C.accent,border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>Add</button>
             </div>
           </div>
 

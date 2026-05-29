@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { C, MF, FULL_MOS } from "../theme.js";
 import { fmt } from "../lib/moneyFormat.js";
+import { ColorSwatchPicker } from "../components/ColorSwatchPicker.jsx";
 
 const TODAY = new Date();
 
@@ -96,6 +97,19 @@ export default function CalendarView({expenses,bills,calColors,setCalColors,setE
         </div>)}
         <button onClick={onAdd} style={{marginTop:10,width:'100%',background:C.accentBg,border:`1px solid ${C.accentMid}`,borderRadius:10,padding:'9px 0',color:C.accent,fontWeight:700,fontSize:13,cursor:'pointer'}}>+ Log expense for {FULL_MOS[mo]} {selected}</button>
       </div>}
+      <div className="fv-card" style={{padding:14,marginTop:4}}>
+        <div style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>Calendar colors</div>
+        {[
+          {key:"expense",label:"Days with spending"},
+          {key:"bill",label:"Days with bills"},
+          {key:"today",label:"Today highlight"},
+        ].map(({key,label},i,arr)=>(
+          <div key={key} style={{marginBottom:i<arr.length-1?14:0}}>
+            <div style={{fontSize:12,fontWeight:600,color:C.textMid,marginBottom:6}}>{label}</div>
+            <ColorSwatchPicker label="" value={calColors[key]||C.accent} onChange={(hex)=>setCalColors(p=>({...p,[key]:hex}))} size={26} showCustom={false}/>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -7,6 +7,8 @@ import { GoalRing } from "../components/GoalRing.jsx";
 import { RechartsReady, ChartPanel, useChartTheme } from "../components/RechartsBridge.jsx";
 import { chartColor } from "../lib/chartTheme.js";
 import { EmojiPicker } from "../components/EmojiPicker.jsx";
+import { ColorSwatchPicker } from "../components/ColorSwatchPicker.jsx";
+import { CHOOSEABLE_COLORS } from "../lib/colorPalettes.js";
 import { normalizePaidFrom, pickDefaultBankAccountId, hasCashSubaccounts, PAID_FROM_OPTIONS, PAID_FROM_FS_LABELS } from "../lib/accountsLogic.js";
 import { cashAccountsByKind } from "../lib/cashAccounts.js";
 
@@ -18,7 +20,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
   const[showAdd,setShowAdd]=useState(false);
   const[form,setForm]=useState({});
   const ff=k=>e=>setForm(p=>({...p,[k]:e.target.value}));
-  function add(){if(!form.name||!form.target)return;setGoals(p=>[...p,{id:Date.now().toString(),name:form.name,target:parseFloat(form.target),saved:parseFloat(form.saved||0),monthly:parseFloat(form.monthly||0),icon:form.icon||"🎯",color:form.color||C.teal}]);showToast&&showToast("Goal added — "+form.name);setForm({});setShowAdd(false);}
+  function add(){if(!form.name||!form.target)return;setGoals(p=>[...p,{id:Date.now().toString(),name:form.name,target:parseFloat(form.target),saved:parseFloat(form.saved||0),monthly:parseFloat(form.monthly||0),icon:form.icon||"🎯",color:form.color||defaultGoalColor}]);showToast&&showToast("Goal added — "+form.name);setForm({});setShowAdd(false);}
   const depositToGoal=React.useCallback((goal,rawAmt)=>{
     const amt=parseFloat(rawAmt);
     if(!(amt>0))return;
@@ -62,7 +64,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
             <div style={{fontFamily:MF,fontWeight:800,fontSize:16,color:C.text}}>{pct.toFixed(0)}%</div>
           </div>
         </div>
-        <div onClick={()=>{setEditGoal(goal);setEditForm({name:goal.name,target:String(goal.target),monthly:String(goal.monthly||0),saved:String(goal.saved||0)});}} style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:2,textAlign:"center",cursor:"pointer"}}>{goal.name} <span style={{fontSize:11,color:C.textLight}}>✎</span></div>
+        <div onClick={()=>{setEditGoal(goal);setEditForm({name:goal.name,target:String(goal.target),monthly:String(goal.monthly||0),saved:String(goal.saved||0),color:goal.color||defaultGoalColor});}} style={{fontFamily:MF,fontWeight:700,fontSize:14,color:C.text,marginBottom:2,textAlign:"center",cursor:"pointer"}}>{goal.name} <span style={{fontSize:11,color:C.textLight}}>✎</span></div>
         <div style={{fontSize:12,color:C.textLight,marginBottom:8,textAlign:"center"}}>{fmt(goal.saved)} of {fmt(goal.target)}</div>
         {months>0&&<div style={{fontSize:11,color:C.green,fontWeight:600,marginBottom:4}}>{months} mo · {targetDate}</div>}
         <div style={{display:"flex",gap:6,width:"100%"}}>
@@ -74,7 +76,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
     );
   }
   const ICONS=["🎯","🏠","🚗","✈️","💍","📱","🎓","🐕","💪","🌴","🏖️","💰"];
-  const COLORS=[C.accent,C.green,C.purple,C.amber,C.red,C.teal,C.purple];
+  const defaultGoalColor=CHOOSEABLE_COLORS[5];
   return(
     <div className="fu fv-view-root">
       <div style={{display:"flex",gap:6,background:C.borderLight,borderRadius:12,padding:4,marginBottom:16}}>
@@ -117,7 +119,6 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
           });
           return point;
         });
-        const GOAL_COLORS=[C.teal,C.accent,C.green,C.purple,C.amber];
         return(
           <ChartPanel title="12-month projection" subtitle="Where each goal lands with monthly contributions">
             <RechartsReady minHeight={160} render={R=>(
@@ -139,7 +140,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
                 const mo=parseFloat(g.monthly||0);
                 const months2=mo>0?Math.ceil(rem/mo):0;
                 return(<div key={g.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:11}}>
-                  <div style={{width:10,height:2,background:g.color||GOAL_COLORS[i%GOAL_COLORS.length],borderRadius:1}}/>
+                  <div style={{width:10,height:2,background:g.color||chartColor(i),borderRadius:1}}/>
                   <span style={{color:C.textMid,fontWeight:500}}>{g.name}</span>
                   {months2>0&&<span style={{color:C.textLight}}>·{months2}mo</span>}
                 </div>);
@@ -176,7 +177,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
               <input type="number" placeholder="From checking ($)" id={"ldep-"+g.id} style={{flex:1,border:`1.5px solid ${C.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:C.text,outline:"none",background:C.surfaceAlt}}
                 onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){depositToGoal(g,e.target.value);e.target.value="";}}}/>
               <button onClick={()=>{const inp=document.getElementById("ldep-"+g.id);if(inp?.value){depositToGoal(g,inp.value);inp.value="";}}} style={{padding:"8px 12px",borderRadius:10,border:"none",background:C.green,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>+</button>
-              <button onClick={()=>{setEditGoal(g);setEditForm({name:g.name,target:String(g.target),monthly:String(g.monthly||0),saved:String(g.saved||0)});}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",fontSize:12,color:C.textMid,fontWeight:600}}>Edit</button>
+              <button onClick={()=>{setEditGoal(g);setEditForm({name:g.name,target:String(g.target),monthly:String(g.monthly||0),saved:String(g.saved||0),color:g.color||defaultGoalColor});}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",fontSize:12,color:C.textMid,fontWeight:600}}>Edit</button>
               <button onClick={()=>{setGoals(p=>p.filter(x=>x.id!==g.id));showToast&&showToast("Goal removed","error");}} style={{padding:"8px 10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",color:C.textLight,display:"flex",alignItems:"center"}}><Trash2 size={14}/></button>
             </div>
           </div>);
@@ -355,7 +356,26 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
           </div>
         );
       })()}
-      {editGoal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setEditGoal(null)}><div style={{background:"#fff",borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}><div className="fv-page-title" style={{fontSize:18,marginBottom:16}}>Edit goal</div><FI label="Goal Name" value={editForm.name||""} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}/><div style={{display:"flex",gap:10}}><FI half label="Target ($)" type="number" value={editForm.target||""} onChange={e=>setEditForm(p=>({...p,target:e.target.value}))}/><FI half label="Saved ($)" type="number" value={editForm.saved||""} onChange={e=>setEditForm(p=>({...p,saved:e.target.value}))}/></div><FI label="Monthly Contribution ($)" type="number" value={editForm.monthly||""} onChange={e=>setEditForm(p=>({...p,monthly:e.target.value}))}/><div style={{display:"flex",gap:10,marginTop:8}}><button onClick={()=>setEditGoal(null)} style={{flex:1,padding:"13px",borderRadius:14,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:700,fontSize:16,cursor:"pointer"}}>Cancel</button><button onClick={()=>{setGoals(p=>p.map(g=>g.id===editGoal.id?{...g,name:editForm.name||g.name,target:parseFloat(editForm.target)||g.target,saved:parseFloat(editForm.saved||0),monthly:parseFloat(editForm.monthly||0)}:g));showToast&&showToast("Goal updated!");setEditGoal(null);}} style={{flex:2,padding:"13px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Save Changes</button></div></div></div>}
+      {editGoal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setEditGoal(null)}>
+          <div style={{background:"#fff",borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
+            <div className="fv-page-title" style={{fontSize:18,marginBottom:16}}>Edit goal</div>
+            <FI label="Goal Name" value={editForm.name||""} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}/>
+            <div style={{display:"flex",gap:10}}>
+              <FI half label="Target ($)" type="number" value={editForm.target||""} onChange={e=>setEditForm(p=>({...p,target:e.target.value}))}/>
+              <FI half label="Saved ($)" type="number" value={editForm.saved||""} onChange={e=>setEditForm(p=>({...p,saved:e.target.value}))}/>
+            </div>
+            <FI label="Monthly Contribution ($)" type="number" value={editForm.monthly||""} onChange={e=>setEditForm(p=>({...p,monthly:e.target.value}))}/>
+            <div style={{marginBottom:16}}>
+              <ColorSwatchPicker label="Color" value={editForm.color||defaultGoalColor} onChange={(c)=>setEditForm(p=>({...p,color:c}))}/>
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:8}}>
+              <button onClick={()=>setEditGoal(null)} style={{flex:1,padding:"13px",borderRadius:14,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:700,fontSize:16,cursor:"pointer"}}>Cancel</button>
+              <button onClick={()=>{setGoals(p=>p.map(g=>g.id===editGoal.id?{...g,name:editForm.name||g.name,target:parseFloat(editForm.target)||g.target,saved:parseFloat(editForm.saved||0),monthly:parseFloat(editForm.monthly||0),color:editForm.color||g.color}:g));showToast&&showToast("Goal updated!");setEditGoal(null);}} style={{flex:2,padding:"13px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
             {showAdd&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setShowAdd(false)}>
           <div style={{background:"#fff",borderRadius:"24px 24px 0 0",padding:28,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
@@ -364,7 +384,7 @@ export default function SavingsGoalsView({goals,setGoals,income,accounts,account
             <div style={{display:"flex",gap:10}}><FI half label="Target ($)" type="number" placeholder="5000" value={form.target||""} onChange={ff("target")}/><FI half label="Saved So Far ($)" type="number" placeholder="0" value={form.saved||""} onChange={ff("saved")}/></div>
             <FI label="Monthly Contribution ($)" type="number" placeholder="200" value={form.monthly||""} onChange={ff("monthly")}/>
             <div style={{marginBottom:12}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Icon</div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{ICONS.map(ic=><button key={ic} onClick={()=>setForm(p=>({...p,icon:ic}))} style={{fontSize:22,padding:6,borderRadius:10,border:`2px solid ${form.icon===ic?C.accent:C.border}`,background:form.icon===ic?C.accentBg:"#fff",cursor:"pointer"}}>{ic}</button>)}</div></div>
-            <div style={{marginBottom:20}}><div style={{fontSize:11,fontWeight:700,color:C.slate,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Color</div><div style={{display:"flex",gap:8}}>{COLORS.map(c=><button key={c} onClick={()=>setForm(p=>({...p,color:c}))} style={{width:32,height:32,borderRadius:"50%",background:c,border:`3px solid ${form.color===c?"#fff":c}`,outline:form.color===c?`2px solid ${c}`:"none",cursor:"pointer"}}/>)}</div></div>
+            <div style={{marginBottom:20}}><ColorSwatchPicker label="Color" value={form.color||defaultGoalColor} onChange={(c)=>setForm(p=>({...p,color:c}))}/></div>
             <div style={{display:"flex",gap:10}}>
               <button onClick={()=>setShowAdd(false)} style={{flex:1,padding:"13px",borderRadius:14,border:`1.5px solid ${C.border}`,background:C.surface,color:C.textMid,fontWeight:700,fontSize:16,cursor:"pointer"}}>Cancel</button>
               <button onClick={add} style={{flex:2,padding:"13px",borderRadius:14,border:"none",background:C.accent,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer",fontFamily:MF}}>Add Goal</button>

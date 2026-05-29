@@ -73,10 +73,10 @@ export const DEF_DASHCONFIG = {
  * Calendar dot colors. Factory so theme tokens stay the single source of truth.
  * Pass an alternate palette (e.g. dark mode) if needed; defaults to the light `C` tokens.
  */
-export const DEF_CALCOLORS = (palette = C) => ({
-  expense: palette.red,
-  bill: palette.amber,
-  today: palette.accent,
+export const DEF_CALCOLORS = () => ({
+  expense: "#FDA4AF",
+  bill: "#FDE68A",
+  today: "#A5B4FC",
   dotStyle: "circle",
 });
 

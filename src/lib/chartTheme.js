@@ -3,18 +3,10 @@
  * Import these in any view that renders charts so they stay consistent in light/dark mode.
  */
 import { C } from "../theme.js";
+import { CHART_PASTEL_SERIES } from "./colorPalettes.js";
 
-/** Muted categorical palette for pies, bars, and multi-series charts (no pastels). */
-export const CHART_SERIES = [
-  "#4F46E5",
-  "#0EA5E9",
-  "#059669",
-  "#D97706",
-  "#64748B",
-  "#7C3AED",
-  "#0D9488",
-  "#BE185D",
-];
+/** Soft categorical palette for pies, bars, and multi-series charts. */
+export const CHART_SERIES = CHART_PASTEL_SERIES;
 
 export function chartColor(index) {
   return CHART_SERIES[index % CHART_SERIES.length];

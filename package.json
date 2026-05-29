@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && node e2e/with-server.mjs",
-    "test:release": "npm run test && npm run test:e2e"
+    "test:release": "npm run test && npm run test:e2e",
+    "test:backend": "node scripts/backend-sync-test.mjs",
+    "test:backend:cleanup": "node scripts/backend-sync-cleanup.mjs"
   },
   "dependencies": {
     "@sentry/react": "^10.46.0",
