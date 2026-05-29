@@ -91,6 +91,12 @@ import {
   paycheckPeriodNeedsHandling,
 } from "./lib/safeToSpend.js";
 import { applyUserDataSnapshot, buildAuthoritativeCloudMap } from "./lib/userData.js";
+import {
+  resolveEmptyCloudAction,
+  EMPTY_CLOUD_ACTION,
+  applyOnboardingFlagsFromSnapshot,
+  shouldMarkOnboardedFromSnapshot,
+} from "./lib/syncPolicy.js";
 import { parseMsg, chatMatchBill, chatPickExpenseDate, chatIsStatsQuery } from "./lib/parseMsg.js";
 import { hashPIN } from "./lib/pinHash.js";
 import {
@@ -395,7 +401,10 @@ function AppInner(){
         cancelPendingDebouncedSync();
         if(res.data.length===0){
           applyPulledUserDataRows([]);
-          if(opts.preserveLocalOnEmpty===true){
+          const emptyAction=opts.preserveLocalOnEmpty===true
+            ?EMPTY_CLOUD_ACTION.HYDRATE_LOCAL
+            :resolveEmptyCloudAction();
+          if(emptyAction===EMPTY_CLOUD_ACTION.HYDRATE_LOCAL){
             cloudLoadedRef.current=true;
           }else{
             resetUserState({clearOnboarding:true,cloudLoadedRefTarget:true});
@@ -427,6 +436,7 @@ function AppInner(){
           setDarkMode(pulledSettings.darkMode);
         }
         cloudLoadedRef.current=true;
+        applyOnboardingFlagsFromSnapshot(fullMap,setOnboarded);
         const scope="fv6_"+uid.slice(0,8)+":";
         for(const key of SCOPED_USER_DATA_KEYS){
           if(!Object.prototype.hasOwnProperty.call(fullMap,key))continue;
@@ -461,8 +471,9 @@ function AppInner(){
     setAuthSession(null);
     setSkipAuth(true);
   }
+  /** Wipes in-memory + scoped local data. Onboarding flag is opt-in — avoids accidental wizard loops. */
   function resetUserState(opts={}){
-    const clearOnboarding=opts.clearOnboarding!==false;
+    const clearOnboarding=opts.clearOnboarding===true;
     setExpenses([]);setBills([]);setDebts([]);setSGoals([]);setBGoals([]);
     setTrades([]);setShifts([]);setBalHist([]);setNotifs([]);setRecurrings([]);
     setSettlements([]);setHhBudgets([]);setNwGoal(null);setSubDismissed([]);
@@ -646,6 +657,8 @@ function AppInner(){
     try{localStorage.setItem("fv_onboarded","1");localStorage.removeItem("fv_pending_name");}catch{}
     ss("fv6:onboarded",true);
     setOnboarded(true);
+    cloudLoadedRef.current=true;
+    void flushPendingSync();
   }
 
   function handleTryDemoFresh(){
@@ -774,8 +787,11 @@ function AppInner(){
             const bulk=await supaFetchUserDataRows(uid_boot);
             if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length===0){
               applyPulledUserDataRows([]);
-              resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
-              return;
+              if(resolveEmptyCloudAction()===EMPTY_CLOUD_ACTION.WIPE_TO_DEFAULTS){
+                resetUserState({ clearOnboarding: true, cloudLoadedRefTarget: true });
+                return;
+              }
+              // Empty cloud but local onboarding/data exists — hydrate from scoped storage below.
             }
             if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length>0){
               applyPulledUserDataRows(bulk.data);
@@ -803,6 +819,7 @@ function AppInner(){
               }
               cloudLoadedRef.current=true;
               cloudHydratedFromBulk=true;
+              applyOnboardingFlagsFromSnapshot(fullMap,setOnboarded);
             }
           }catch{}
         }
@@ -832,8 +849,11 @@ function AppInner(){
           if(ar&&typeof ar==="object")bootMap.accountRates=ar;
         }catch{}
         try{
-          const ob=_bulkMap["onboarded"]!==undefined?_bulkMap["onboarded"]:(await sg("fv6:onboarded"));
-          if(ob)bootMap.onboarded=ob;
+          if(shouldMarkOnboardedFromSnapshot(bootMap))bootMap.onboarded=true;
+          else{
+            const ob=_bulkMap["onboarded"]!==undefined?_bulkMap["onboarded"]:(await sg("fv6:onboarded"));
+            if(ob)bootMap.onboarded=ob;
+          }
         }catch{}
         applyUserDataSnapshot(bootMap,{
           setExpenses,setBills,setDebts,setBGoals,setSGoals,setCats,setTrades,
@@ -842,6 +862,7 @@ function AppInner(){
           setDashConfig,setHousehold,setTradingAccount,setAppName,setGreetName,
           setProfCategory,setProfSub,setAccountRates,setOnboarded,
         },{bootDefaults:true});
+        applyOnboardingFlagsFromSnapshot(bootMap,setOnboarded);
         const bootSettings = bootMap.settings;
         if(
           bootSettings &&
@@ -1618,9 +1639,7 @@ function AppInner(){
         return false;
       }
     }
-    resetUserState();
-    setOnboarded(false);
-    try{localStorage.removeItem("fv_onboarded");}catch{}
+    resetUserState({clearOnboarding:true});
     setSyncRecoverableError(false);
     setStorageQuotaBlocked(false);
     resetLocalStorageQuotaWarned();

@@ -239,6 +239,48 @@ export function isTrackfiDemoMode() {
   }
 }
 
+/** Device flag set when the user finishes the first-run wizard (survives empty cloud pulls). */
+export function isLocalOnboardingComplete() {
+  try {
+    return localStorage.getItem("fv_onboarded") === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** True when scoped localStorage already has profile or transaction data worth keeping. */
+export function localUserHasSavedData() {
+  try {
+    if (isTrackfiDemoMode()) return true;
+    const scope = getScope();
+    for (const bare of ["accounts", "income", "expenses", "bills", "debts", "sgoals", "bgoals"]) {
+      const raw = localStorage.getItem(scope + bare);
+      if (raw == null) continue;
+      let v;
+      try {
+        v = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      if (bare === "accounts") {
+        if (parseFloat(v?.checking || 0) > 0 || parseFloat(v?.savings || 0) > 0) return true;
+        if (Array.isArray(v?.cashAccounts) && v.cashAccounts.some((a) => parseFloat(a?.balance || 0) > 0)) return true;
+        continue;
+      }
+      if (bare === "income" && parseFloat(v?.primary || 0) > 0) return true;
+      if (Array.isArray(v) && v.length > 0) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** Keep local onboarding + edits when Supabase has no rows yet (new account / upload pending). */
+export function shouldPreserveLocalWhenCloudEmpty() {
+  return isLocalOnboardingComplete() || localUserHasSavedData();
+}
+
 /** Bare `user_data.key` values — single list for cache clear, offline mirror, and authoritative sync. */
 export const SCOPED_USER_DATA_KEYS = [
   "accounts",

@@ -127,6 +127,13 @@ describe("applyUserDataSnapshot cloudPull", () => {
     expect(liquidFieldDisplay(state.accounts, "checking")).toBe("2000");
   });
 
+  it("bootDefaults keeps onboarded when map includes onboarded true", () => {
+    const { H, state } = makeSnapshotHandlers({ onboarded: false });
+    applyUserDataSnapshot({ onboarded: true, income: { primary: "3000" } }, H, { bootDefaults: true });
+    expect(state.onboarded).toBe(true);
+    expect(localStorage.getItem("fv_onboarded")).toBe("1");
+  });
+
   it("sets onboarded from cloud and localStorage flag", () => {
     const { H, state } = makeSnapshotHandlers();
     applyUserDataSnapshot({ onboarded: true }, H, { cloudPull: true });

@@ -29,6 +29,22 @@ describe('supabase helpers', () => {
     expect(getScope()).toBe('fv6_abcdefgh:')
   })
 
+  it('shouldPreserveLocalWhenCloudEmpty respects fv_onboarded and scoped accounts', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'k')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem('fv_onboarded', '1')
+    vi.resetModules()
+    const { shouldPreserveLocalWhenCloudEmpty } = await import('./supabase.js')
+    expect(shouldPreserveLocalWhenCloudEmpty()).toBe(true)
+    localStorage.removeItem('fv_onboarded')
+    vi.resetModules()
+    const mod2 = await import('./supabase.js')
+    const scope = mod2.getScope()
+    localStorage.setItem(scope + 'accounts', JSON.stringify({ checking: '2500', savings: '', cashAccounts: [] }))
+    expect(mod2.shouldPreserveLocalWhenCloudEmpty()).toBe(true)
+  })
+
   it('getScope and getUserId ignore session when fv_skip_auth is set', async () => {
     vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'k')
