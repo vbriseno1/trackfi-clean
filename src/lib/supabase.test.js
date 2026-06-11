@@ -282,11 +282,149 @@ describe('supabase helpers', () => {
       JSON.stringify({ user: { id: 'user1234567890' }, access_token: 'tok' })
     )
     vi.resetModules()
+    const { markCloudHydrationConfirmed } = await import('./syncLifecycle.js')
     const { ss, getUploadSyncStatus } = await import('./supabase.js')
+    markCloudHydrationConfirmed()
     await ss('fv6:expenses', [{ id: 1 }])
     const st = getUploadSyncStatus()
     expect(st.pendingCount).toBeGreaterThan(0)
     expect(st.hasUploadProblem).toBe(false)
+  })
+
+  it('ss never schedules a cloud upload before cloud hydration is confirmed', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem(
+      'fv_session',
+      JSON.stringify({ user: { id: 'user1234567890' }, access_token: 'tok' })
+    )
+    vi.useFakeTimers()
+    vi.resetModules()
+    const { ss, getUploadSyncStatus, getScope } = await import('./supabase.js')
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    await ss('fv6:expenses', [{ id: 1 }])
+    expect(getUploadSyncStatus().pendingCount).toBe(0)
+    await vi.runAllTimersAsync()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    // Local write still happens — offline edits survive a refresh.
+    expect(localStorage.getItem(getScope() + 'expenses')).toBe(JSON.stringify([{ id: 1 }]))
+    vi.useRealTimers()
+  })
+
+  it('ss uploads after hydration is confirmed and flushPendingSync respects the gate', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem(
+      'fv_session',
+      JSON.stringify({ user: { id: 'user1234567890' }, access_token: 'tok' })
+    )
+    vi.resetModules()
+    const sync = await import('./syncLifecycle.js')
+    const { ss, flushPendingSync } = await import('./supabase.js')
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    sync.markCloudHydrationConfirmed()
+    await ss('fv6:expenses', [{ id: 1 }])
+    const out = await flushPendingSync()
+    expect(out.error).toBe(false)
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+    expect(globalThis.fetch.mock.calls[0][0]).toContain('/rest/v1/user_data')
+  })
+
+  it('ss skips uploading an exact echo of the pulled cloud value', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    localStorage.setItem(
+      'fv_session',
+      JSON.stringify({ user: { id: 'user1234567890' }, access_token: 'tok' })
+    )
+    vi.useFakeTimers()
+    vi.resetModules()
+    const { markCloudHydrationConfirmed } = await import('./syncLifecycle.js')
+    const { ss, recordCloudEchoValues, getUploadSyncStatus } = await import('./supabase.js')
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    markCloudHydrationConfirmed()
+    const pulled = [{ id: 7, name: 'Rent' }]
+    recordCloudEchoValues({ bills: pulled })
+    // Hydration write-back of the identical value: no upload scheduled.
+    await ss('fv6:bills', [{ id: 7, name: 'Rent' }])
+    expect(getUploadSyncStatus().pendingCount).toBe(0)
+    await vi.runAllTimersAsync()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    // A real change does upload.
+    await ss('fv6:bills', [{ id: 7, name: 'Rent' }, { id: 8, name: 'Power' }])
+    expect(getUploadSyncStatus().pendingCount).toBe(1)
+    await vi.runAllTimersAsync()
+    expect(globalThis.fetch).toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('supaFetchUserDataRowsWithRetry retries then reports definitive failure', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    vi.resetModules()
+    const { supaFetchUserDataRowsWithRetry } = await import('./supabase.js')
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network down'))
+    const onAttemptFailed = vi.fn()
+    const out = await supaFetchUserDataRowsWithRetry('user1234567890', {
+      attempts: 3,
+      perTryTimeoutMs: 50,
+      backoffMs: 1,
+      deadlineMs: 5000,
+      onAttemptFailed,
+    })
+    expect(out.ok).toBe(false)
+    expect(out.error).toBeTruthy()
+    expect(onAttemptFailed).toHaveBeenCalledTimes(3)
+    // Each attempt issues primary + fallback select.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(6)
+  })
+
+  it('supaFetchUserDataRowsWithRetry succeeds on a later attempt', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    vi.resetModules()
+    const { supaFetchUserDataRowsWithRetry } = await import('./supabase.js')
+    const rows = [{ key: 'bills', value: [], updated_at: '2026-01-01T00:00:00Z' }]
+    let calls = 0
+    globalThis.fetch = vi.fn(async () => {
+      calls += 1
+      if (calls <= 2) throw new Error('flaky')
+      return { ok: true, json: async () => rows }
+    })
+    const out = await supaFetchUserDataRowsWithRetry('user1234567890', {
+      attempts: 3,
+      perTryTimeoutMs: 50,
+      backoffMs: 1,
+      deadlineMs: 5000,
+    })
+    expect(out.ok).toBe(true)
+    expect(out.data).toEqual(rows)
+  })
+
+  it('supaFetchUserDataRowsWithRetry never treats a failure as an empty account', async () => {
+    vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
+    vi.stubGlobal('localStorage', freshStorage())
+    vi.resetModules()
+    const { supaFetchUserDataRowsWithRetry } = await import('./supabase.js')
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ message: 'boom' }),
+    })
+    const out = await supaFetchUserDataRowsWithRetry('user1234567890', {
+      attempts: 2,
+      perTryTimeoutMs: 50,
+      backoffMs: 1,
+      deadlineMs: 5000,
+    })
+    expect(out.ok).toBe(false)
+    expect(out.data).toBeUndefined()
   })
 
   it('cancelPendingDebouncedSync clears without throwing', async () => {

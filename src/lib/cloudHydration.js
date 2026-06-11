@@ -3,12 +3,14 @@
  */
 import {
   applyPulledUserDataRows,
+  recordCloudEchoValues,
   cancelPendingDebouncedSync,
   SCOPED_USER_DATA_KEYS,
   sg,
   getScope,
 } from "./supabase.js";
 import { applyUserDataSnapshot, buildAuthoritativeCloudMap } from "./userData.js";
+import { DEF_SETTINGS } from "./defaults.js";
 import {
   resolveEmptyCloudAction,
   EMPTY_CLOUD_ACTION,
@@ -103,6 +105,15 @@ export function applyCloudPullResult({ rows, uid, handlers, setDarkMode }) {
   applyPulledUserDataRows(rows);
   const raw = rowsToRawMap(rows);
   const fullMap = buildAuthoritativeCloudMap(raw);
+  // Hydration must never write back to the cloud: remember what the cloud now holds
+  // (rows + filled defaults) so the persistence effects' echo writes skip upload.
+  // Settings are recorded post-merge to match what React state will re-serialize.
+  recordCloudEchoValues({
+    ...fullMap,
+    ...(fullMap.settings && typeof fullMap.settings === "object"
+      ? { settings: { ...DEF_SETTINGS, ...fullMap.settings } }
+      : {}),
+  });
   applyUserDataSnapshot(fullMap, handlers, { cloudPull: true });
   applyDarkModeFromSettings(fullMap, setDarkMode);
   applyOnboardingFlagsFromSnapshot(fullMap, handlers.setOnboarded);

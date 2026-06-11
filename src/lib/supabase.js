@@ -2,6 +2,7 @@
  * Supabase REST + scoped localStorage sync layer for Trackfi.
  * Kept separate from App.jsx for testing and bundle clarity.
  */
+import { isCloudHydrationConfirmed } from "./syncLifecycle.js";
 
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
@@ -104,13 +105,42 @@ export async function supaFetch(path, opts = {}) {
 }
 
 /** Prefer `updated_at` for versioned sync; fall back if the column isn't exposed (avoids hard sync failure). */
-export async function supaFetchUserDataRows(uid) {
+export async function supaFetchUserDataRows(uid, opts = {}) {
   const q = encodeURIComponent(uid);
+  const reqOpts = typeof opts.timeoutMs === "number" ? { timeoutMs: opts.timeoutMs } : {};
   const primary = await supaFetch(
-    `/rest/v1/user_data?user_id=eq.${q}&select=key,value,updated_at`
+    `/rest/v1/user_data?user_id=eq.${q}&select=key,value,updated_at`,
+    reqOpts
   );
   if (!primary.error && Array.isArray(primary.data)) return primary;
-  return supaFetch(`/rest/v1/user_data?user_id=eq.${q}&select=key,value`);
+  return supaFetch(`/rest/v1/user_data?user_id=eq.${q}&select=key,value`, reqOpts);
+}
+
+/**
+ * Boot-time bulk fetch with bounded retries. Returns only after the cloud state is known
+ * ({ok:true, data}) or every attempt within the deadline failed ({ok:false, error}).
+ * Callers must treat ok:false as "cloud state UNKNOWN" — never as "cloud is empty".
+ */
+export async function supaFetchUserDataRowsWithRetry(
+  uid,
+  { attempts = 3, perTryTimeoutMs = 9000, backoffMs = 1500, deadlineMs = 45000, onAttemptFailed } = {}
+) {
+  const start = Date.now();
+  let last = null;
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) {
+      // Worst case per attempt is two requests (primary + fallback select).
+      const remaining = deadlineMs - (Date.now() - start);
+      if (remaining < perTryTimeoutMs + backoffMs) break;
+      await new Promise((r) => setTimeout(r, backoffMs));
+    }
+    last = await supaFetchUserDataRows(uid, { timeoutMs: perTryTimeoutMs });
+    if (!last.error && Array.isArray(last.data)) return { ok: true, data: last.data };
+    try {
+      onAttemptFailed?.(i + 1, last?.error);
+    } catch {}
+  }
+  return { ok: false, error: last?.error || { message: "Could not reach the cloud" } };
 }
 
 /** Bounded refresh-token POST so a stuck Supabase /auth endpoint cannot hang the app indefinitely. */
@@ -399,6 +429,13 @@ function touchLastSyncTimestamp() {
 /** Last `updated_at` we saw from Supabase per key — used so stale tabs cannot overwrite newer cloud rows. */
 const _lastKnownRowUpdatedAt = Object.create(null);
 
+/**
+ * Serialized values known to already match the cloud (recorded on pull / after successful
+ * upload). ss() skips scheduling an upload when the value is an exact echo of these, so
+ * hydration itself never writes anything back to the cloud.
+ */
+const _lastKnownCloudJson = Object.create(null);
+
 /** After each successful pull, replace version map from REST rows `{ key, value, updated_at }`. */
 export function applyPulledUserDataRows(rows) {
   for (const k of SCOPED_USER_DATA_KEYS) delete _lastKnownRowUpdatedAt[k];
@@ -409,8 +446,21 @@ export function applyPulledUserDataRows(rows) {
   }
 }
 
+/** Record the authoritative pulled map (rows + filled defaults) so echo persists are not re-uploaded. */
+export function recordCloudEchoValues(map) {
+  for (const k of Object.keys(_lastKnownCloudJson)) delete _lastKnownCloudJson[k];
+  if (!map || typeof map !== "object") return;
+  for (const k of Object.keys(map)) {
+    try {
+      const s = JSON.stringify(map[k]);
+      if (s !== undefined) _lastKnownCloudJson[k] = s;
+    } catch {}
+  }
+}
+
 export function clearUserDataRowVersions() {
   for (const k of Object.keys(_lastKnownRowUpdatedAt)) delete _lastKnownRowUpdatedAt[k];
+  for (const k of Object.keys(_lastKnownCloudJson)) delete _lastKnownCloudJson[k];
 }
 
 let _uploadConflictHandler = null;
@@ -437,6 +487,12 @@ function scheduleConflictPull() {
 async function _flushKey(uid, bare, v) {
   const nextUpdatedAt = new Date().toISOString();
   const lastTs = _lastKnownRowUpdatedAt[bare];
+  const recordEcho = () => {
+    try {
+      const s = JSON.stringify(v);
+      if (s !== undefined) _lastKnownCloudJson[bare] = s;
+    } catch {}
+  };
   try {
     if (lastTs) {
       const r = await supaFetch(
@@ -457,6 +513,7 @@ async function _flushKey(uid, bare, v) {
       if (Array.isArray(raw)) {
         if (raw.length === 1 && raw[0]?.updated_at != null) {
           _lastKnownRowUpdatedAt[bare] = String(raw[0].updated_at);
+          recordEcho();
           _failedUploadKeys.delete(bare);
           bumpUploadStatus();
           touchLastSyncTimestamp();
@@ -471,6 +528,7 @@ async function _flushKey(uid, bare, v) {
         return { error: true };
       }
       _lastKnownRowUpdatedAt[bare] = nextUpdatedAt;
+      recordEcho();
       _failedUploadKeys.delete(bare);
       bumpUploadStatus();
       touchLastSyncTimestamp();
@@ -490,6 +548,7 @@ async function _flushKey(uid, bare, v) {
     const rows2 = Array.isArray(r2.data) ? r2.data : [];
     if (rows2.length === 1 && rows2[0]?.updated_at != null) _lastKnownRowUpdatedAt[bare] = String(rows2[0].updated_at);
     else _lastKnownRowUpdatedAt[bare] = nextUpdatedAt;
+    recordEcho();
     _failedUploadKeys.delete(bare);
     bumpUploadStatus();
     touchLastSyncTimestamp();
@@ -501,23 +560,9 @@ async function _flushKey(uid, bare, v) {
   }
 }
 
-export async function sg(k) {
-  const uid = getUserId();
+/** Local-only read of a scoped key (no network). Used by sg() and by degraded boot when the cloud is unreachable. */
+export function sgLocal(k) {
   const bare = k.replace("fv6:", "");
-  if (uid && !isTrackfiDemoMode() && !isOfflineOnlyMode()) {
-    try {
-      const res = await supaFetch(
-        `/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&key=eq.${encodeURIComponent(bare)}&select=value,updated_at`
-      );
-      if (Array.isArray(res?.data) && res.data.length > 0) {
-        const row = res.data[0];
-        if (row != null && Object.prototype.hasOwnProperty.call(row, "value")) {
-          if (row.updated_at != null && row.updated_at !== "") _lastKnownRowUpdatedAt[bare] = String(row.updated_at);
-          return row.value;
-        }
-      }
-    } catch {}
-  }
   try {
     const scopedKey = getScope() + bare;
     const scoped = localStorage.getItem(scopedKey);
@@ -542,6 +587,35 @@ export async function sg(k) {
   }
 }
 
+export async function sg(k) {
+  const uid = getUserId();
+  const bare = k.replace("fv6:", "");
+  if (uid && !isTrackfiDemoMode() && !isOfflineOnlyMode()) {
+    try {
+      const res = await supaFetch(
+        `/rest/v1/user_data?user_id=eq.${encodeURIComponent(uid)}&key=eq.${encodeURIComponent(bare)}&select=value,updated_at`
+      );
+      if (Array.isArray(res?.data) && res.data.length > 0) {
+        const row = res.data[0];
+        if (row != null && Object.prototype.hasOwnProperty.call(row, "value")) {
+          if (row.updated_at != null && row.updated_at !== "") _lastKnownRowUpdatedAt[bare] = String(row.updated_at);
+          return row.value;
+        }
+      }
+    } catch {}
+  }
+  return sgLocal(k);
+}
+
+/**
+ * Cloud uploads are only allowed once this session has positively confirmed the cloud's
+ * state (rows pulled, confirmed-empty, or explicit user data creation). Otherwise a
+ * pending/failed boot fetch could let local defaults overwrite real cloud rows.
+ */
+function cloudUploadAllowed(uid) {
+  return !!uid && !isTrackfiDemoMode() && !isOfflineOnlyMode() && isCloudHydrationConfirmed();
+}
+
 export async function ss(k, v) {
   const uid = getUserId();
   const bare = k.replace("fv6:", "");
@@ -561,12 +635,26 @@ export async function ss(k, v) {
       } catch {}
     }
   }
-  if (uid && !isTrackfiDemoMode() && !isOfflineOnlyMode()) {
+  if (cloudUploadAllowed(uid)) {
+    let serialized;
+    try {
+      serialized = JSON.stringify(v);
+    } catch {}
+    if (serialized !== undefined && _lastKnownCloudJson[bare] === serialized) {
+      // Exact echo of the value the cloud already has (hydration write-back) — skip upload.
+      if (_ssBuffer[bare]?.timer) {
+        clearTimeout(_ssBuffer[bare].timer);
+        delete _ssBuffer[bare];
+        bumpUploadStatus();
+      }
+      return;
+    }
     if (_ssBuffer[bare]?.timer) clearTimeout(_ssBuffer[bare].timer);
     const buf = { value: v, timer: null };
     buf.timer = setTimeout(() => {
       try {
         if (_ssBuffer[bare] !== buf) return;
+        if (!cloudUploadAllowed(uid)) return;
         let val;
         try {
           const raw = localStorage.getItem(getScope() + bare);
@@ -599,7 +687,7 @@ export function cancelPendingDebouncedSync() {
 
 export async function flushPendingSync() {
   const uid = getUserId();
-  const allowCloud = !!uid && !isTrackfiDemoMode() && !isOfflineOnlyMode();
+  const allowCloud = cloudUploadAllowed(uid);
   const keys = Object.keys(_ssBuffer);
   let conflict = false;
   let error = false;

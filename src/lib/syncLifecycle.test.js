@@ -6,6 +6,9 @@ import {
   isSyncReady,
   resetSyncLifecycle,
   subscribeSyncPhase,
+  markCloudHydrationConfirmed,
+  isCloudHydrationConfirmed,
+  resetCloudHydrationConfirmed,
 } from "./syncLifecycle.js";
 
 describe("syncLifecycle", () => {
@@ -26,5 +29,23 @@ describe("syncLifecycle", () => {
     setSyncPhase(SYNC_PHASE.READY);
     unsub();
     expect(seen).toEqual([SYNC_PHASE.READY]);
+  });
+
+  it("cloud hydration starts unconfirmed and is independent of READY", () => {
+    expect(isCloudHydrationConfirmed()).toBe(false);
+    setSyncPhase(SYNC_PHASE.READY);
+    // READY alone never confirms hydration — failed boots reach READY too.
+    expect(isCloudHydrationConfirmed()).toBe(false);
+    markCloudHydrationConfirmed();
+    expect(isCloudHydrationConfirmed()).toBe(true);
+  });
+
+  it("resetSyncLifecycle and resetCloudHydrationConfirmed clear the confirmation", () => {
+    markCloudHydrationConfirmed();
+    resetCloudHydrationConfirmed();
+    expect(isCloudHydrationConfirmed()).toBe(false);
+    markCloudHydrationConfirmed();
+    resetSyncLifecycle();
+    expect(isCloudHydrationConfirmed()).toBe(false);
   });
 });

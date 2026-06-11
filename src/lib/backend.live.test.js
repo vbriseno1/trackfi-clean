@@ -124,7 +124,10 @@ describeLive("live backend sync", () => {
 
   it("ss + flushPendingSync uploads expenses to user_data", async () => {
     vi.resetModules();
+    const { markCloudHydrationConfirmed } = await import("./syncLifecycle.js");
     const { ss, flushPendingSync, supaFetchUserDataRows } = await import("./supabase.js");
+    // Uploads are gated until the session has confirmed the cloud state.
+    markCloudHydrationConfirmed();
     const sample = [{ id: "live1", name: "Live test", amount: "9.99", category: "Misc", date: "2026-05-15" }];
     await ss("fv6:expenses", sample);
     const out = await flushPendingSync();

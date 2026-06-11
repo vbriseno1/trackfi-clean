@@ -34,6 +34,8 @@ import {
   setUploadStatusHandler,
   getUploadSyncStatus,
   supaFetchUserDataRows,
+  supaFetchUserDataRowsWithRetry,
+  sgLocal,
   trackfiAuthRefreshFetch,
 } from "./lib/supabase.js";
 import { launchConfetti } from "./lib/confetti.js";
@@ -100,8 +102,8 @@ import {
   hydrateReactFromScopedLocal,
   readScopeBulkMap,
 } from "./lib/cloudHydration.js";
-import { SYNC_PHASE, setSyncPhase, isSyncReady, resetSyncLifecycle } from "./lib/syncLifecycle.js";
-import { shouldPersistFinanceSlice } from "./lib/financePersistence.js";
+import { SYNC_PHASE, setSyncPhase, isSyncReady, resetSyncLifecycle, markCloudHydrationConfirmed } from "./lib/syncLifecycle.js";
+import { shouldPersistFinanceSlice, shouldPersistConfigSlice } from "./lib/financePersistence.js";
 import { parseMsg, chatMatchBill, chatPickExpenseDate, chatIsStatsQuery } from "./lib/parseMsg.js";
 import { hashPIN } from "./lib/pinHash.js";
 import {
@@ -416,6 +418,8 @@ function AppInner(){
           return;
         }
         if(res.data.length===0){
+          // Cloud confirmed empty — uploads are safe from here on.
+          markCloudHydrationConfirmed();
           const emptyAction=resolveEmptyCloudPullAction({preserveLocalOnEmpty:opts.preserveLocalOnEmpty===true});
           if(emptyAction===EMPTY_CLOUD_ACTION.HYDRATE_LOCAL){
             await hydrateReactFromScopedLocal({handlers:snapshotHandlers(),setDarkMode,uid});
@@ -429,6 +433,7 @@ function AppInner(){
           return;
         }
         applyCloudPullResult({rows:res.data,uid,handlers:snapshotHandlers(),setDarkMode});
+        markCloudHydrationConfirmed();
         setSyncRecoverableError(false);
         setSyncPhase(SYNC_PHASE.READY);
         try{localStorage.setItem("fv_last_sync",String(Date.now()));}catch{}
@@ -527,6 +532,8 @@ function AppInner(){
     return true;
   }
   const[ready,setReady]=useState(false);
+  /** Boot cloud fetch is slow/retrying — shows "Having trouble connecting..." on the loading screen. */
+  const[bootSlow,setBootSlow]=useState(false);
   useEffect(()=>{readyRef.current=ready;},[ready]);
   const[uploadSyncBump,setUploadSyncBump]=useState(0);
   useEffect(()=>{
@@ -629,6 +636,10 @@ function AppInner(){
   const showUndoToast=(msg,undoFn)=>showToast(msg,"error",{label:"Undo",fn:undoFn});
 
   function applyOnboardingComplete(d){
+    // Explicit user data creation — uploads of this data are allowed even if the boot
+    // pull never confirmed the cloud state (the wizard's values are user-entered, not defaults).
+    // Must run before the ss() calls below so their uploads are scheduled.
+    markCloudHydrationConfirmed();
     if(d.name)setGreetName(d.name);
     setAppName("Trackfi");
     if(d.profCategory)setProfCategory(d.profCategory);
@@ -752,55 +763,83 @@ function AppInner(){
   // Auto-hide demo banner after 6 seconds, but it can be re-shown by scrolling back to top
   useEffect(()=>{if(!isDemoMode)return;const t=setTimeout(()=>setDemoBannerVisible(false),6000);return()=>clearTimeout(t);},[isDemoMode]);
 
+  // Boot: READY is only set after the cloud state is KNOWN (rows pulled, confirmed empty,
+  // or definitive failure after bounded retries). There is deliberately no early-READY
+  // safety timeout — an unknown cloud state must never open the persistence gates, or
+  // empty defaults could be uploaded over real data. While the fetch is pending, ready
+  // stays false: the whole app is behind the loading screen and no persistence runs.
   useEffect(()=>{
-    let bootDone=false;
-    const bootSafety=setTimeout(()=>{
-      if(!bootDone){
-        bootDone=true;
-        setSyncPhase(SYNC_PHASE.READY);
-        setReady(true);
-      }
-    },12000);
+    let cancelled=false;
+    let slowTimer=null;
     (async()=>{
       try{
         resetSyncLifecycle();
         const uid_boot=_getUserId();
         let bulkMap={};
         let cloudHydratedFromBulk=false;
+        let bootFetchFailed=false;
         if(isTrackfiDemoMode()){
           bulkMap=readScopeBulkMap(getScope());
         }else if(uid_boot){
+          // "Having trouble connecting..." indicator if the first attempt is dragging.
+          slowTimer=setTimeout(()=>{if(!cancelled)setBootSlow(true);},8000);
+          let bulk;
           try{
-            const bulk=await supaFetchUserDataRows(uid_boot);
-            if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length===0){
-              if(resolveEmptyCloudPullAction()===EMPTY_CLOUD_ACTION.WIPE_TO_DEFAULTS){
-                resetUserState({clearOnboarding:true,syncPhaseReady:true});
-                return;
-              }
+            // Bounded retries inside a 45s deadline — never hangs, never guesses.
+            bulk=await supaFetchUserDataRowsWithRetry(uid_boot,{
+              onAttemptFailed:()=>{if(!cancelled)setBootSlow(true);},
+            });
+          }catch{
+            bulk={ok:false};
+          }
+          clearTimeout(slowTimer);
+          slowTimer=null;
+          if(!cancelled)setBootSlow(false);
+          if(bulk.ok&&bulk.data.length===0){
+            // Cloud confirmed empty — uploads are safe (nothing to destroy).
+            markCloudHydrationConfirmed();
+            if(resolveEmptyCloudPullAction()===EMPTY_CLOUD_ACTION.WIPE_TO_DEFAULTS){
+              resetUserState({clearOnboarding:true,syncPhaseReady:true});
+              return;
             }
-            if(bulk?.error==null && Array.isArray(bulk.data) && bulk.data.length>0){
-              applyCloudPullResult({rows:bulk.data,uid:uid_boot,handlers:snapshotHandlers(),setDarkMode});
-              cloudHydratedFromBulk=true;
-            }
-          }catch{}
+          }else if(bulk.ok&&bulk.data.length>0){
+            applyCloudPullResult({rows:bulk.data,uid:uid_boot,handlers:snapshotHandlers(),setDarkMode});
+            markCloudHydrationConfirmed();
+            cloudHydratedFromBulk=true;
+          }else{
+            // Definitive failure after retries: cloud state UNKNOWN. Hydrate from this
+            // device only; hydration stays unconfirmed so every cloud upload is blocked
+            // until a later pull succeeds (focus/online/manual retry).
+            // TODO(bug #9): KNOWN ACCEPTED LIMITATION (degraded mode). Edits made now are
+            // localStorage-only and will be DISCARDED by the next authoritative pull, which
+            // overwrites React state + scoped storage with the server snapshot. Fix in Task 3:
+            // write-ahead journal of local mutations while unconfirmed, replayed/merged after
+            // the pull instead of overwritten. See DATA_SYNC.md "Degraded mode".
+            bootFetchFailed=true;
+            if(navigator.onLine)setSyncRecoverableError(true);
+          }
         }
         if(cloudHydratedFromBulk){
           setSyncPhase(SYNC_PHASE.READY);
           return;
         }
-        const bootMap=await buildBootMapFromLocal({uid:uid_boot,bulkMap});
+        const bootMap=await buildBootMapFromLocal({
+          uid:uid_boot,
+          bulkMap,
+          // When the cloud is unreachable, per-key sg() remote reads would also fail or
+          // hang past the boot deadline — read scoped localStorage directly instead.
+          ...(bootFetchFailed?{sgFn:sgLocal}:{}),
+        });
         applyLocalBootSnapshot({bootMap,handlers:snapshotHandlers(),setDarkMode});
         setSyncPhase(SYNC_PHASE.READY);
       }catch(e){console.error("Load error",e);}
       finally{
-        clearTimeout(bootSafety);
-        if(!bootDone){
-          bootDone=true;
-          setReady(true);
-        }
+        if(slowTimer)clearTimeout(slowTimer);
+        if(!cancelled)setBootSlow(false);
+        setReady(true);
       }
     })();
-    return()=>clearTimeout(bootSafety);
+    return()=>{cancelled=true;if(slowTimer)clearTimeout(slowTimer);};
   },[]);
 
   useEffect(()=>{
@@ -830,20 +869,28 @@ function AppInner(){
   useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:hhBudgets.length>0}))return;ss("fv6:hhBudgets",hhBudgets);},[hhBudgets,ready]);
   useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,slice:"nwGoal",hasContent:nwGoal!=null}))return;ss("fv6:nwGoal",nwGoal);},[nwGoal,ready]);
   useEffect(()=>{if(!ready)return;const signedIn=!!_getUserId();if(!shouldPersistFinanceSlice({ready,signedIn,hasContent:subDismissed.length>0}))return;ss("fv6:subDismissed",subDismissed);},[subDismissed,ready]);
-  // Settings & config — always persist locally when ready (don't wait for cloud pull)
+  /**
+   * Settings & config slices — gated like finance slices (bug #8 fix): signed-in users only
+   * persist once cloud hydration is confirmed, or when the value is provably non-default.
+   * Default values are never written/uploaded before hydration is confirmed.
+   */
+  const persistConfigSlice=useCallback((slice,value)=>{
+    if(!shouldPersistConfigSlice({ready,signedIn:!!_getUserId(),slice,value}))return;
+    ss("fv6:"+slice,value);
+  },[ready]);
   useEffect(()=>{
     if(!ready)return;
-    ss("fv6:income",income);ss("fv6:bgoals",budgetGoals);ss("fv6:sgoals",savingsGoals);
-    ss("fv6:cats",categories);ss("fv6:settings",settings);
-  },[income,budgetGoals,savingsGoals,categories,settings,ready]);
+    persistConfigSlice("income",income);persistConfigSlice("bgoals",budgetGoals);persistConfigSlice("sgoals",savingsGoals);
+    persistConfigSlice("cats",categories);persistConfigSlice("settings",settings);
+  },[income,budgetGoals,savingsGoals,categories,settings,ready,persistConfigSlice]);
   // Profile & display
   useEffect(()=>{
     if(!ready)return;
-    ss("fv6:prof",profCategory);ss("fv6:profSub",profSub);
-    ss("fv6:appName",appName);ss("fv6:greetName",greetName);
-    ss("fv6:dashConfig",dashConfig);ss("fv6:household",household);
-  },[profCategory,profSub,appName,greetName,dashConfig,household,ready]);
-  useEffect(()=>{try{localStorage.setItem("fv_account_rates",JSON.stringify(accountRates));}catch{};if(ready)ss("fv6:accountRates",accountRates);},[accountRates,ready]);
+    persistConfigSlice("prof",profCategory);persistConfigSlice("profSub",profSub);
+    persistConfigSlice("appName",appName);persistConfigSlice("greetName",greetName);
+    persistConfigSlice("dashConfig",dashConfig);persistConfigSlice("household",household);
+  },[profCategory,profSub,appName,greetName,dashConfig,household,ready,persistConfigSlice]);
+  useEffect(()=>{try{localStorage.setItem("fv_account_rates",JSON.stringify(accountRates));}catch{};persistConfigSlice("accountRates",accountRates);},[accountRates,ready,persistConfigSlice]);
   // Recurring bills marked paid stay in history until the next due is within the cadence-specific window — then they return to Upcoming (unpaid for the new cycle).
   // One-time paid bills stay paid until the user manually marks them unpaid, so balances cannot be double-applied by an automatic reset.
   useEffect(()=>{
@@ -961,8 +1008,8 @@ function AppInner(){
       setMonthlySummary({month:FULL_MOS[lastMs.getMonth()],total:lastTotal,prevTotal,topCat:topCat?.[0],topAmt:topCat?.[1],txnCount:lastExp.length,savRate});
     }catch(e){}
   },[ready,expenses,income]);
-  useEffect(()=>{if(ready)ss("fv6:calColors",calColors);},[calColors,ready]);
-  useEffect(()=>{if(ready)ss("fv6:taccount",tradingAccount);},[tradingAccount,ready]);
+  useEffect(()=>{persistConfigSlice("calColors",calColors);},[calColors,ready,persistConfigSlice]);
+  useEffect(()=>{persistConfigSlice("taccount",tradingAccount);},[tradingAccount,ready,persistConfigSlice]);
   useEffect(()=>{try{localStorage.setItem("fv_dark",darkMode?"1":"0");}catch{};document.body.classList.toggle("dark-mode",!!darkMode);},[darkMode]);
 
   // paycheckMultiplier converts per-paycheck primary income → monthly
@@ -1332,6 +1379,9 @@ function AppInner(){
     };
   }
   function applyDataBundle(d){
+    // Explicit user action (backup import / pre-demo restore) — its data may sync.
+    // Must run before the ss() calls below so their uploads are scheduled.
+    markCloudHydrationConfirmed();
     if(d.accounts)setAccounts(p=>mergeAccountsState(p,d.accounts));
     if(d.income)setIncome(p=>({...p,...d.income}));
     if(Array.isArray(d.expenses))setExpenses(d.expenses);
@@ -1557,6 +1607,8 @@ function AppInner(){
       }
     }
     resetUserState({clearOnboarding:true});
+    // Cloud rows were just deleted — confirmed empty, so future saves may upload.
+    if(uid)markCloudHydrationConfirmed();
     setSyncRecoverableError(false);
     setStorageQuotaBlocked(false);
     resetLocalStorageQuotaWarned();
@@ -1618,7 +1670,7 @@ function AppInner(){
     );
   }
   if(!authSession&&!skipAuth)return <AuthScreen onAuth={handleAuth} onSkip={handleSkip} onTryDemo={handleTryDemoFresh}/>;
-  if(!ready)return(<div className="fv-auth-shell"><style>{CSS}</style><div style={{textAlign:"center"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:20}}>Trackfi</div><div style={{width:36,height:36,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>Loading your data...</div></div></div>);
+  if(!ready)return(<div className="fv-auth-shell"><style>{CSS}</style><div style={{textAlign:"center",padding:"0 24px"}}><div style={{fontFamily:MF,fontSize:28,fontWeight:900,color:"#fff",marginBottom:20}}>Trackfi</div><div style={{width:36,height:36,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 1s linear infinite",margin:"0 auto 14px"}}/><div style={{fontSize:13,color:"rgba(255,255,255,.5)"}}>{bootSlow?"Having trouble connecting — retrying...":"Loading your data..."}</div>{bootSlow&&<div role="status" style={{fontSize:12,color:"rgba(255,255,255,.4)",marginTop:8,lineHeight:1.5,maxWidth:300,margin:"8px auto 0"}}>Your data is safe — nothing is changed until we hear back from the cloud.</div>}</div></div>);
   if(!onboarded&&ready)return(<><style>{CSS}</style><OnboardingWizard onComplete={applyOnboardingComplete} onTryDemo={()=>{loadDemo();}}/></>);
   if(locked&&pinEnabled)return(<><style>{CSS}</style><PINLock onUnlock={()=>setLocked(false)} appName={appName} darkMode={darkMode}/></>);
 
